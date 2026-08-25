@@ -91,6 +91,94 @@ for (const vp of VIEWPORTS) {
   });
   shell.forEach((b) => problems.push(`${vp.name} · shell: ${b}`));
 
+  /* Le sovrapposizioni dentro la sidebar non spostano il documento, quindi la
+     misura dell'overflow non le vede: si vedono solo guardando lo schermo, ed è
+     così che sono arrivate in produzione.
+
+     Contarle richiede una cautela, imparata sbagliando: `getBoundingClientRect`
+     restituisce la posizione anche di ciò che è fuori dall'area visibile di un
+     contenitore che scorre. Senza ritagliare su quell'area il conteggio dava
+     53 sovrapposizioni là dove la geometria era perfettamente impilata. Si
+     confronta solo ciò che si vede davvero. */
+  const collisioni = await page.evaluate(() => {
+    const sb = document.getElementById('sidebar');
+    if (!sb) return 0;
+    const visibili = [...sb.querySelectorAll('*')].filter((e) => {
+      const cs = getComputedStyle(e), r = e.getBoundingClientRect();
+      if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return false;
+      if (r.width < 20 || r.height < 8) return false;
+      if (!e.textContent.trim() || e.children.length > 3) return false;
+      for (let a = e.parentElement; a && a !== sb; a = a.parentElement) {
+        const ac = getComputedStyle(a);
+        if (ac.maxHeight === '0px' || +ac.opacity === 0 || ac.display === 'none') return false;
+      }
+      // fuori dall'area visibile del contenitore che scorre: non è sullo schermo
+      for (let a = e.parentElement; a; a = a.parentElement) {
+        const ac = getComputedStyle(a);
+        if (ac.overflow === 'auto' || ac.overflow === 'scroll' || ac.overflowY === 'auto' || ac.overflowY === 'scroll') {
+          const ar = a.getBoundingClientRect();
+          if (r.bottom <= ar.top + 1 || r.top >= ar.bottom - 1) return false;
+        }
+        if (a === sb) break;
+      }
+      return true;
+    });
+    let n = 0;
+    for (let i = 0; i < visibili.length; i++) {
+      for (let j = i + 1; j < visibili.length; j++) {
+        const A = visibili[i], B = visibili[j];
+        if (A.contains(B) || B.contains(A)) continue;
+        const a = A.getBoundingClientRect(), c = B.getBoundingClientRect();
+        if (Math.min(a.right, c.right) - Math.max(a.left, c.left) > 10 &&
+            Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top) > 10) n++;
+      }
+    }
+    return n;
+  });
+  if (collisioni > 0) problems.push(`${vp.name} · sidebar: ${collisioni} coppie di elementi sovrapposti`);
+
+  /* Lo stesso, con i risultati della ricerca aperti: è la condizione in cui il
+     pannello si disegnava sopra il menu invece di sostituirlo. */
+  const conRicerca = await page.evaluate(async () => {
+    const s = document.getElementById('nav-search');
+    if (!s) return 0;
+    document.querySelectorAll('#sidebar-nav .nav-group.collapsed').forEach((g) => g.classList.remove('collapsed'));
+    s.value = 'a';
+    ['input', 'keyup'].forEach((t) => s.dispatchEvent(new Event(t, { bubbles: true })));
+    await new Promise((r) => setTimeout(r, 700));
+    const sb = document.getElementById('sidebar');
+    const vis = [...sb.querySelectorAll('*')].filter((e) => {
+      const cs = getComputedStyle(e), r = e.getBoundingClientRect();
+      if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return false;
+      if (r.width < 20 || r.height < 8 || !e.textContent.trim() || e.children.length > 3) return false;
+      for (let a = e.parentElement; a && a !== sb; a = a.parentElement) {
+        const ac = getComputedStyle(a);
+        if (ac.maxHeight === '0px' || +ac.opacity === 0 || ac.display === 'none') return false;
+      }
+      // fuori dall'area visibile del contenitore che scorre: non è sullo schermo
+      for (let a = e.parentElement; a; a = a.parentElement) {
+        const ac = getComputedStyle(a);
+        if (ac.overflow === 'auto' || ac.overflow === 'scroll' || ac.overflowY === 'auto' || ac.overflowY === 'scroll') {
+          const ar = a.getBoundingClientRect();
+          if (r.bottom <= ar.top + 1 || r.top >= ar.bottom - 1) return false;
+        }
+        if (a === sb) break;
+      }
+      return true;
+    });
+    let n = 0;
+    for (let i = 0; i < vis.length; i++) for (let j = i + 1; j < vis.length; j++) {
+      const A = vis[i], B = vis[j];
+      if (A.contains(B) || B.contains(A)) continue;
+      const a = A.getBoundingClientRect(), c = B.getBoundingClientRect();
+      if (Math.min(a.right, c.right) - Math.max(a.left, c.left) > 10 &&
+          Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top) > 10) n++;
+    }
+    s.value = ''; ['input', 'keyup'].forEach((t) => s.dispatchEvent(new Event(t, { bubbles: true })));
+    return n;
+  });
+  if (conRicerca > 0) problems.push(`${vp.name} · sidebar con ricerca aperta: ${conRicerca} coppie sovrapposte`);
+
   /* Una modale che sfora è invisibile finché non la si apre. */
   const modale = await page.evaluate(async () => {
     if (!window.InglyUI) return null;

@@ -532,3 +532,49 @@
 .nav-group[hidden] {
   display: none;
 }
+
+/* ── Sidebar: i risultati sostituiscono il menu, non ci si appoggiano sopra ──
+   `#search-dropdown` è in posizione assoluta dentro `#sidebar-search` e si
+   disegnava sopra la lista di navigazione. Con uno sfondo pieno il difetto non
+   si vede; basta un tema chiaro, uno zoom o un elenco più lungo del pannello e
+   le due liste si leggono una sull'altra — che è esattamente ciò che si vedeva
+   nella sidebar: le voci del menu attraverso i risultati della ricerca.
+
+   Finché si cerca, il menu non serve: si nasconde. La sovrapposizione non viene
+   coperta meglio, viene resa impossibile.                                    */
+#sidebar-search:has(#search-dropdown.open) ~ #sidebar-nav,
+#sidebar-search:has(#search-dropdown.open) ~ #core-nav {
+  display: none;
+}
+
+/* Il pannello prende lo spazio che gli serve senza uscire dalla sidebar. */
+#search-dropdown {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+  max-height: min(72vh, calc(100vh - var(--shell-topbar-height) - 120px));
+}
+
+/* ── L'evidenziazione dei risultati ────────────────────────────────────────
+   Era un blocco di ciano pieno su ogni corrispondenza: con una ricerca larga
+   l'intera etichetta diventava una pastiglia e il testo spariva dentro il
+   colore. Il ciano qui è un accento, non un riempimento — la corrispondenza si
+   segna con il peso e una sottolineatura, che restano leggibili anche quando le
+   corrispondenze sono venti.                                                */
+mark.sh {
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary-border);
+  text-underline-offset: 2px;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* ── Un solo campo di ricerca nella sidebar ────────────────────────────────
+   Ce n'erano due che facevano la stessa cosa — «Cerca modulo…» e «Filtra il
+   menu…» — più ⌘K nella topbar. Tre modi per cercare la stessa cosa sono tre
+   occasioni di non trovarla. Resta quello che apre i risultati completi.    */
+#sidebar-nav > .nav-search {
+  display: none;
+}

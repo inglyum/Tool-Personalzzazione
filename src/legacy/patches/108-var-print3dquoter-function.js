@@ -175,6 +175,14 @@ function render(){
         +'<div class="p3-fg"><label class="p3-fl">💡 €/kWh</label><input class="p3-fc" id="p3d-kwh" type="number" step="0.01" value="0.28" oninput="Print3DQuoter.calc()"><div class="p3-ht">Media IT: 0.24–0.32</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🏭 COSTO MACCHINA €</label><input class="p3-fc" id="p3d-mc" type="number" step="50" value="'+(isFdm?'400':'250')+'" oninput="Print3DQuoter.calc()"></div>'
         +'<div class="p3-fg"><label class="p3-fl">⏳ VITA UTILE (h)</label><input class="p3-fc" id="p3d-lh" type="number" step="100" value="'+(isFdm?'2000':'2500')+'" oninput="Print3DQuoter.calc()"></div>'
+        /* Le quattro voci che mancavano al conto: senza di queste il costo
+           sembra più basso di quello che è. */
+        +'<div class="p3-fg"><label class="p3-fl">🔧 MANUTENZIONE €/h</label><input class="p3-fc" id="p3d-mnt" type="number" step="0.05" value="'+(isFdm?'0.12':'0.20')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'Ugelli, piatti, cinghie':'Film FEP, alcool, guanti')+'</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">📉 STAMPE FALLITE %</label><input class="p3-fc" id="p3d-fail" type="number" step="1" value="'+(isFdm?'7':'12')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">Materiale e ore già spesi</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">🔌 CICLO DI LAVORO</label><input class="p3-fc" id="p3d-duty" type="number" step="0.05" min="0.1" max="1" value="'+(isFdm?'0.6':'0.9')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">Frazione della potenza di targa</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">⚙️ SETUP (min)</label><input class="p3-fc" id="p3d-setup" type="number" step="5" value="15" oninput="Print3DQuoter.calc()"><div class="p3-ht">Si paga una volta, diviso per la quantità</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">🧱 SUPPORTI (g)</label><input class="p3-fc" id="p3d-sup" type="number" step="1" value="0" oninput="Print3DQuoter.calc()"><div class="p3-ht">Finiscono nel cestino, si pagano al chilo</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">'+(isFdm?'🪣 POST-PROCESSO (min)':'🚿 LAVAGGIO + CURA (min)')+'</label><input class="p3-fc" id="p3d-wash" type="number" step="5" value="'+(isFdm?'0':'20')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'Rimozione supporti, carteggiatura':'La stampa non è finita quando si ferma')+'</div></div>'
       +'</div>'
     +'</div>'
     // Materiale
@@ -324,36 +332,47 @@ function upE(i,k,v){if(EXTRAS[i])EXTRAS[i][k]=(k==='c'?parseFloat(v)||0:v);calc(
 function updML(){var v=(el('p3d-margin')||{value:40}).value;st('p3d-ml',v+'%');}
 
 function calc(){
-  var kwh=gv('p3d-kwh',.28),watt=gv('p3d-watt',150);
-  var mc=gv('p3d-mc',400),lh=gv('p3d-lh',2000);
-  var mpkg=gv('p3d-mkg',24),mu=gv('p3d-mu',1000);
-  var gram=gv('p3d-g',0),hrs=gv('p3d-h',0);
-  var lmin=gv('p3d-lm',0),lhr=gv('p3d-lr',15);
+  /* La matematica sta in `InglyPrint3D.cost` — una funzione pura, provata da
+     tests/print3d-cost.test.mjs. Qui si leggono i campi e si disegna il
+     risultato: due mestieri separati, che prima erano lo stesso. */
+  var qty=Math.max(1,gv('p3d-qty',1));
+  var minM=gv('p3d-margin',40);
   var m1=gv('p3d-m1',3.5),m2=gv('p3d-m2',2.8),m3=gv('p3d-m3',2.2);
-  var minM=gv('p3d-margin',40),qty=Math.max(1,gv('p3d-qty',1));
+  var mu=gv('p3d-mu',1000), mpkg=gv('p3d-mkg',24);
 
-  var matC=mu>0?(gram/mu)*mpkg:0;
-  var engC=(watt/1000)*hrs*kwh;
-  var depC=lh>0?(mc/lh)*hrs:0;
-  var labC=(lmin/60)*lhr;
-  var extC=EXTRAS.reduce(function(a,e){return a+(parseFloat(e.c)||0);},0);
-  var total=matC+engC+depC+labC+extC;
+  var R = window.InglyPrint3D.cost({
+    grams: gv('p3d-g',0),
+    supportGrams: gv('p3d-sup',0),
+    spoolPrice: mpkg, spoolGrams: mu,
+    hours: gv('p3d-h',0),
+    watt: gv('p3d-watt',150), kwhPrice: gv('p3d-kwh',.28), dutyCycle: gv('p3d-duty',1),
+    machinePrice: gv('p3d-mc',400), machineLifeHours: gv('p3d-lh',2000),
+    maintenancePerHour: gv('p3d-mnt',0),
+    washCureMin: gv('p3d-wash',0), laborPerHour: gv('p3d-lr',15),
+    setupMin: gv('p3d-setup',0), finishMin: gv('p3d-lm',0), qty: qty,
+    failureRate: gv('p3d-fail',0),
+    extras: EXTRAS.map(function(e){ return { label:e.n, cost:parseFloat(e.c)||0 }; }),
+  });
+
+  var total=R.costo;
   COST=total;PRICES={p1:total*m1,p2:total*m2,p3:total*m3};
+
+  var ICONE={materiale:'🧵',energia:'⚡',ammortamento:'🏭',manutenzione:'🔧',
+             postProcesso:'🚿',manodopera:'👤',scarto:'📉',extra:'✨'};
+  var COLORI={materiale:'#22d3ee',energia:'var(--primary)',ammortamento:'var(--purple)',
+              manutenzione:'#94a3b8',postProcesso:'#38bdf8',manodopera:'var(--green)',
+              scarto:'var(--orange)',extra:'#f472b6'};
 
   var bk=el('p3d-bk');
   if(bk){
     if(total<=0){bk.innerHTML='<div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div>';}
     else{
-      var rows=[
-        {l:'🧵 Materiale ('+gram+(T==='resin'?' ml':' g')+')',v:matC,c:'#22d3ee'},
-        {l:'⚡ Energia ('+watt+'W × '+hrs.toFixed(2)+'h)',      v:engC,c:'var(--primary)'},
-        {l:'🏭 Ammortamento macchina',                           v:depC,c:'var(--purple)'},
-        {l:'👤 Manodopera ('+lmin+' min)',                       v:labC,c:'var(--green)'},
-      ];
-      if(extC>0)rows.push({l:'✨ Extra ('+EXTRAS.length+')',v:extC,c:'#f472b6'});
-      bk.innerHTML=rows.map(function(r){
-        return '<div class="p3-bkr"><span style="color:#94a3b8">'+r.l+'</span><span style="font-weight:700;font-size:12px;color:'+r.c+'">'+eur(r.v)+'</span></div>';
-      }).join('')+'<div class="p3-bkt"><span style="color:#fff">🔢 COSTO / PZ</span><span style="color:#22d3ee">'+eur(total)+'</span></div>';
+      bk.innerHTML=R.voci.map(function(v){
+        return '<div class="p3-bkr"><span style="color:#94a3b8">'+(ICONE[v.id]||'•')+' '+v.label
+          +'<span style="display:block;font-size:9px;color:#64748b">'+v.detail+'</span></span>'
+          +'<span style="font-weight:700;font-size:12px;color:'+(COLORI[v.id]||'#94a3b8')+'">'+eur(v.value)+'</span></div>';
+      }).join('')+'<div class="p3-bkt"><span style="color:#fff">🔢 COSTO / PZ</span><span style="color:#22d3ee">'+eur(total)+'</span></div>'
+        +'<div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.5">Con margine del '+minM+'% il prezzo sarebbe <b style="color:#22d3ee">'+eur(R.prezzoDaMargine(minM))+'</b> — un ricarico ×'+(total>0?(R.prezzoDaMargine(minM)/total).toFixed(2):'—')+', non ×'+(1+minM/100).toFixed(2)+'.</div>';
     }
   }
 

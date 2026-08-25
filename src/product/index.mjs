@@ -40,6 +40,7 @@ export const PRODUCT_FILES = [
   'product-builder.js',
   'topbar.js',
   'command-palette.js',
+  'print3d-cost.js',
   'first-run.js',
 ];
 
