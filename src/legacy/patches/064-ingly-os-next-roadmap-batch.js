@@ -53,13 +53,27 @@ const SmartReminder = {
   },
 
   _schedule(rem) {
-    const diff = new Date(rem.dueAt) - Date.now();
+    /* Due campi per la stessa cosa: `openQuickAdd` scrive `dueAt` (stringa),
+       `_checkOrdersDue` scrive `dueMs` (millisecondi). Qui si leggeva solo
+       `dueAt`, quindi per i secondi `new Date(undefined)` dava NaN, `NaN < 0`
+       è falso e si finiva in `setTimeout(fn, NaN)` — che il browser tratta
+       come zero. Il promemoria partiva subito invece che alla scadenza, e
+       insieme al `_fire` immediato produceva la scheda doppia. */
+    const at = rem.dueMs != null ? +rem.dueMs : Date.parse(rem.dueAt);
+    if(!isFinite(at)) return;
+    const diff = at - Date.now();
     if(diff < 0) return;
     const tid = setTimeout(() => this._fire(rem), Math.min(diff, 2147483647));
     this._timers.push(tid);
   },
 
   _fire(rem) {
+    // Lo stesso promemoria non si impila due volte: `_fire` veniva raggiunto
+    // da tre strade (creazione immediata, timer, riavvio) e ognuna aggiungeva
+    // una scheda identica accanto alle precedenti.
+    if(document.getElementById('reminder-toast-' + rem.id)) return;
+    // Oltre quattro schede la pila copre la topbar e nasconde ciò che annuncia.
+    if(document.querySelectorAll('[id^="reminder-toast-"]').length >= 4) return;
     // Browser notification if granted
     if(typeof PushNotifications !== 'undefined' && PushNotifications.isGranted()) {
       PushNotifications.send(rem.label, rem.body||'');
@@ -88,6 +102,12 @@ const SmartReminder = {
     document.body.appendChild(toast_div);
     // Auto-remove after 30s
     setTimeout(() => toast_div.remove(), 30000);
+
+    // `_fire` è l'unico punto attraversato da tutte e tre le strade: segnare
+    // qui che il promemoria è stato mostrato evita di riproporlo al riavvio.
+    const all = this.getAll();
+    const saved = all.find(x => x.id === rem.id);
+    if(saved && !saved.firedMs) { saved.firedMs = Date.now(); this.save(all); }
   },
 
   // Check overdue orders and payments at startup
@@ -161,8 +181,13 @@ const SmartReminder = {
 
   checkOnBoot() {
     const now = Date.now();
-    const rems = this.getAll().filter(r => !r.dismissed && r.dueMs && r.dueMs <= now + 300000);
-    rems.forEach(r => this._fire(r));
+    // Un promemoria scaduto veniva rimostrato a ogni avvio: nessuno segnava
+    // che era già stato mostrato e nessuno lo archiviava, quindi la pila
+    // cresceva a ogni riapertura dell'applicazione. Ora si mostra una volta
+    // e resta consultabile nell'elenco.
+    this.getAll()
+      .filter(r => !r.dismissed && !r.firedMs && r.dueMs && r.dueMs <= now + 300000)
+      .forEach(r => this._fire(r));
     // Schedule future reminders
     this.getAll().filter(r=>!r.dismissed&&r.dueMs&&r.dueMs>now).forEach(r=>this._schedule(r));
     // Add daily order due-date check
@@ -191,8 +216,9 @@ const SmartReminder = {
           fromOrderId: o.id,
           dismissed: false,
         };
+        // `add()` programma già la notifica: il `_fire` che stava qui la
+        // mostrava una seconda volta.
         this.add(r);
-        this._fire(r);
       }
     });
   },

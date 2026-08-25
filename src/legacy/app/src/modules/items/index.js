@@ -67,7 +67,7 @@ const Inventory={
     toast('Articolo salvato!');closeModal('inventory');this.editId=null;await this.render();
   },
   async del(id){
-    if(!confirm('Eliminare articolo?'))return;
+    if(!await askConfirm('Eliminare articolo?'))return;
     await IDB.del('inventory',id).catch(e=>console.warn('[IDB.del]',e));await logAction('inventory',id,'deleted');
     toast('Articolo eliminato','warning');AppStore.invalidate('inventory');
     await this.render();
@@ -360,14 +360,14 @@ const Materials={
     toast(this.editId?'Aggiornato!':'Salvato!');closeModal('material');this.editId=null;await this.render();
   },
   async del(id){
-    if(!confirm('Eliminare questo elemento?'))return;
+    if(!await askConfirm('Eliminare questo elemento?'))return;
     await IDB.del('materials',id).catch(e=>console.warn('[IDB.del]',e));toast('Eliminato','warning');AppStore.invalidate('materials');
     await this.render();
   },
 
   // P3 — Add to Quoter
-  addToQuoterFromMat(id,name,cost){
-    const area=parseFloat(prompt('Area in mq? (es. 0.06 = 30x20cm)','0.06')||'0.06')||0.06;
+  async addToQuoterFromMat(id,name,cost){
+    const area=parseFloat(await askPrompt('Area in mq? (es. 0.06 = 30x20cm)','0.06',{type:'number'})||'0.06')||0.06;
     const totalCost=+(cost*area).toFixed(2);
     localStorage.setItem('laser_calc_for_quoter',JSON.stringify({name,unitCost:totalCost,qty:1}));
     App.navigate('quoter');
@@ -667,7 +667,7 @@ const Paints = {
 
   async deleteItem() {
     if (!this._editId) return;
-    if (!confirm('Eliminare questa vernice?')) return;
+    if (!await askConfirm('Eliminare questa vernice?')) return;
     await IDB.del('paints', this._editId).catch(e=>console.warn('[IDB.del]',e));
     this.closeForm();
     await this.render();
@@ -1302,7 +1302,7 @@ const ItemsModule = {
 
   async deleteItem(id) {
     const targetId = id ? +id : this._editId; if (!targetId) return;
-    if (!confirm('Eliminare questo item?')) return;
+    if (!await askConfirm('Eliminare questo item?')) return;
     await IDB.del('items', targetId).catch(e=>console.warn('[IDB.del]',e)); this.closeForm();
     await this.render(); toast('Item eliminato','success');
   },
@@ -1365,7 +1365,7 @@ const ItemsModule = {
   },
 
   async loadItalianDB() {
-    if (!confirm('Caricare il database materiali laser con prezzi di mercato italiani?\n(Compensato, MDF, Plexiglass, LED, Magneti, Gadget, Packaging e altro — 60+ items con prezzi Atomm, Lasertale, Artistico.it, Supermagnete...)')) return;
+    if (!await askConfirm('Compensato, MDF, Plexiglass, LED, Magneti, Gadget, Packaging e altro — 60+ items con prezzi Atomm, Lasertale, Artistico.it, Supermagnete.',{title:'Caricare il database materiali laser con prezzi di mercato italiani?',confirmLabel:'Carica',danger:false})) return;
     const existing = await this._getAll();
     const names = new Set(existing.map(i=>(i.name||'').toLowerCase()));
     const DB = [
@@ -1822,7 +1822,7 @@ const ItemsModule = {
   },
 
   async _catDel(cat){
-    if(!confirm(`Eliminare "${cat}"?`))return;
+    if(!await askConfirm(`Eliminare "${cat}"?`))return;
     const m=eid('im-cat-modal');if(m)m.style.display='none'; toast(`Categoria "${cat}" eliminata`,'success');
   },
 
@@ -2254,7 +2254,7 @@ Quoter.renderList = async function(){
         <button onclick="Quoter._loadForEdit(${q.id})" title="Carica e modifica" style="flex:1;padding:4px 6px;background:var(--primary-dim);border:1pstyle="flex:1;padding:4px 6px;background:var(--primary-dim);border:1px solid var(--primary-border);color:var(--primary);border-radius:4px;cursor:pointer;font-size:10px;font-weight:700">✏️ Modifica</button>
         <button onclick="Quoter.convertToInvoice(${q.id})" title="Converti in Fattura" style="padding:4px 8px;background:#10b98120;color:#4ade80;border:1px solid #10b98140;border-radius:4px;cursor:pointer;font-size:10px;font-weight:700">→ FAT</button>
         <button onclick="QuoterBridge.toOrder(${q.id})" title="Manda in produzione" style="padding:4px 8px;background:#6366f120;color:#a5b4fc;border:1px solid #6366f140;border-radius:4px;cursor:pointer;font-size:10px">📋</button>
-        <button onclick="if(confirm('Eliminare?'))IDB.del('quotes',${q.id}).then(()=>Quoter.renderList())" style="padding:4px 6px;background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:4px;cursor:pointer;font-size:10px">🗑</button>
+        <button onclick="askConfirm('Eliminare questo preventivo?').then(ok=>{if(ok)IDB.del('quotes',${q.id}).then(()=>Quoter.renderList())})" style="padding:4px 6px;background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:4px;cursor:pointer;font-size:10px">🗑</button>
       </div>
     </div>`).join('') + nav;
 };
@@ -3315,7 +3315,7 @@ const InventoryReorder = {
     if (count === 0) {
       toast('Nessun riordino necessario o ordini già aperti per tutti gli articoli', 'info');
     } else {
-      if (confirm(`${count} ordine/i acquisto creati. Aprire la sezione Ordini?`)) {
+      if (await askConfirm(`${count} ordine/i acquisto creati. Aprire la sezione Ordini?`,{confirmLabel:'Apri Ordini',danger:false})) {
         App.navigate('orders');
       }
     }

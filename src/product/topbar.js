@@ -100,6 +100,48 @@
     if (!overflow.length) shell.querySelector('.tb__more').hidden = true;
 
     bind(shell, menu);
+    adopt(bar, shell, slot, menu);
+  }
+
+  /* Nove patch aggiungono il proprio pulsante a `#topbar` dopo che questa
+     funzione ha già ricostruito la barra: `qs-bar`, `topbar-status`,
+     `cloud-topbar-btn`, `ai-reply-topbar-btn`, `quote-lang-toggle` e altri
+     arrivano secondi dopo l'avvio e si piazzano accanto a `.tb`, rimettendo in
+     barra la fila di pastiglie che la ricostruzione aveva ordinato.
+
+     Attenderli con un timer sarebbe una scommessa sul loro ritardo. Si osserva
+     invece la barra e si applica a ogni nuovo arrivato la stessa regola degli
+     altri: se è nell'elenco resta in barra, altrimenti va nel menu. Il nodo si
+     sposta, non si ricrea: i suoi gestori restano attaccati.
+
+     L'osservatore ha un tetto perché un componente che si reinserisse da solo
+     trasformerebbe questa correzione in un ciclo infinito. */
+  const MAX_ADOPTIONS = 60;
+
+  function adopt(bar, shell, slot, menu) {
+    let adopted = 0;
+    const observer = new MutationObserver(function (records) {
+      let moved = 0;
+      records.forEach(function (rec) {
+        rec.addedNodes.forEach(function (node) {
+          if (node.nodeType !== 1 || node === shell) return;
+          if (adopted >= MAX_ADOPTIONS) return;
+          adopted += 1;
+          moved += 1;
+          if (KEEP.indexOf(node.id || '') !== -1) { slot.appendChild(node); return; }
+          const row = document.createElement('div');
+          row.className = 'tb__menu-row';
+          row.appendChild(node);
+          menu.appendChild(row);
+        });
+      });
+      if (moved) shell.querySelector('.tb__more').hidden = false;
+      if (adopted >= MAX_ADOPTIONS) {
+        observer.disconnect();
+        console.info('[INGLY topbar] limite di adozioni raggiunto: osservatore fermato.');
+      }
+    });
+    observer.observe(bar, { childList: true });
   }
 
   function bind(shell, menu) {

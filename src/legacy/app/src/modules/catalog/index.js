@@ -600,10 +600,10 @@ const CatalogCats = {
     if(typeof toast!=='undefined') toast(`✅ Categoria aggiornata: ${newName}`,'success');
   },
 
-  remove(i) {
+  async remove(i) {
     const cats = this.getAll();
     const name = cats[i].name;
-    if(!confirm(`Eliminare la categoria "${name}"? I prodotti non vengono eliminati.`)) return;
+    if(!await askConfirm(`Eliminare la categoria "${name}"? I prodotti non vengono eliminati.`)) return;
     cats.splice(i,1);
     this.save(cats);
     if(typeof Catalog!=='undefined'&&Catalog.catFilter===name) Catalog.catFilter='';
@@ -2252,7 +2252,7 @@ Genera ESATTAMENTE in questo formato:
     await this.render();
   },
   async del(id){
-    if(!confirm('Eliminare questo prodotto dal catalogo?'))return;
+    if(!await askConfirm('Eliminare questo prodotto dal catalogo?'))return;
     await IDB.del('catalog',id).catch(e=>console.warn('[Catalog.del]',e));
     AppStore.invalidate('catalog');
     toast('Prodotto eliminato','warning');
@@ -2262,7 +2262,7 @@ Genera ESATTAMENTE in questo formato:
   // ═══ Quick price editor + bulk operations ═══
   async quickEditPrice(productId, currentPrice, e) {
     e?.stopPropagation();
-    const newPrice = prompt('Nuovo prezzo di vendita (€):', currentPrice||'');
+    const newPrice = await askPrompt('Nuovo prezzo di vendita (€):', currentPrice||'', {type:'number'});
     if(newPrice===null || newPrice==='') return;
     const price = parseFloat(newPrice);
     if(isNaN(price)||price<=0){ if(typeof toast!=='undefined') toast('Prezzo non valido','warning'); return; }
@@ -2534,7 +2534,7 @@ const Components={
   },
   async use(id){
     const i=await IDB.get('components',id);if(!i)return;
-    const qty=+prompt(`Quante unità di "${i.name}" hai usato?\n(Disponibili: ${i.stock} ${i.unit||'pz'})`,1);
+    const qty=+await askPrompt(`Disponibili: ${i.stock} ${i.unit||'pz'}`,1,{title:`Quante unità di "${i.name}" hai usato?`,type:'number'});
     if(!qty||qty<=0)return;
     if((+i.stock||0)<qty){toast('Quantità superiore allo stock disponibile!','error');return;}
     i.stock=Math.max(0,(+i.stock||0)-qty);
@@ -2544,7 +2544,7 @@ const Components={
   },
   async restock(id){
     const i=await IDB.get('components',id);if(!i)return;
-    const qty=+prompt(`Quante unità aggiungere a "${i.name}"?`,10);
+    const qty=+await askPrompt(`Quante unità aggiungere a "${i.name}"?`,10,{type:'number'});
     if(!qty||qty<=0)return;
     i.stock=(+i.stock||0)+qty;
     await IDB.put('components',i);
@@ -2585,7 +2585,7 @@ const Components={
     closeModal('component');this.editId=null;await this.render();
   },
   async del(id){
-    if(!confirm('Eliminare questo componente?'))return;
+    if(!await askConfirm('Eliminare questo componente?'))return;
     await IDB.del('components',id);toast('Componente eliminato','warning');await this.render()
   }
 };
@@ -2692,7 +2692,7 @@ const Gadgets={
   clearPhoto(){ this._photoData=null; const p=document.getElementById('gadget-photo-prev'); if(p)p.src=''; toast('Foto rimossa','info'); },
 
   async del(id){
-    if(!confirm('Eliminare questo gadget?'))return;
+    if(!await askConfirm('Eliminare questo gadget?'))return;
     await IDB.del('gadgets',id);toast('Eliminato','warning');await this.render()
   }
 };
@@ -2769,8 +2769,8 @@ const Listino = {
     }catch(e){ if(out) out.innerHTML='<div style="color:#ef4444;padding:10px">'+e.message+'</div>'; }
   },
   async salvaListino(){
-    const nome=prompt('Nome listino (es. "Portachiavi Betulla"):'); if(!nome)return;
-    const cliente=prompt('Cliente / Categoria (opzionale):')||'';
+    const nome=await askPrompt('Nome listino (es. "Portachiavi Betulla"):'); if(!nome)return;
+    const cliente=await askPrompt('Cliente / Categoria (opzionale):')||'';
     const prezzi={camp:+eid('lc-camp-price')?.value||0, kit:+eid('lc-kit-price')?.value||0, stock:+eid('lc-stock-price')?.value||0, kitQtyA:+eid('lc-kit-qty-a')?.value||25, kitQtyB:+eid('lc-kit-qty-b')?.value||30, stockQty:+eid('lc-stock-qty')?.value||100};
     const all=JSON.parse(localStorage.getItem('ingly_listini')||'[]');
     all.push({id:Date.now(),nome,cliente,prezzi,costo:eid('lc-unit-cost')?.textContent||'',created:new Date().toISOString()});
@@ -2816,8 +2816,8 @@ const Listino = {
     if(l.prezzi.stockQty&&eid('lc-stock-qty')) eid('lc-stock-qty').value=l.prezzi.stockQty;
     toast('📂 Listino "'+l.nome+'" caricato!');
   },
-  elimina(id){
-    if(!confirm('Eliminare?'))return;
+  async elimina(id){
+    if(!await askConfirm('Eliminare questo listino?'))return;
     localStorage.setItem('ingly_listini',JSON.stringify(JSON.parse(localStorage.getItem('ingly_listini')||'[]').filter(x=>x.id!==id)));
     this.renderSaved(); toast('Eliminato','warning');
   },
@@ -3667,7 +3667,7 @@ const ListinoTabs = {
   },
 
   async deletePricelist(id) {
-    if(!confirm('Eliminare questo listino?')) return;
+    if(!await askConfirm('Eliminare questo listino?')) return;
     await IDB.del('client_pricelists',id)
     const dyn=eid('lt-dynamic-panel');
     if(dyn) await this._showPricelists(dyn);

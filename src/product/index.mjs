@@ -33,6 +33,7 @@ export const RETIRED_DASHBOARD_PATCHES = [
 
 export const PRODUCT_FILES = [
   'ui.js',
+  'dialogs.js',
   'data.js',
   'work-center.js',
   'dashboard.js',

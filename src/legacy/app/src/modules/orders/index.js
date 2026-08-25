@@ -95,7 +95,7 @@ const Workflow={
     toast('Preventivo caricato in modifica','info');
   },
   async delQuote(id){
-    if(!confirm('Eliminare questo preventivo?'))return;
+    if(!await askConfirm('Eliminare questo preventivo?'))return;
     await IDB.del('quotes',id).catch(e=>console.warn('[IDB.del]',e));
     await logAction('quote',id,'deleted');
     AppStore.invalidate('quotes');
@@ -566,7 +566,7 @@ const Orders={
       o = pl.find(x=>x.id===id || x._sourceId===id)||null;
     }
     if(!o){ toast('Ordine non trovato','error'); return; }
-    if(!confirm(`Creare vendita da ordine "${o.name||o.id}"?\n€${o.value||0} — verrà aggiunta in Vendite & Fatture`)) return;
+    if(!await askConfirm(`€${o.value||0} — verrà aggiunta in Vendite & Fatture`,{title:`Creare vendita da ordine "${o.name||o.id}"?`,confirmLabel:'Crea vendita',danger:false})) return;
     const sale = {
       id: Date.now(),
       clientId: o.clientId||null,
@@ -783,7 +783,7 @@ const Orders={
 
   // ── Delete order ──────────────────────────────────────────────────────────
   async deleteOrder(id, modalEl){
-    if(!confirm('Eliminare questo ordine definitivamente?')) return;
+    if(!await askConfirm('Eliminare questo ordine definitivamente?')) return;
     // v3.9: delete from BOTH orders AND pipeline
     await IDB.del('orders', id);
     try {
@@ -964,11 +964,15 @@ const Produzione = {
     } catch { toast('Errerazione lista','warning'); }
   },
 
-  addSupplier() {
-    const name = prompt('Nome fornitore:');
+  async addSupplier() {
+    const v = await askForm('Nuovo fornitore', [
+      { name:'name',     label:'Nome fornitore' },
+      { name:'contact',  label:'Contatto (email o telefono)' },
+      { name:'material', label:'Materiale fornito' },
+    ], { confirmLabel:'Aggiungi' });
+    const name = v && v.name && v.name.trim();
     if (!name) return;
-    const contact = prompt('Contatto (email o telefono):');
-    const material = prompt('Materiale fornito:');
+    const contact = v.contact, material = v.material;
     const supplier = { id: Date.now().toString(), name, contact: contact||'', material: material||'', createdAt: new Date().toISOString() };
     IDB.put('suppliers', supplier).catch(()=>{});
     this._suppliers.push(supplier);
@@ -1051,7 +1055,7 @@ const Pipeline = {
   async confirm(quoteId) {
     const q = await IDB.get('quotes', quoteId);
     if (!q) return toast('Preventivo non trovato', 'warning');
-    if (!confirm(`Confermare "${q.name}" e mettere in lavorazione?\n\nQuesta azione:\n• Sposta il preventivo su "Confermato"\n• Crea/aggiorna l'ordine nel Kanban (In Lavorazione)\n• Registra la vendita "da pagare"`)) return;
+    if (!await askConfirm(`Sposta il preventivo su "Confermato", crea o aggiorna l'ordine nel Kanban (In Lavorazione) e registra la vendita "da pagare".`,{title:`Confermare "${q.name}" e mettere in lavorazione?`,confirmLabel:'Conferma',danger:false})) return;
 
     await snapshotRecord('quotes', quoteId);
 
@@ -2395,7 +2399,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
     if (!o) { toast('Ordine non trovato','warning'); return; }
     const total = +(o.total||o.value)||0;
     if (!total) { toast('Imposta il totale prima di convertire','warning'); return; }
-    if (!confirm(`Convertire "${o.name||'Ordine #'+id}" in vendita da ${fmtCur(total)}?`)) return;
+    if (!await askConfirm(`Convertire "${o.name||'Ordine #'+id}" in vendita da ${fmtCur(total)}?`,{confirmLabel:'Converti',danger:false})) return;
     // Create sale record
     const sale = {
       id: Date.now(),
@@ -2430,7 +2434,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
 
   async deleteOrder(id) {
     id = typeof id === 'string' ? +id || id : id;
-    if (!confirm('Eliminare questo ordine definitivamente?')) return;
+    if (!await askConfirm('Eliminare questo ordine definitivamente?')) return;
     await IDB.del('orders', id);
     // Also delete any pipeline entry that references this order
     try {
@@ -2593,11 +2597,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
   // ── Aggiunge nuova voce a un ordine esistente ─────────────────────────
   async _addItemToOrder(orderId) {
     orderId = typeof orderId==='string' ? +orderId||orderId : orderId;
-    const desc     = prompt('Descrizione voce:', 'Lavorazione laser');
+    const v = await askForm('Nuova voce d\'ordine', [
+      { name:'desc',  label:'Descrizione voce',           value:'Lavorazione laser' },
+      { name:'price', label:'Prezzo unitario (€)',        value:'0', type:'number' },
+      { name:'qty',   label:'Quantità',                    value:'1', type:'number' },
+      { name:'cost',  label:'Costo acquisto (€, opzionale)', value:'0', type:'number' },
+    ], { confirmLabel:'Aggiungi voce' });
+    const desc = v && v.desc && v.desc.trim();
     if (!desc) return;
-    const priceRaw = prompt('Prezzo unitario (€):', '0');
-    const qtyRaw   = prompt('Quantità:', '1');
-    const costRaw  = prompt('Costo acquisto (€, opz):', '0');
+    const priceRaw = v.price, qtyRaw = v.qty, costRaw = v.cost;
 
     const price = +priceRaw||0;
     const qty   = +qtyRaw||1;
@@ -2648,7 +2656,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
 
   // ── Rimuove una voce da un ordine esistente ───────────────────────────
   async _removeItemFromOrder(orderId, itemIdx) {
-    if (!confirm('Rimuovere questa voce?')) return;
+    if (!await askConfirm('Rimuovere questa voce?')) return;
     orderId = typeof orderId==='string' ? +orderId||orderId : orderId;
     const o = await IDB.get('orders', orderId).catch(()=>null);
     if (!o) return;
@@ -2728,7 +2736,7 @@ if (typeof Workflow !== 'undefined') {
 QuoterBridge.convert = async function(quoteId) {
   const q = await IDB.get('quotes', quoteId).catch(()=>null);
   if (!q) return;
-  if (!confirm(`Confermare preventivo "${q.name}"?\nIl cliente accetta → entra in PRODUZIONE`)) return;
+  if (!await askConfirm('Il cliente accetta → entra in PRODUZIONE',{title:`Confermare preventivo "${q.name}"?`,confirmLabel:'Conferma',danger:false})) return;
   q.status = 'confermato';
   await IDB.put('quotes', q);
   // Find linked order
