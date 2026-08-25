@@ -34,14 +34,24 @@ test('nessun colore esadecimale fuori dai token primitivi', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('nessun !important nel design system, salvo il reset di reduced-motion', () => {
-  // L'unica eccezione legittima: annullare le animazioni dichiarate altrove
-  // richiede di vincere sulla loro specificità, qualunque essa sia.
+test('nessun !important nel design system senza una ragione scritta', () => {
+  // Due eccezioni, entrambe dichiarate nel foglio stesso.
+  //
+  // La prima è il reset di reduced-motion: annullare le animazioni dichiarate
+  // altrove richiede di vincere sulla loro specificità, qualunque essa sia.
+  //
+  // La seconda è il codice storico che scrive `style.cssText` sui nodi: un
+  // `display` in linea non si batte con un foglio di stile, e la sola
+  // alternativa sarebbe rimuovere attributi altrui da JavaScript. Va marcata
+  // con `/* !important-ok: … */` subito prima della regola, così il perché sta
+  // accanto al come e questo test continua a bloccare tutti gli altri casi.
   const offenders = [];
   for (const f of newFiles.filter((f) => f.endsWith('.css'))) {
-    const css = stripComments(fs.readFileSync(f, 'utf8')).replace(
-      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g,
-      '',
+    const css = stripComments(
+      fs
+        .readFileSync(f, 'utf8')
+        .replace(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g, '')
+        .replace(/\/\*\s*!important-ok:[\s\S]*?\*\/[\s\S]*?\}/g, ''),
     );
     if (css.includes('!important')) offenders.push(f);
   }

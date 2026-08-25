@@ -8,18 +8,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { SEED, seedScript } from './seed.mjs';
 
 const file = process.argv[2] ?? 'dist/INGLY-OS.html';
 const outDir = 'tests/__screenshots__/responsive';
 fs.mkdirSync(outDir, { recursive: true });
 
+/* Le cinque larghezze della fase 2. Non sono taglie di dispositivo ma i punti
+   in cui il layout cambia davvero: due colonne che diventano una, la sidebar
+   che si ritira, la tabella che comincia a scorrere per conto suo. */
 const VIEWPORTS = [
-  { name: 'desktop', width: 1680, height: 1050 },
-  { name: 'laptop', width: 1366, height: 800 },
-  { name: 'tablet', width: 900, height: 1200 },
-  { name: 'mobile', width: 390, height: 844 },
+  { name: '1440-desktop', width: 1440, height: 900 },
+  { name: '1280-laptop', width: 1280, height: 800 },
+  { name: '1024-piccolo', width: 1024, height: 768 },
+  { name: '768-tablet', width: 768, height: 1024 },
+  { name: '390-mobile', width: 390, height: 844 },
 ];
-const SECTIONS = ['dashboard', 'quoter', 'items', 'sales', 'finance'];
+/* Le superfici della fase 2 più quelle dense di tabelle, dove l'overflow
+   orizzontale si manifesta per primo. */
+const SECTIONS = ['dashboard', 'product_builder', 'quoter', 'items', 'gestione_ordini', 'sales', 'equipment', 'finance'];
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
@@ -36,6 +43,11 @@ for (const vp of VIEWPORTS) {
   });
   await page.goto('file://' + path.resolve(file), { waitUntil: 'load', timeout: 120000 });
   await page.waitForTimeout(6000);
+  // Con gli store vuoti ogni griglia è un riquadro "nessun dato": si misurerebbe
+  // il vuoto, non il layout.
+  await page.evaluate(seedScript(SEED));
+  await page.reload({ waitUntil: 'load', timeout: 120000 });
+  await page.waitForTimeout(8000);
   await page.evaluate(() => {
     [...document.querySelectorAll('body > div')].forEach((el) => {
       const cs = getComputedStyle(el);
@@ -58,8 +70,46 @@ for (const vp of VIEWPORTS) {
     if (res.over > 1) problems.push(`${vp.name} · ${s}: +${res.over}px  ${res.offenders.join(' ')}`);
   }
 
+  /* Topbar e sidebar vivono fuori dalla vista attiva: un loro sforamento non
+     comparirebbe nella misura qui sopra. */
+  const shell = await page.evaluate(() => {
+    const bad = [];
+    const tb = document.querySelector('#topbar .tb');
+    if (tb && tb.getBoundingClientRect().right > window.innerWidth + 2) bad.push('topbar');
+    /* Sotto i 768px la sidebar è un pannello estraibile: è larga 264px ma
+       tradotta fuori schermo. Misurarne la larghezza direbbe che occupa i due
+       terzi del telefono, e sarebbe falso. Conta dove sta, non quanto misura:
+       chiusa non deve rubare spazio, aperta deve starci dentro. */
+    const sb = document.getElementById('sidebar');
+    if (sb) {
+      const r = sb.getBoundingClientRect();
+      const fuoriCampo = r.right <= 1;                 // pannello ritratto
+      if (!fuoriCampo && r.right > window.innerWidth + 2) bad.push('sidebar oltre il bordo');
+      if (r.width > window.innerWidth) bad.push('sidebar più larga dello schermo');
+    }
+    return bad;
+  });
+  shell.forEach((b) => problems.push(`${vp.name} · shell: ${b}`));
+
+  /* Una modale che sfora è invisibile finché non la si apre. */
+  const modale = await page.evaluate(async () => {
+    if (!window.InglyUI) return null;
+    InglyUI.openDialog({
+      title: 'Verifica larghezza',
+      body: '<p>Controllo che il dialogo stia dentro lo schermo.</p>',
+      actions: [{ label: 'Chiudi', variant: 'primary', value: true }],
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    const d = document.querySelector('.modal-overlay.is-open .modal, .modal-overlay.is-open > div');
+    const r = d ? d.getBoundingClientRect() : null;
+    const over = r ? Math.max(0, Math.round(r.right - window.innerWidth), Math.round(-r.left)) : 0;
+    document.querySelector('.modal-overlay.is-open [data-ds-action]')?.click();
+    return over;
+  });
+  if (modale > 1) problems.push(`${vp.name} · modale: +${modale}px`);
+
   await page.evaluate(() => window.App && window.App.navigate('dashboard'));
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(900);
   await page.screenshot({ path: path.join(outDir, `${vp.name}.png`), fullPage: false });
   await page.close();
 }

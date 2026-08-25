@@ -138,6 +138,15 @@
   color: var(--color-text-subtle);
 }
 
+/* Il contenitore interno della sidebar storica è fissato a `--sidebar-w`, un
+   nome legacy che non segue la larghezza della barra quando questa si stringe:
+   il risultato è un binario da 60 px con dentro 260 px di contenuto, tagliato
+   a metà parola da `overflow:hidden`. Qui l'interno segue la barra, sempre. */
+#sidebar-inner {
+  width: var(--shell-sidebar-width);
+  max-width: 100%;
+}
+
 /* ── Sidebar compatta (solo icone) ────────────────────────────────────────  */
 .sidebar-collapsed #sidebar,
 #sidebar.is-collapsed {
@@ -338,6 +347,62 @@
   .nav-item {
     justify-content: center;
     padding: 0;
+  }
+
+  /* In modalità barra restano le icone di navigazione. I riquadri fatti di
+     sole parole — l'intestazione "Rapido", il pulsante che la nasconde, il
+     campo di ricerca della sidebar e la legenda delle scorciatoie — a 60 px
+     non si leggono: incolonnano una lettera per riga. Si nascondono invece di
+     essere tagliati, e non si perde niente: la ricerca è nella topbar e
+     risponde a ⌘K a ogni larghezza. */
+  #cn-header,
+  #prox-cn-showhide,
+  #nav-search,
+  #nav-search-icon,
+  #nav-search-clear,
+  #sidebar-search .kbd-hint,
+  /* "Filtra il menu": un campo scritto per una barra larga. */
+  #sidebar-nav > .nav-search,
+  /* I primi due pulsanti della barra strumenti sono "Espandi" e "Comprimi":
+     in modalità barra la sidebar è già compressa e dicono l'ovvio a metà. */
+  /* !important-ok: "⭐ Favorites — hover nav items to pin" e i pulsanti
+     "Espandi"/"Comprimi" sono creati da JavaScript con `style.cssText`, quindi
+     portano `display:flex` in linea. Nessuna regola di foglio può batterlo. */
+  #nav-favorites-bar,
+  #sidebar-toolbar > button:nth-child(1),
+  #sidebar-toolbar > button:nth-child(2) {
+    display: none !important;
+  }
+
+  /* Le voci di menu scrivono l'etichetta come nodo di testo nudo accanto
+     all'icona — `<i class="fas…"></i>Dashboard ROI` — non dentro uno `<span>`.
+     Nasconderla per selettore è quindi impossibile: si azzera il corpo del
+     testo sulla voce e lo si restituisce all'icona. */
+  #sidebar-nav .nav-item {
+    font-size: 0;
+    justify-content: center;
+  }
+
+  #sidebar-nav .nav-item > i {
+    font-size: var(--font-size-base);
+  }
+
+  /* !important-ok: anche le stelline di aggancio hanno il `display` in linea,
+     e a 60 px non c'è spazio per colpirle. */
+  #sidebar-nav .nav-ctrl,
+  #sidebar-nav .nav-pin {
+    display: none !important;
+  }
+
+  /* Gli strumenti restano, incolonnati e centrati invece che in riga. */
+  #sidebar-toolbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-1);
+  }
+
+  #sidebar-search {
+    padding: var(--space-2) 0;
   }
 }
 
