@@ -866,7 +866,11 @@
     var bar = document.createElement('div');
     bar.id = 'v27-save-bar';
     bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;height:22px;background:rgba(9,9,11,.95);border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:10px;color:rgba(255,255,255,.3);z-index:9990;gap:8px;backdrop-filter:blur(8px)';
-    var kb=0; try{for(var k in localStorage)kb+=localStorage[k].length; kb=Math.round(kb/1024);}catch(e){}
+    /* `for…in` su localStorage enumera anche i metodi del prototipo: `length`
+       è un numero, il suo `.length` è `undefined`, e la somma diventava NaN.
+       L'utente leggeva «NaNKB» nella barra di stato. `Object.keys` restituisce
+       le sole chiavi memorizzate. */
+    var kb=0; try{Object.keys(localStorage).forEach(function(k){kb+=(localStorage.getItem(k)||'').length;}); kb=Math.round(kb/1024);}catch(e){}
     bar.innerHTML='<span id="v27-sb-status">⚡ Ingly OS · pronto</span><span style="color:rgba(255,255,255,.1)">|</span><span id="v27-sb-kb">'+kb+'KB</span>';
     document.body.appendChild(bar);
     var _orig = localStorage.setItem.bind(localStorage);
@@ -876,7 +880,7 @@
       window._v27sv = setTimeout(function(){
         var st=document.getElementById('v27-sb-status');
         if(st) st.textContent='✅ '+new Date().toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'});
-        var kb2=0; try{for(var k2 in localStorage)kb2+=localStorage[k2].length;kb2=Math.round(kb2/1024);}catch(e){}
+        var kb2=0; try{Object.keys(localStorage).forEach(function(k2){kb2+=(localStorage.getItem(k2)||'').length;});kb2=Math.round(kb2/1024);}catch(e){}
         var ke=document.getElementById('v27-sb-kb'); if(ke) ke.textContent=kb2+'KB';
       },300);
     };
