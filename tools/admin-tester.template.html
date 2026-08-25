@@ -119,7 +119,7 @@
   <h1>Collaudo automatico</h1>
   <p class="lede">
     Il pannello è dentro questo file. Premi il pulsante: viene avviato davvero,
-    guidato attraverso otto prove e giudicato. Tu guardi.
+    guidato attraverso <span id="nProve">—</span> prove e giudicato. Tu guardi.
   </p>
 </header>
 
@@ -140,7 +140,7 @@
       </div>
     </div>
     <div class="verdict">
-      <div class="verdict__s" id="score">— / 8</div>
+      <div class="verdict__s" id="score">—</div>
       <div class="verdict__t" id="vtxt">In attesa.</div>
       <div class="bar"><div class="bar__f" id="fill"></div></div>
     </div>
@@ -213,6 +213,7 @@ function sorgente() {
 const CHIAVE = 'ingly_saas_db';
 const PWD_OK = 'IngLy2026sicura';
 const PWD_DEBOLE = '12345678';
+const PWD_NUOVA = 'RuotataOgg1';
 
 const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -348,18 +349,90 @@ const PROVE = [
     },
   },
   {
+    t: 'Il cambio password non mente',
+    w: 'Il pulsante «Salva» deve rifiutare la password attuale sbagliata e cambiarla davvero.',
+    async run() {
+      const prima = String((db().admins.find((a) => a.passwordHash) || {}).passwordHash || '');
+
+      W.openAdminProfile();
+      await finche(() => !!q(W, '#ap-newpwd'), 6000);
+      if (!q(W, '#ap-newpwd')) return { ok: false, d: 'scheda del cambio password non raggiungibile' };
+
+      // Con la password attuale sbagliata non deve cambiare nulla.
+      val(W, '#ap-oldpwd', 'non-e-questa');
+      val(W, '#ap-newpwd', 'AltraPassword9');
+      await W.doChangeMyPassword();
+      await attesa(500);
+      if (String((db().admins.find((a) => a.passwordHash) || {}).passwordHash || '') !== prima) {
+        return { ok: false, d: 'ATTENZIONE: ha cambiato la password senza verificare quella attuale.' };
+      }
+
+      // Con quella giusta deve cambiarla per davvero.
+      if (!q(W, '#ap-newpwd')) { W.openAdminProfile(); await finche(() => !!q(W, '#ap-newpwd'), 6000); }
+      val(W, '#ap-oldpwd', PWD_OK);
+      val(W, '#ap-newpwd', PWD_NUOVA);
+      await W.doChangeMyPassword();
+      await attesa(700);
+      const dopo = String((db().admins.find((a) => a.passwordHash) || {}).passwordHash || '');
+      if (dopo === prima) return { ok: false, d: 'ATTENZIONE: annuncia il successo ma non salva nulla.' };
+      if (dopo === PWD_NUOVA) return { ok: false, d: 'ATTENZIONE: nuova password salvata in chiaro.' };
+      return { ok: dopo.startsWith('pbkdf2$'), d: 'rifiutata quella sbagliata, cambiata con quella giusta' };
+    },
+  },
+  {
     t: 'La password resta al riavvio',
-    w: 'Riaprendo il pannello: quella sbagliata è rifiutata, quella giusta entra.',
+    w: 'Riaprendo il pannello: la vecchia è rifiutata, quella appena cambiata entra.',
     async run() {
       W = await avvia(false); // stavolta il database non si azzera
       await accedi(W, 'superadmin', 'password-sbagliata');
       if (!visibile(W, '#login-screen')) return { ok: false, d: 'ATTENZIONE: è entrato con la password sbagliata.' };
-      await accedi(W, 'superadmin', PWD_OK);
+      await accedi(W, 'superadmin', PWD_NUOVA);
       await finche(() => !visibile(W, '#login-screen'), 8000);
       const dentro = !visibile(W, '#login-screen');
       const richiedeSetup = !!q(W, '#fl-pwd1');
       if (richiedeSetup) return { ok: false, d: 'ha richiesto di nuovo il primo accesso: la password non è stata conservata' };
       return { ok: dentro, d: dentro ? 'sbagliata rifiutata, giusta accettata' : 'non è entrato con la password corretta' };
+    },
+  },
+  {
+    t: 'Il reset di un cliente pretende una password vera',
+    w: 'Prima bastavano 4 caratteri. Ora valgono gli stessi requisiti degli admin.',
+    async run() {
+      // Il database nasce senza clienti: se ne inserisce uno per avere qualcosa da modificare.
+      const d = db();
+      const id = 'u-collaudo';
+      d.users = (d.users || []).filter((u) => u.id !== id);
+      d.users.push({ id: id, nome: 'Prova', cognome: 'Collaudo', email: 'prova@collaudo.it',
+        phone: '', company: '', piva: '', plan: 'starter',
+        status: 'active', active: true, payment_method: 'stripe', notes: '',
+        passwordHash: null, createdAt: new Date().toISOString(), avatarInitials: 'PC' });
+      localStorage.setItem(CHIAVE, JSON.stringify(d));
+
+      /* Il pannello dichiara il database con `let _db`, che non diventa una
+         proprietà di `window`: si rilegge dentro il suo stesso scope. */
+      W.eval('_db = dbLoad();');
+      const utente = () => JSON.parse(W.eval('JSON.stringify((_db.users||[]).find(function(x){return x.id==="' + id + '"})||{})'));
+
+      W.openEditUser(id);
+      const pronta = await finche(() => !!q(W, '#eu-newpwd'), 6000);
+      if (!pronta) return { ok: false, d: 'scheda cliente non raggiungibile' };
+
+      // Una password debole non deve passare nemmeno qui.
+      val(W, '#eu-newpwd', 'abc');
+      await W.doSaveUser(id);
+      await attesa(400);
+      if (utente().passwordHash) return { ok: false, d: 'ATTENZIONE: ha accettato «abc» come password cliente.' };
+
+      /* Una password conforme deve essere accettata. Resta in chiaro di
+         proposito: il login lato INGLY OS la confronta come testo, quindi
+         cifrarla solo qui chiuderebbe fuori il cliente. Vedi SECURITY A4. */
+      if (!q(W, '#eu-newpwd')) W.openEditUser(id);
+      await finche(() => !!q(W, '#eu-newpwd'), 4000);
+      val(W, '#eu-newpwd', PWD_OK);
+      await W.doSaveUser(id);
+      await attesa(700);
+      const salvata = String(utente().passwordHash || '');
+      return { ok: salvata === PWD_OK, d: salvata ? 'debole rifiutata, conforme accettata' : 'non ha salvato nulla' };
     },
   },
   {
@@ -471,6 +544,7 @@ document.getElementById('copy').addEventListener('click', async function () {
   }
 });
 
+document.getElementById('nProve').textContent = PROVE.length;
 aggiorna();
 </script>
 </body>

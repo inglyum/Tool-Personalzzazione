@@ -1165,7 +1165,7 @@ function openEditUser(id){
   `);
 }
 
-function doSaveUser(id){
+async function doSaveUser(id){
   const u=_db.users.find(x=>x.id===id); if(!u) return;
   const oldPlan=u.plan;
   u.nome=document.getElementById('eu-nome').value;
@@ -1181,7 +1181,20 @@ function doSaveUser(id){
   u.notes=document.getElementById('eu-notes').value;
   // Cambio password opzionale
   const newPwd = document.getElementById('eu-newpwd') && document.getElementById('eu-newpwd').value.trim();
-  if(newPwd && newPwd.length >= 4){
+  if(newPwd){
+    /* Qui bastavano 4 caratteri: ora si applicano gli stessi requisiti degli
+       admin (8 caratteri, maiuscola, minuscola, numero).
+
+       La password resta però **in chiaro**, e non è una dimenticanza. Il campo
+       si chiama `passwordHash` ma l'intera catena delle credenziali cliente lo
+       tratta come testo: il login lato INGLY OS confronta
+       `user.passwordHash !== password` (patch 117), e la mail di reset spedisce
+       al cliente il valore letto dal database. Cifrarlo solo qui chiuderebbe
+       fuori ogni cliente a cui un admin cambia la password, e gli spedirebbe un
+       hash al posto delle credenziali. Si chiude quando esiste il backend, e si
+       chiude su tutta la catena insieme — vedi `docs/SECURITY.md` A4. */
+    const problem = InglyAdminAuth.validate(newPwd);
+    if(problem){ toast(problem,'error'); return; }
     u.passwordHash = newPwd;
     u.passwordChangedAt = new Date().toISOString();
     u.passwordResets = (u.passwordResets||0) + 1;
@@ -3157,10 +3170,41 @@ function openAdminProfile(){
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost btn-sm" onclick="closeModal()">Chiudi</button>
-        <button class="btn btn-primary btn-sm" onclick="toast('✅ Password aggiornata','success');closeModal()"><i class="fas fa-save"></i> Salva</button>
+        <button class="btn btn-primary btn-sm" onclick="doChangeMyPassword()"><i class="fas fa-save"></i> Salva</button>
       </div>
     </div>
   `);
+}
+
+/* Il pulsante "Salva" di questa scheda era `onclick="toast('✅ Password
+   aggiornata');closeModal()"`: annunciava il successo senza leggere i campi,
+   senza validare, senza salvare. Un admin convinto di aver ruotato una
+   password compromessa se la teneva. È il tipo di guasto peggiore — non
+   un'operazione che fallisce, ma una che mente. */
+async function doChangeMyPassword(){
+  const vecchia = (document.getElementById('ap-oldpwd')||{}).value || '';
+  const nuova   = (document.getElementById('ap-newpwd')||{}).value || '';
+  if(!vecchia && !nuova){ closeModal(); return; }   // nessuna intenzione di cambiarla
+
+  const adm = (_db.admins||[]).find(function(a){ return _me && a.id===_me.id; });
+  if(!adm){ toast('Sessione non riconosciuta','error'); return; }
+
+  /* La password attuale va dimostrata: senza questo controllo chiunque
+     raggiunga una console già aperta potrebbe riassegnarla. */
+  const check = await InglyAdminAuth.verify(vecchia, adm.passwordHash);
+  if(!check || !check.ok){ toast('La password attuale non è corretta','error'); return; }
+
+  const problem = InglyAdminAuth.validate(nuova);
+  if(problem){ toast(problem,'error'); return; }
+  if(nuova === vecchia){ toast('La nuova password è uguale a quella attuale','error'); return; }
+
+  adm.passwordHash = await InglyAdminAuth.hash(nuova);
+  adm.passwordChangedAt = new Date().toISOString();
+  adm.mustChangePassword = false;
+  dbSave(_db);
+  addAuditLog('admin_password_changed','Password cambiata dall\'admin', adm.name, adm.id);
+  closeModal();
+  toast('✅ Password aggiornata','success');
 }
 
 /* ═══════════════════════════════════════════════════════════
