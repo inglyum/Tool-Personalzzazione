@@ -1,0 +1,10 @@
+{
+  "_": "Ogni file dei sorgenti estratti che differisce dal monolite originale deve comparire qui con la ragione. Il test tests/roundtrip.test.mjs confronta l'impronta di ogni blocco con quella registrata nel manifest e fallisce su qualsiasi differenza non dichiarata: è il modo per accorgersi di una modifica accidentale a 9 MB di codice storico.",
+  "src/legacy": {
+    "patches/111-fase-1-navigation-bus.js": "App.navigate era `writable:false`: ogni override tardivo lanciava un TypeError non gestito e interrompeva la funzione chiamante. Sostituito con un accessor dal setter vuoto — stessa semantica (override ignorati), niente eccezioni.",
+    "patches/099-ingly-prox-js-ingly-os-pro-x-v2.js": "hookNavigate assegnava App.navigate (protetta): l'eccezione impediva la registrazione dell'evidenziazione delle sezioni PRO X. Ora si registra su NavBus, il meccanismo previsto.",
+    "patches/117-ingly-smart-search-engine-v33.js": "Il tema predefinito seguiva `prefers-color-scheme` e su una macchina in tema chiaro il prodotto si apriva con una palette che non è la sua. INGLY OS è dark-first: senza preferenza salvata parte scuro.",
+    "app/src/modules/settings/index.js": "MorningBriefing.show() e showV2() inserivano l'overlay senza rimuovere quello esistente: al primo avvio due modali con lo stesso id si sovrapponevano."
+  },
+  "src/admin/legacy": {}
+}

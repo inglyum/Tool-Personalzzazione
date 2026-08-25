@@ -1,0 +1,169 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   INGLY DESIGN SYSTEM · Livello 3 — COMPONENT
+   Un componente legge solo da qui. Se un CSS di componente punta a un token
+   semantico o primitivo, manca una riga in questo file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Button ─────────────────────────────────────────────────────────────  */
+  --button-height-sm: 28px;
+  --button-height-md: 34px;
+  --button-height-lg: 40px;
+  --button-padding-x: var(--space-4);
+  --button-padding-x-sm: var(--space-3);
+  --button-radius: var(--radius-md);
+  --button-font-size: var(--text-sm);
+  --button-font-weight: var(--weight-medium);
+  --button-gap: var(--space-2);
+
+  --button-primary-bg: var(--color-primary);
+  --button-primary-fg: var(--color-text-on-primary);
+  --button-primary-bg-hover: var(--color-primary-hover);
+  --button-primary-bg-active: var(--color-primary-active);
+
+  --button-secondary-bg: var(--color-neutral-surface);
+  --button-secondary-fg: var(--color-text);
+  --button-secondary-border: var(--color-border);
+  --button-secondary-bg-hover: var(--color-surface-hover);
+
+  --button-ghost-fg: var(--color-text-muted);
+  --button-ghost-fg-hover: var(--color-text);
+  --button-ghost-bg-hover: var(--color-neutral-surface);
+
+  --button-danger-bg: var(--color-danger);
+  --button-danger-fg: var(--neutral-0);
+
+  /* ── Input / Select / Textarea ──────────────────────────────────────────  */
+  --input-height: 34px;
+  --input-padding-x: var(--space-3);
+  --input-radius: var(--radius-md);
+  --input-font-size: var(--text-sm);
+  --input-bg: var(--color-bg-sunken);
+  --input-fg: var(--color-text);
+  --input-placeholder: var(--color-text-subtle);
+  --input-border: var(--color-border);
+  --input-border-hover: var(--color-border-strong);
+  --input-border-focus: var(--color-primary);
+  --input-border-error: var(--color-danger);
+  --input-label-size: var(--text-xs);
+  --input-label-color: var(--color-text-muted);
+  --input-hint-size: var(--text-xs);
+
+  /* ── Card ───────────────────────────────────────────────────────────────  */
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border-subtle);
+  --card-radius: var(--radius-lg);
+  --card-padding: var(--space-5);
+  --card-padding-compact: var(--space-4);
+  --card-shadow: var(--shadow-sm);
+  --card-shadow-hover: var(--shadow-md);
+  --card-header-gap: var(--space-4);
+
+  /* ── KPI ────────────────────────────────────────────────────────────────
+     Il numero è il contenuto: grande, tabellare, senza decorazioni intorno. */
+  --kpi-label-size: var(--text-xs);
+  --kpi-label-color: var(--color-text-muted);
+  --kpi-label-tracking: var(--tracking-caps);
+  --kpi-value-size: var(--text-2xl);
+  --kpi-value-weight: var(--weight-semibold);
+  --kpi-value-tracking: var(--tracking-tight);
+  --kpi-delta-size: var(--text-xs);
+  --kpi-gap: var(--space-2);
+
+  /* ── Table ──────────────────────────────────────────────────────────────  */
+  --table-font-size: var(--text-sm);
+  --table-header-bg: var(--color-surface-elevated);
+  --table-header-fg: var(--color-text-muted);
+  --table-header-size: var(--text-2xs);
+  --table-header-tracking: var(--tracking-caps);
+  --table-row-height: 38px;
+  --table-row-hover: var(--color-surface-hover);
+  --table-row-selected: var(--color-primary-surface);
+  --table-cell-padding-x: var(--space-3);
+  --table-border: var(--color-divider);
+
+  /* ── Badge ──────────────────────────────────────────────────────────────  */
+  --badge-height: 20px;
+  --badge-padding-x: var(--space-2);
+  --badge-radius: var(--radius-sm);
+  --badge-font-size: var(--text-2xs);
+  --badge-font-weight: var(--weight-semibold);
+  --badge-tracking: var(--tracking-wide);
+
+  /* ── Navigazione ────────────────────────────────────────────────────────  */
+  --nav-item-height: 32px;
+  --nav-item-padding-x: var(--space-3);
+  --nav-item-radius: var(--radius-md);
+  --nav-item-fg: var(--color-text-muted);
+  --nav-item-fg-hover: var(--color-text);
+  --nav-item-bg-hover: var(--color-neutral-surface);
+  --nav-item-fg-active: var(--color-primary);
+  --nav-item-bg-active: var(--color-primary-surface);
+  --nav-item-indicator: var(--color-primary);
+  --nav-group-label-size: var(--text-2xs);
+  --nav-group-label-color: var(--color-text-subtle);
+  --nav-group-label-tracking: var(--tracking-caps);
+  --nav-icon-size: 16px;
+
+  /* ── Modal / Drawer ─────────────────────────────────────────────────────  */
+  --modal-bg: var(--color-surface-elevated);
+  --modal-border: var(--color-border);
+  --modal-radius: var(--radius-xl);
+  --modal-padding: var(--space-6);
+  --modal-shadow: var(--shadow-xl);
+  --modal-backdrop: rgb(4 6 8 / 0.66);
+  --modal-width-sm: 420px;
+  --modal-width-md: 620px;
+  --modal-width-lg: 880px;
+  --drawer-width: 420px;
+
+  /* ── Toast / Alert ──────────────────────────────────────────────────────  */
+  --toast-bg: var(--color-surface-overlay);
+  --toast-border: var(--color-border);
+  --toast-radius: var(--radius-lg);
+  --toast-padding: var(--space-4);
+  --toast-shadow: var(--shadow-lg);
+  --toast-width: 360px;
+  --alert-radius: var(--radius-md);
+  --alert-padding: var(--space-4);
+
+  /* ── Tooltip ────────────────────────────────────────────────────────────  */
+  --tooltip-bg: var(--neutral-700);
+  --tooltip-fg: var(--color-text);
+  --tooltip-radius: var(--radius-sm);
+  --tooltip-padding: var(--space-1) var(--space-2);
+  --tooltip-font-size: var(--text-xs);
+
+  /* ── Progress ───────────────────────────────────────────────────────────  */
+  --progress-height: 6px;
+  --progress-height-lg: 8px;
+  --progress-radius: var(--radius-full);
+  --progress-track: var(--color-neutral-surface);
+  --progress-fill: var(--color-primary);
+
+  /* ── Skeleton ───────────────────────────────────────────────────────────  */
+  --skeleton-bg: var(--color-neutral-surface);
+  --skeleton-shimmer: rgb(255 255 255 / 0.06);
+  --skeleton-radius: var(--radius-sm);
+
+  /* ── Empty state ────────────────────────────────────────────────────────  */
+  --empty-padding: var(--space-12) var(--space-6);
+  --empty-icon-size: 28px;
+  --empty-icon-color: var(--color-text-subtle);
+  --empty-title-size: var(--text-md);
+  --empty-body-size: var(--text-sm);
+  --empty-max-width: 380px;
+
+  /* ── Command palette ────────────────────────────────────────────────────  */
+  --palette-width: 560px;
+  --palette-bg: var(--color-surface-elevated);
+  --palette-radius: var(--radius-xl);
+  --palette-shadow: var(--shadow-xl);
+  --palette-item-height: 38px;
+
+  /* ── Work center ────────────────────────────────────────────────────────  */
+  --workcenter-radius: var(--radius-lg);
+  --workcenter-bg: var(--color-surface);
+  --workcenter-border: var(--color-border-subtle);
+  --workcenter-accent-width: 3px;
+}

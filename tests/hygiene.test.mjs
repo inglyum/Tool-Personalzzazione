@@ -22,20 +22,29 @@ const walk = (dir, acc = []) => {
 
 const newFiles = NEW_CODE.flatMap((d) => walk(d));
 
+const stripComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
+
 test('nessun colore esadecimale fuori dai token primitivi', () => {
   const offenders = [];
   for (const f of newFiles.filter((f) => f.endsWith('.css'))) {
     if (f.endsWith('primitive.css')) continue; // è il posto in cui i colori nascono
-    const hex = fs.readFileSync(f, 'utf8').match(/#[0-9a-fA-F]{3,8}\b/g);
+    const hex = stripComments(fs.readFileSync(f, 'utf8')).match(/#[0-9a-fA-F]{3,8}\b/g);
     if (hex) offenders.push(`${f}: ${[...new Set(hex)].join(' ')}`);
   }
   assert.deepEqual(offenders, []);
 });
 
-test('nessun !important nel design system', () => {
-  const offenders = newFiles
-    .filter((f) => f.endsWith('.css'))
-    .filter((f) => fs.readFileSync(f, 'utf8').includes('!important'));
+test('nessun !important nel design system, salvo il reset di reduced-motion', () => {
+  // L'unica eccezione legittima: annullare le animazioni dichiarate altrove
+  // richiede di vincere sulla loro specificità, qualunque essa sia.
+  const offenders = [];
+  for (const f of newFiles.filter((f) => f.endsWith('.css'))) {
+    const css = stripComments(fs.readFileSync(f, 'utf8')).replace(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g,
+      '',
+    );
+    if (css.includes('!important')) offenders.push(f);
+  }
   assert.deepEqual(offenders, []);
 });
 

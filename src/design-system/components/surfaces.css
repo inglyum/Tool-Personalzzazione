@@ -1,0 +1,339 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTI · Superfici — card, KPI, tabelle, badge, alert, progress
+   Sostituisce i layer v54 (elevazione, KPI) e v55 (KPI, badge, tabelle,
+   bottone primario, header di modulo), che si sovrascrivevano a vicenda.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Card ─────────────────────────────────────────────────────────────────  */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  box-shadow: var(--card-shadow);
+}
+
+.card-compact {
+  padding: var(--card-padding-compact);
+}
+
+.card-title {
+  margin-bottom: var(--space-3);
+}
+
+/* L'hover sulle card serve solo dove la card è cliccabile. Sollevare al
+   passaggio del mouse una card che non fa niente è rumore.                  */
+.card.is-interactive {
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.card.is-interactive:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--card-shadow-hover);
+}
+
+/* ── Header di modulo ─────────────────────────────────────────────────────  */
+.module-header,
+.page-header,
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.module-subtitle {
+  margin-top: var(--space-1);
+  max-width: 78ch;
+}
+
+.module-actions,
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ── KPI ──────────────────────────────────────────────────────────────────
+   Il valore è il contenuto. Etichetta piccola sopra, delta piccolo sotto,
+   niente icone grandi né sfondi colorati: il numero deve poter essere letto
+   di sfuggita da due metri.                                                 */
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kpi-gap);
+  padding: var(--card-padding-compact);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+}
+
+.kpi-label {
+  font-size: var(--kpi-label-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--kpi-label-tracking);
+  text-transform: uppercase;
+  color: var(--kpi-label-color);
+}
+
+.kpi-value,
+.kpi-val {
+  font-size: var(--kpi-value-size);
+  font-weight: var(--kpi-value-weight);
+  letter-spacing: var(--kpi-value-tracking);
+  line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+.kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--kpi-delta-size);
+  font-weight: var(--weight-medium);
+}
+
+.kpi-delta.is-up {
+  color: var(--color-success-text);
+}
+
+.kpi-delta.is-down {
+  color: var(--color-danger-text);
+}
+
+.kpi-delta.is-flat {
+  color: var(--color-text-subtle);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+/* ── Griglie ──────────────────────────────────────────────────────────────  */
+.grid-2,
+.grid-3,
+.grid-4 {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+/* ── Tabelle ──────────────────────────────────────────────────────────────
+   Larghezza eccedente: scorre il contenitore, mai il documento.             */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+}
+
+.table-wrap table,
+table.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--table-font-size);
+}
+
+.table-wrap thead th,
+table.ds-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  padding: var(--space-2) var(--table-cell-padding-x);
+  background: var(--table-header-bg);
+  color: var(--table-header-fg);
+  font-size: var(--table-header-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--table-header-tracking);
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table-wrap tbody td,
+table.ds-table tbody td {
+  height: var(--table-row-height);
+  padding: var(--space-2) var(--table-cell-padding-x);
+  border-bottom: 1px solid var(--table-border);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.table-wrap tbody tr:last-child td,
+table.ds-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table-wrap tbody tr:hover td,
+table.ds-table tbody tr:hover td {
+  background: var(--table-row-hover);
+}
+
+.table-wrap tbody tr[aria-selected='true'] td,
+table.ds-table tbody tr.is-selected td {
+  background: var(--table-row-selected);
+}
+
+/* Le colonne numeriche si allineano a destra: è così che si confrontano. */
+.ds-td-num,
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Badge ────────────────────────────────────────────────────────────────  */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--badge-height);
+  padding: 0 var(--badge-padding-x);
+  border: 1px solid var(--color-neutral-border);
+  border-radius: var(--badge-radius);
+  background: var(--color-neutral-surface);
+  color: var(--color-text-muted);
+  font-size: var(--badge-font-size);
+  font-weight: var(--badge-font-weight);
+  letter-spacing: var(--badge-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-green,
+.badge-success {
+  background: var(--color-success-surface);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+
+.badge-yellow,
+.badge-orange,
+.badge-warning {
+  background: var(--color-warning-surface);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+.badge-red,
+.badge-danger {
+  background: var(--color-danger-surface);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.badge-blue,
+.badge-info {
+  background: var(--color-info-surface);
+  border-color: var(--color-info-border);
+  color: var(--color-info-text);
+}
+
+.badge-purple {
+  background: var(--color-neutral-surface);
+  border-color: var(--color-neutral-border);
+  color: var(--violet-400);
+}
+
+.badge-gray,
+.badge-neutral {
+  background: var(--color-neutral-surface);
+  border-color: var(--color-neutral-border);
+  color: var(--color-text-muted);
+}
+
+.badge-premium {
+  background: var(--color-premium-surface);
+  border-color: var(--color-premium-border);
+  color: var(--color-premium-text);
+}
+
+/* ── Alert ────────────────────────────────────────────────────────────────  */
+.ds-alert {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--alert-padding);
+  border: 1px solid var(--color-neutral-border);
+  border-radius: var(--alert-radius);
+  background: var(--color-neutral-surface);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.ds-alert__title {
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.ds-alert--success {
+  background: var(--color-success-surface);
+  border-color: var(--color-success-border);
+}
+
+.ds-alert--warning {
+  background: var(--color-warning-surface);
+  border-color: var(--color-warning-border);
+}
+
+.ds-alert--danger {
+  background: var(--color-danger-surface);
+  border-color: var(--color-danger-border);
+}
+
+.ds-alert--info {
+  background: var(--color-info-surface);
+  border-color: var(--color-info-border);
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────────  */
+.ds-progress {
+  width: 100%;
+  height: var(--progress-height);
+  border-radius: var(--progress-radius);
+  background: var(--progress-track);
+  overflow: hidden;
+}
+
+.ds-progress__bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--progress-fill);
+  transition: width var(--transition-base);
+}
+
+.ds-progress--lg {
+  height: var(--progress-height-lg);
+}
+
+.ds-progress--success .ds-progress__bar {
+  background: var(--color-success);
+}
+
+.ds-progress--warning .ds-progress__bar {
+  background: var(--color-warning);
+}
+
+.ds-progress--danger .ds-progress__bar {
+  background: var(--color-danger);
+}

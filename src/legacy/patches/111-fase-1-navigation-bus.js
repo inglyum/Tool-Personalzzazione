@@ -63,15 +63,20 @@
     };
 
     /* Rendi non-wrappabile (previene ulteriori override).
-       IMPORTANTE: configurable:false è INTENZIONALE. Blocca i ~6 override
-       tardivi (App.navigate=... dopo questa riga) facendoli fallire e restare
-       inattivi — com'era in origine. NON metterlo a true: l'accessor successivo
-       si installerebbe e riattiverebbe quegli override morti come handler
-       NavBus eseguiti a ogni navigazione, causando un FREEZE con dati reali.
-       L'errore console "Cannot assign to read only property navigate" è innocuo. */
+       IMPORTANTE: configurable:false è INTENZIONALE. Blocca i ~20 override
+       tardivi (App.navigate=... dopo questa riga) lasciandoli inattivi —
+       com'era in origine. NON metterlo a true: l'accessor successivo si
+       installerebbe e riattiverebbe quegli override morti come handler NavBus
+       eseguiti a ogni navigazione, causando un FREEZE con dati reali.
+
+       Il setter vuoto sostituisce `writable:false`: la semantica è la stessa
+       (l'assegnazione non ha effetto), ma non lancia più TypeError. Prima ogni
+       avvio produceva eccezioni non gestite in console e interrompeva la
+       funzione chiamante nel punto dell'assegnazione. */
+    var _protectedNavigate = App.navigate;
     Object.defineProperty(App, 'navigate', {
-      value: App.navigate,
-      writable: false,
+      get: function () { return _protectedNavigate; },
+      set: function () { /* override tardivi: ignorati di proposito */ },
       configurable: false,
     });
 

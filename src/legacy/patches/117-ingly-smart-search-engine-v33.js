@@ -2092,9 +2092,11 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   /* ── P2: DARK / LIGHT MODE ────────────────────────────────── */
   function initDarkMode() {
     var saved = localStorage.getItem('ingly_theme');
-    var prefersDark = window.matchMedia &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var isDark = saved ? saved === 'dark' : prefersDark;
+    // INGLY OS è dark-first: senza una preferenza salvata si parte scuri.
+    // Prima si ereditava l'impostazione del sistema operativo, e su una
+    // macchina in tema chiaro il prodotto si apriva con una palette che non
+    // è la sua.
+    var isDark = saved ? saved === 'dark' : true;
     applyTheme(isDark);
   }
 
@@ -2921,8 +2923,9 @@ body.saas-active main {
   /* ─── P1: DARK / LIGHT MODE (visibile nella UI) ─────────── */
   function initDarkMode() {
     var saved = localStorage.getItem('ingly_theme');
-    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var isDark = saved ? saved === 'dark' : prefersDark !== false;
+    // Vedi sopra: `prefersDark !== false` intendeva "scuro salvo diversa
+    // indicazione", ma con matchMedia che risponde `false` dava chiaro.
+    var isDark = saved ? saved === 'dark' : true;
     applyTheme(isDark, false);
   }
 

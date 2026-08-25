@@ -7,14 +7,15 @@
   "license": "UNLICENSED",
   "engines": { "node": ">=20" },
   "scripts": {
-    "build": "node scripts/build.mjs src/legacy dist/INGLY-OS.html && node scripts/build.mjs src/admin/legacy dist/INGLY-CLOUD-ADMIN.html",
+    "build": "node scripts/compose.mjs dist/INGLY-OS.html && node scripts/build.mjs src/admin/legacy dist/INGLY-CLOUD-ADMIN.html",
     "dev": "node scripts/dev.mjs",
     "preview": "node scripts/dev.mjs --no-watch",
     "baseline": "node scripts/baseline.mjs src/legacy baseline/ingly-os.json && node scripts/baseline.mjs src/admin/legacy baseline/ingly-cloud-admin.json",
     "audit": "node scripts/audit-report.mjs",
     "verify": "node scripts/verify-syntax.mjs",
     "test": "node --test 'tests/**/*.test.mjs'",
-    "check": "npm run verify && npm run build && npm test"
+    "check": "npm run verify && npm run build && npm test",
+    "qa": "node tests/qa/smoke.mjs dist/INGLY-OS.html && node tests/qa/navigation.mjs dist/INGLY-OS.html"
   },
   "devDependencies": {
     "playwright": "^1.48.0"

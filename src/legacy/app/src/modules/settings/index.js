@@ -12,6 +12,10 @@ const MorningBriefing = {
   },
 
   async show() {
+    // `show()` e `showV2()` inserivano l'overlay senza rimuovere quello
+    // esistente: al primo avvio venivano chiamate entrambe e due modali
+    // con lo stesso id si sovrapponevano.
+    this.close();
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem(this._KEY, today);
 
@@ -191,6 +195,10 @@ const MorningBriefing = {
 
   // ── v2 UPGRADE: show() upgraded inline to use HealthScore ──
   async showV2() {
+    // `show()` e `showV2()` inserivano l'overlay senza rimuovere quello
+    // esistente: al primo avvio venivano chiamate entrambe e due modali
+    // con lo stesso id si sovrapponevano.
+    this.close();
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem(this._KEY, today);
 

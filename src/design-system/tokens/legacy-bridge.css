@@ -1,0 +1,99 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   INGLY DESIGN SYSTEM · PONTE VERSO IL CODICE STORICO
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Il v96 usava due sistemi di variabili paralleli e in conflitto:
+   `--primary/--bg-card/--text/…` (dal CSS originale) e `--ds-accent/--ds-blue/…`
+   (introdotti dal layer "v54 Design System"). 72 variabili in tutto, senza
+   gerarchia, ridefinite in quattro blocchi diversi caricati in momenti diversi.
+
+   Questo file li rimpiazza entrambi. Le vecchie variabili continuano a esistere
+   con lo stesso nome — quindi i 16.292 stili inline e le 129 patch continuano a
+   funzionare senza essere toccati — ma non contengono più un colore: sono alias
+   dei token semantici. Cambiare l'aspetto dell'applicazione ora significa
+   cambiare `semantic.css`, non rincorrere 8.210 letterali esadecimali.
+
+   È un ponte, non una destinazione: man mano che un modulo viene migrato, i suoi
+   riferimenti passano ai token semantici e le righe corrispondenti spariscono
+   da qui. Non si aggiungono mai nomi nuovi a questo file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Superfici ──────────────────────────────────────────────────────────
+     Nel v96 `--primary` era l'ambra #fbbf24 e dava all'applicazione l'aria di
+     un pannello di amministrazione generico. Diventa il ciano del marchio.  */
+  --bg: var(--color-bg);
+  --bg-body: var(--color-bg);
+  --bg-card: var(--color-surface);
+  --bg-card2: var(--color-surface-elevated);
+  --bg-card3: var(--color-surface-overlay);
+
+  --primary: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --primary-dim: var(--color-primary-surface);
+  --primary-border: var(--color-primary-border);
+  --accent2: var(--color-premium);
+
+  --text: var(--color-text);
+  --text-muted: var(--color-text-muted);
+  --text-dim: var(--color-text-subtle);
+
+  --border: var(--color-border);
+  --border2: var(--color-border-strong);
+  --border-light: var(--color-border-subtle);
+
+  /* ── Colori di stato usati direttamente dalle patch ─────────────────────  */
+  --green: var(--color-success);
+  --red: var(--color-danger);
+  --blue: var(--color-info);
+  --orange: var(--color-warning);
+  --purple: var(--violet-500);
+
+  /* ── Geometria e tipografia ─────────────────────────────────────────────  */
+     Sei nomi legacy — `--radius-sm`, `--radius-lg`, `--shadow-sm/md/lg`,
+     `--font-mono` — coincidono con token primitivi. Non vengono ridefiniti qui:
+     vince la scala del design system, che li stringe leggermente
+     (raggi 8→6 px e 18→12 px). È una differenza voluta e visibile nel diff.   */
+  --sidebar-w: var(--shell-sidebar-width);
+  --header-h: var(--shell-topbar-height);
+  --radius: var(--radius-lg);
+  --font-body: var(--font-sans);
+
+  /* ── Elevazione e movimento ─────────────────────────────────────────────
+     Il v96 usava `--shadow-primary` come alone luminoso attorno agli elementi
+     attivi. Un bagliore colorato è la firma di una dashboard da gaming: qui
+     diventa un bordo netto, che è anche più leggibile.                      */
+  --shadow-primary: 0 0 0 1px var(--color-primary-border);
+  --elev-1: var(--shadow-sm);
+  --elev-2: var(--shadow-md);
+  --elev-3: var(--shadow-lg);
+  --transition: var(--transition-fast);
+  --transition-slow: var(--transition-base);
+  --ring: var(--focus-ring);
+
+  /* ── Il secondo sistema: i token `--ds-*` del layer v54 ─────────────────
+     Erano una copia parziale del primo con nomi diversi. Qui convergono.   */
+  --ds-accent: var(--color-primary);
+  --ds-teal: var(--cyan-600);
+  --ds-blue: var(--color-info);
+  --ds-purple: var(--violet-500);
+  --ds-yellow: var(--amber-400);
+  --ds-orange: var(--color-warning);
+  --ds-red: var(--color-danger);
+  --ds-green: var(--color-success);
+
+  --ds-success: var(--color-success);
+  --ds-success-bg: var(--color-success-surface);
+  --ds-warning: var(--color-warning);
+  --ds-warning-bg: var(--color-warning-surface);
+  --ds-danger: var(--color-danger);
+  --ds-danger-bg: var(--color-danger-surface);
+  --ds-info: var(--color-info);
+  --ds-info-bg: var(--color-info-surface);
+
+  --ds-radius: var(--radius-md);
+  --ds-radius-lg: var(--radius-lg);
+  --ds-radius-xl: var(--radius-xl);
+  --ds-shadow: var(--shadow-sm);
+  --ds-shadow-lg: var(--shadow-lg);
+}

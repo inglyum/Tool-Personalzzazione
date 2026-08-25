@@ -1,0 +1,425 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTI · App shell — sidebar, topbar, contenuto, breadcrumb
+   Sostituisce i layer v56 (shell di navigazione) e v58 (chrome normalization),
+   che normalizzavano gli stessi elementi con regole in conflitto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────  */
+#sidebar {
+  width: var(--shell-sidebar-width);
+  background: var(--color-bg-sunken);
+  border-right: 1px solid var(--color-border-subtle);
+  z-index: var(--z-sidebar);
+}
+
+#sidebar-nav {
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* ── Gruppo di navigazione ────────────────────────────────────────────────
+   L'etichetta del gruppo è un'eyebrow, non un pulsante: la gerarchia si
+   legge dalla tipografia, non da uno sfondo colorato per ogni gruppo.       */
+.nav-group {
+  margin-bottom: var(--space-1);
+}
+
+.nav-group-title,
+.ng-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--nav-item-padding-x) var(--space-1);
+  font-size: var(--nav-group-label-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--nav-group-label-tracking);
+  text-transform: uppercase;
+  color: var(--nav-group-label-color);
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  width: 100%;
+}
+
+.nav-group-title:hover,
+.ng-header:hover {
+  color: var(--color-text-muted);
+}
+
+.ng-chevron {
+  margin-left: auto;
+  font-size: 9px;
+  opacity: 0.6;
+  transition: transform var(--transition-fast);
+}
+
+.nav-group.is-collapsed .ng-chevron,
+.nav-group[aria-expanded='false'] .ng-chevron {
+  transform: rotate(-90deg);
+}
+
+.nav-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* ── Voce di navigazione ──────────────────────────────────────────────────  */
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--nav-item-height);
+  padding: 0 var(--nav-item-padding-x);
+  border-radius: var(--nav-item-radius);
+  color: var(--nav-item-fg);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-item i,
+.nav-item svg,
+.nav-item .nav-icon {
+  width: var(--nav-icon-size);
+  font-size: 13px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.nav-item:hover {
+  background: var(--nav-item-bg-hover);
+  color: var(--nav-item-fg-hover);
+}
+
+.nav-item.active,
+.nav-item[aria-current='page'] {
+  background: var(--nav-item-bg-active);
+  color: var(--nav-item-fg-active);
+  font-weight: var(--weight-semibold);
+}
+
+/* La barra a sinistra è l'unico indicatore di posizione: niente doppio
+   segnale fra sfondo, grassetto, icona colorata e bordo.                    */
+.nav-item.active::before,
+.nav-item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--nav-item-indicator);
+}
+
+.nav-item.active i,
+.nav-item[aria-current='page'] i {
+  opacity: 1;
+}
+
+/* Badge di conteggio accanto alla voce */
+.nav-item__count {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-subtle);
+}
+
+/* ── Sidebar compatta (solo icone) ────────────────────────────────────────  */
+.sidebar-collapsed #sidebar,
+#sidebar.is-collapsed {
+  width: var(--shell-sidebar-width-collapsed);
+}
+
+.sidebar-collapsed .nav-item span,
+.sidebar-collapsed .nav-group-title span,
+.sidebar-collapsed .nav-item__count,
+#sidebar.is-collapsed .nav-item span {
+  display: none;
+}
+
+.sidebar-collapsed .nav-item,
+#sidebar.is-collapsed .nav-item {
+  justify-content: center;
+  padding: 0;
+}
+
+/* ── Topbar ───────────────────────────────────────────────────────────────  */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--shell-topbar-height);
+  padding: 0 var(--space-4);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border-subtle);
+  z-index: var(--z-header);
+}
+
+#topbar .logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+}
+
+.topbar-btn,
+#topbar > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 32px;
+  min-width: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.topbar-btn:hover,
+#topbar > button:hover {
+  background: var(--color-neutral-surface);
+  color: var(--color-text);
+}
+
+.topbar-btn.is-primary {
+  background: var(--color-primary-surface);
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+
+/* ── Contenuto ────────────────────────────────────────────────────────────  */
+#content-inner {
+  padding: var(--shell-gutter);
+}
+
+.section-view {
+  max-width: var(--shell-content-max);
+}
+
+/* ── Breadcrumb ───────────────────────────────────────────────────────────  */
+.ds-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  margin-bottom: var(--space-3);
+}
+
+.ds-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ds-breadcrumb a:hover {
+  color: var(--color-text-muted);
+}
+
+.ds-breadcrumb__sep {
+  opacity: 0.5;
+}
+
+/* ── Work center ──────────────────────────────────────────────────────────
+   Una macchina reale configurata dall'utente. Il colore della barra dice
+   quale tecnologia, lo stato dice se sta lavorando.                         */
+.ds-workcenter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--card-padding-compact);
+  padding-left: calc(var(--card-padding-compact) + var(--workcenter-accent-width));
+  background: var(--workcenter-bg);
+  border: 1px solid var(--workcenter-border);
+  border-radius: var(--workcenter-radius);
+  overflow: hidden;
+}
+
+.ds-workcenter::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--workcenter-accent-width);
+  background: var(--ds-workcenter-accent, var(--color-text-subtle));
+}
+
+.ds-workcenter--laser {
+  --ds-workcenter-accent: var(--color-tech-laser);
+}
+
+.ds-workcenter--print3d {
+  --ds-workcenter-accent: var(--color-tech-print3d);
+}
+
+.ds-workcenter--uv {
+  --ds-workcenter-accent: var(--color-tech-uv);
+}
+
+.ds-workcenter--dtf {
+  --ds-workcenter-accent: var(--color-tech-dtf);
+}
+
+.ds-workcenter--sublimation {
+  --ds-workcenter-accent: var(--color-tech-sublimation);
+}
+
+.ds-workcenter__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.ds-workcenter__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-subtle);
+  flex-shrink: 0;
+}
+
+.ds-workcenter__dot--ready {
+  background: var(--color-success);
+}
+
+.ds-workcenter__dot--running {
+  background: var(--color-primary);
+}
+
+.ds-workcenter__dot--warning {
+  background: var(--color-warning);
+}
+
+.ds-workcenter__dot--error {
+  background: var(--color-danger);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────
+   Sostituisce il layer v57. Tre soglie, non una per problema riscontrato.   */
+
+/* Tablet: sidebar compatta, densità invariata. */
+@media (max-width: 1100px) {
+  :root {
+    --shell-sidebar-width: var(--shell-sidebar-width-collapsed);
+    --shell-gutter: var(--space-4);
+  }
+
+  .nav-item span,
+  .nav-group-title span {
+    display: none;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* Mobile: la sidebar diventa un pannello a scomparsa. */
+@media (max-width: 768px) {
+  :root {
+    --shell-gutter: var(--space-3);
+    --card-padding: var(--space-4);
+    --modal-padding: var(--space-4);
+  }
+
+  #sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 264px;
+    transform: translateX(-100%);
+    transition: transform var(--duration-base) var(--ease-out);
+    box-shadow: var(--shadow-xl);
+  }
+
+  #sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .nav-item span,
+  .nav-group-title span {
+    display: inline;
+  }
+
+  .nav-item {
+    justify-content: flex-start;
+    padding: 0 var(--nav-item-padding-x);
+    height: 40px; /* soglia di tocco */
+  }
+
+  .btn,
+  .topbar-btn {
+    min-height: 36px;
+  }
+
+  .btn-icon {
+    width: 36px;
+  }
+
+  .module-header,
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kpi-grid,
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100vh - var(--space-6));
+  }
+
+  .modal-overlay {
+    padding: var(--space-3);
+  }
+
+  .ds-toast-region {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: var(--space-3);
+    width: auto;
+  }
+
+  .ds-drawer {
+    width: 100%;
+  }
+}
+
+@media (max-width: 400px) {
+  :root {
+    --kpi-value-size: var(--text-xl);
+  }
+}

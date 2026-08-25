@@ -1513,14 +1513,28 @@ textarea.px-input{resize:vertical;min-height:90px}
       }
     } catch (e) {}
 
-    // Also patch App.navigate once, cleanly
-    if (!window._proxNavHooked && typeof App !== 'undefined' && App.navigate) {
-      var _orig = App.navigate;
-      App.navigate = function (section) {
-        handleNav(section);
-        return _orig.call(this, section);
-      };
-      window._proxNavHooked = true;
+    // `App.navigate` è deliberatamente non scrivibile (vedi patch 111, che lo
+    // blocca per impedire ai vecchi override di riattivarsi). Qui si assegnava
+    // comunque: l'assegnazione lanciava TypeError a ogni avvio, il resto di
+    // hookNavigate non veniva eseguito e l'evidenziazione delle sezioni PRO X
+    // restava agganciata solo al Bus. Ci si registra sul meccanismo previsto.
+    if (!window._proxNavHooked) {
+      if (typeof NavBus !== 'undefined' && NavBus.onAny) {
+        NavBus.onAny(handleNav);
+        window._proxNavHooked = true;
+      } else {
+        var _navDesc = typeof App !== 'undefined' && App.navigate
+          ? Object.getOwnPropertyDescriptor(App, 'navigate')
+          : null;
+        if (_navDesc && _navDesc.writable !== false) {
+          var _orig = App.navigate;
+          App.navigate = function (section) {
+            handleNav(section);
+            return _orig.call(this, section);
+          };
+          window._proxNavHooked = true;
+        }
+      }
     }
 
     function handleNav(section) {

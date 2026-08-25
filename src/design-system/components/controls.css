@@ -1,0 +1,370 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTI · Controlli — bottoni, campi, select, switch, tab
+   Le classi sono quelle che il codice storico già usa (`.btn`, `.form-control`,
+   `.form-label`, `.tab-btn`): il design system le ridefinisce invece di
+   introdurne di nuove, così le 105 sezioni cambiano aspetto senza essere
+   toccate.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Button ───────────────────────────────────────────────────────────────  */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--button-gap);
+  height: var(--button-height-md);
+  padding: 0 var(--button-padding-x);
+  border: 1px solid transparent;
+  border-radius: var(--button-radius);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-fg);
+  border-color: var(--button-secondary-border);
+  font-family: inherit;
+  font-size: var(--button-font-size);
+  font-weight: var(--button-font-weight);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--button-secondary-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--color-surface-active);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'],
+.btn.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+  border-color: transparent;
+  font-weight: var(--weight-semibold);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--button-primary-bg-hover);
+  border-color: transparent;
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--button-primary-bg-active);
+}
+
+.btn-secondary {
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-fg);
+  border-color: var(--button-secondary-border);
+}
+
+.btn-ghost,
+.btn-text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--button-ghost-fg);
+}
+
+.btn-ghost:hover:not(:disabled),
+.btn-text:hover:not(:disabled) {
+  background: var(--button-ghost-bg-hover);
+  color: var(--button-ghost-fg-hover);
+  border-color: transparent;
+}
+
+.btn-danger {
+  background: var(--button-danger-bg);
+  color: var(--button-danger-fg);
+  border-color: transparent;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--red-400);
+  border-color: transparent;
+}
+
+.btn-premium {
+  background: var(--color-premium-surface);
+  color: var(--color-premium-text);
+  border-color: var(--color-premium-border);
+}
+
+.btn-sm {
+  height: var(--button-height-sm);
+  padding: 0 var(--button-padding-x-sm);
+  font-size: var(--text-xs);
+}
+
+.btn-lg {
+  height: var(--button-height-lg);
+  padding: 0 var(--space-5);
+  font-size: var(--text-base);
+}
+
+.btn-icon {
+  width: var(--button-height-md);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-block,
+.btn.w-full {
+  width: 100%;
+}
+
+/* Stato di caricamento: il bottone resta della stessa larghezza — un pulsante
+   che si restringe mentre salva fa saltare il layout sotto il cursore.       */
+.btn.is-loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+}
+
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentcolor;
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--button-secondary-fg);
+  animation: ds-spin 0.6s linear infinite;
+}
+
+.btn-primary.is-loading::after {
+  color: var(--button-primary-fg);
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Form ─────────────────────────────────────────────────────────────────  */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.form-row > * {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.form-control,
+input[type='text'],
+input[type='number'],
+input[type='email'],
+input[type='date'],
+input[type='search'],
+input[type='tel'],
+input[type='url'],
+select,
+textarea {
+  width: 100%;
+  min-height: var(--input-height);
+  padding: 0 var(--input-padding-x);
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--input-radius);
+  font-family: inherit;
+  font-size: var(--input-font-size);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+textarea,
+textarea.form-control {
+  padding: var(--space-2) var(--input-padding-x);
+  min-height: 76px;
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+
+select,
+select.form-control {
+  appearance: none;
+  padding-right: var(--space-8);
+  background-image: linear-gradient(45deg, transparent 50%, currentcolor 50%),
+    linear-gradient(135deg, currentcolor 50%, transparent 50%);
+  background-position: right var(--space-4) center, right calc(var(--space-4) - 5px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--input-fg);
+}
+
+.form-control::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: var(--input-placeholder);
+}
+
+.form-control:hover:not(:disabled),
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--input-border-hover);
+}
+
+.form-control:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--input-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-surface);
+}
+
+.form-control:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-control.is-error,
+.form-control[aria-invalid='true'] {
+  border-color: var(--input-border-error);
+}
+
+.form-hint {
+  font-size: var(--input-hint-size);
+  color: var(--color-text-subtle);
+}
+
+.form-error {
+  font-size: var(--input-hint-size);
+  color: var(--color-danger-text);
+}
+
+/* ── Checkbox / Radio / Switch ────────────────────────────────────────────  */
+input[type='checkbox'],
+input[type='radio'] {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.ds-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 19px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.ds-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ds-switch__track {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-surface);
+  border: 1px solid var(--color-border);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ds-switch__track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-muted);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.ds-switch input:checked + .ds-switch__track {
+  background: var(--color-primary-surface-hover);
+  border-color: var(--color-primary-border);
+}
+
+.ds-switch input:checked + .ds-switch__track::after {
+  transform: translateX(15px);
+  background: var(--color-primary);
+}
+
+.ds-switch input:focus-visible + .ds-switch__track {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Tab ──────────────────────────────────────────────────────────────────  */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-divider);
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  position: relative;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tab-btn:hover {
+  color: var(--color-text);
+}
+
+.tab-btn.active,
+.tab-btn[aria-selected='true'] {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
