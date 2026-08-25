@@ -1,0 +1,22 @@
+
+/* ── White-label branding: logo + nome + colore (additivo, reversibile) ── */
+#topbar .logo{ position:relative; }
+#topbar .logo .logo-edit{ position:absolute; left:0; top:0; width:38px; height:38px; border-radius:50%; background:#000a; color:#fff; border:none; cursor:pointer; display:none; align-items:center; justify-content:center; z-index:2; }
+#topbar .logo:hover .logo-edit{ display:flex; }
+#topbar .logo .logo-edit svg{ width:14px; height:14px; stroke:#fff; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+#brand-modal{ position:fixed; inset:0; z-index:100001; background:#000a; display:none; align-items:center; justify-content:center; padding:16px; }
+#brand-modal.open{ display:flex; }
+#brand-modal .bm-box{ background:var(--bg-card); border:1px solid var(--border2); border-radius:16px; width:min(440px,96vw); max-height:88vh; overflow:auto; box-shadow:0 30px 80px #000a; }
+#brand-modal .bm-head{ display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); font-weight:800; font-size:15px; color:var(--text); }
+#brand-modal .bm-x{ margin-left:auto; width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--bg-card2); color:var(--text-muted); cursor:pointer; }
+#brand-modal .bm-body{ padding:16px 18px; display:flex; flex-direction:column; gap:16px; }
+#brand-modal .bm-lbl{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); margin-bottom:8px; }
+#brand-modal .bm-logo-row{ display:flex; align-items:center; gap:12px; }
+#brand-modal .bm-logo-prev{ width:48px; height:48px; border-radius:12px; object-fit:contain; border:1px solid var(--border2); background:var(--bg-card2); }
+#brand-modal .bm-btn{ padding:8px 14px; border-radius:9px; border:1px solid var(--border2); background:var(--bg-card2); color:var(--text); font-weight:700; font-size:12px; cursor:pointer; }
+#brand-modal .bm-btn.primary{ background:var(--primary); color:#000; border-color:var(--primary); }
+#brand-modal input.bm-name{ width:100%; background:var(--bg-card2); border:1px solid var(--border2); border-radius:9px; padding:9px 12px; color:var(--text); font-size:13px; outline:none; }
+#brand-modal .bm-sw{ display:flex; flex-wrap:wrap; gap:8px; }
+#brand-modal .bm-sw button{ width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+#brand-modal .bm-sw button.on{ border-color:var(--text); box-shadow:0 0 0 2px var(--bg-card); }
+#brand-modal .bm-foot{ display:flex; gap:10px; padding:14px 18px; border-top:1px solid var(--border); }

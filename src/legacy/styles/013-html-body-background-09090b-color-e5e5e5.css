@@ -1,0 +1,6 @@
+html,body{background:#09090b;color:#e5e5e5}
+/* v10 Improvements CSS */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+#qs-bar .qs-stat { transition:opacity .15s; }
+#orders-view-toggle { transition:all .15s; }
+.ofe-col-header { position:sticky;top:0;z-index:5;background:var(--bg-card); }

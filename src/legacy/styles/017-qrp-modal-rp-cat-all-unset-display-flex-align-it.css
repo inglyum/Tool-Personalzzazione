@@ -1,0 +1,22 @@
+
+  
+  #qrp-modal .rp-cat{all:unset;display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;color:#9ca3af;width:100%;box-sizing:border-box;transition:all .14s}
+  #qrp-modal .rp-cat:hover{background:#1e293b;color:#e2e8f0}
+  #qrp-modal .rp-cat.on{background:#083344;color:#67e8f9;font-weight:700}
+  #qrp-modal .rp-cat .rp-cc{margin-left:auto;font-size:10px;background:#1e293b;border-radius:20px;padding:2px 7px;color:#64748b;min-width:20px;text-align:center}
+  #qrp-modal .rp-cat.on .rp-cc{background:#164e63;color:#a5f3fc}
+  #qrp-modal .rp-sf{all:unset;padding:4px 12px;border-radius:20px;border:1.5px solid #334155;cursor:pointer;font-size:11px;font-weight:600;color:#64748b;transition:all .14s}
+  #qrp-modal .rp-sf:hover{border-color:#475569;color:#e2e8f0}
+  #qrp-modal .rp-sf.on{border-color:#0ea5e9;background:#0ea5e915;color:#38bdf8}
+  #qrp-modal .rp-ic{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  #qrp-modal .rp-il{display:flex;flex-direction:column;gap:6px}
+  #qrp-modal .rp-gc{padding:14px 12px;border-radius:12px;border:1.5px solid #1e293b;background:#0f172a;cursor:pointer;text-align:center;transition:all .14s;position:relative}
+  #qrp-modal .rp-gc:hover{border-color:#334155;background:#1e293b;transform:translateY(-2px);box-shadow:0 8px 24px #0009}
+  #qrp-modal .rp-gc.sel{border-color:#22c55e!important;background:#14532d20}
+  #qrp-modal .rp-lc{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;border:1.5px solid #1e293b;background:#0f172a;cursor:pointer;transition:all .14s}
+  #qrp-modal .rp-lc:hover{border-color:#334155;background:#1e293b}
+  #qrp-modal .rp-lc.sel{border-color:#22c55e!important;background:#14532d15}
+  #qrp-modal .rp-ico{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  #qrp-modal .rp-gio{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 8px}
+  #qrp-modal .rp-avb{position:absolute;top:7px;left:7px;font-size:10px;line-height:1}
+  #qrp-modal .rp-sel-ck{position:absolute;top:7px;right:7px;color:#22c55e;font-size:13px;font-weight:700}

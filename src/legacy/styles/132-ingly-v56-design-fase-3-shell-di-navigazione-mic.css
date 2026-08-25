@@ -1,0 +1,59 @@
+
+/* ═══ INGLY v56 — DESIGN Fase 3: shell di navigazione + micro-interazioni ═══
+   Additivo, accento ambra. Rifinisce la cornice (sidebar/topbar) più vista. */
+
+/* ── SIDEBAR: respiro e struttura ── */
+#sidebar{ border-right:1px solid var(--border); }
+#sidebar-nav{ padding:10px 8px; }
+
+/* Voce nav: forma pill, hover morbido */
+.nav-item{ border-radius:10px; padding:8px 11px; margin:1px 0; font-size:13px; }
+.nav-item i{ opacity:.85; }
+
+/* Attivo: sfondo ambra tenue + barra accento + testo pieno */
+.nav-item.active{
+  background:var(--primary-dim);
+  color:var(--primary);
+  font-weight:700;
+}
+.nav-item.active i{ opacity:1; color:var(--primary); }
+.nav-item.active::before{
+  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:3px; height:62%; background:var(--primary); border-radius:0 3px 3px 0;
+}
+
+/* Titoli gruppo: eyebrow discreto */
+.nav-group-title, .ng-label{ font-size:10px; letter-spacing:.08em; opacity:.6; font-weight:800; }
+
+/* ── TOPBAR: pulizia e coerenza ── */
+#topbar{ border-bottom:1px solid var(--border); backdrop-filter:blur(6px); }
+#topbar .logo{ letter-spacing:-.02em; }
+.topbar-btn{ border-radius:9px; }
+@media (prefers-reduced-motion: no-preference){
+  .topbar-btn{ transition:transform .14s var(--ease-out), background .16s ease, color .16s ease; }
+  .topbar-btn:active{ transform:scale(.94); }
+}
+
+/* Health pill topbar: forma coerente */
+#health-pill{ border-radius:12px; }
+
+/* ── EMPTY STATE (Fase 5): centrato, discreto, invitante ── */
+.empty-state, [class*="empty"], .no-data{ text-align:center; color:var(--text-muted); }
+
+/* ── MICRO-INTERAZIONI (Fase 8): feedback tattile su elementi cliccabili ── */
+@media (prefers-reduced-motion: no-preference){
+  .tab-btn:active, .badge[onclick]:active, .kpi-card[onclick]:active{ transform:scale(.97); }
+  select, input[type=checkbox], input[type=radio]{ transition:transform .1s ease; }
+  input[type=checkbox]:active, input[type=radio]:active{ transform:scale(.9); }
+}
+/* Focus-visible coerente ovunque (accessibilità) */
+a:focus-visible, [tabindex]:focus-visible, [onclick]:focus-visible{
+  outline:2px solid var(--primary); outline-offset:2px; border-radius:6px;
+}
+
+/* ── SCROLL: momentum coerente ── */
+#content-inner{ scroll-behavior:smooth; }
+
+/* ── LOADING skeleton util (Fase 5): classe pronta all'uso ── */
+.skeleton{ background:linear-gradient(90deg, var(--bg-card2) 25%, var(--bg-card3) 37%, var(--bg-card2) 63%); background-size:400% 100%; border-radius:8px; }
+@media (prefers-reduced-motion: no-preference){ .skeleton{ animation:v56shimmer 1.4s ease infinite; } @keyframes v56shimmer{ 0%{background-position:100% 0} 100%{background-position:-100% 0} } }

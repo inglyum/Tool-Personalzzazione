@@ -1,0 +1,41 @@
+
+/* Desktop collapsed = icon-only (60px), not fully hidden */
+#sidebar.collapsed { width: 60px !important; overflow: hidden; }
+#sidebar.collapsed #sidebar-search { display: none; }
+#sidebar.collapsed #sidebar-toolbar { display: none; }
+#sidebar.collapsed #sidebar-mod-btn { display: none; }
+/* Hide group labels and chevrons, center the group icon */
+#sidebar.collapsed .nav-group-title { justify-content: center !important; padding: 8px 0 !important; border-top: 1px solid var(--border); }
+#sidebar.collapsed .nav-group-title .ng-label { display: none; }
+#sidebar.collapsed .nav-group-title .ng-chevron { display: none; }
+#sidebar.collapsed .nav-group-title .nav-group-icon { margin: 0 !important; }
+/* Icon-only nav items: font-size 0 hides text, icons keep their size */
+#sidebar.collapsed .nav-item { font-size: 0 !important; justify-content: center !important; padding: 7px 0 !important; cursor: pointer; }
+#sidebar.collapsed .nav-item i { font-size: 15px !important; width: auto !important; margin: 0 !important; }
+#sidebar.collapsed .nav-item .nav-badge { display: none !important; }
+#sidebar.collapsed .nav-item .nav-pin   { display: none !important; }
+/* Active indicator still works */
+#sidebar.collapsed .nav-item.active i { color: var(--primary); }
+/* Smooth tooltip via native title + custom style */
+#sidebar.collapsed .nav-item[title]:hover::after {
+  content: attr(title);
+  position: fixed;
+  left: 68px;
+  background: var(--bg-card);
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 12px !important;
+  color: var(--text) !important;
+  white-space: nowrap;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  pointer-events: none;
+}
+/* Toggle button tooltip */
+#menu-toggle { transition: color .15s; }
+#menu-toggle:hover { color: var(--primary) !important; }
+/* Mobile: keep full-collapse behaviour (sidebar overlays content) */
+@media (max-width: 768px) {
+  #sidebar.collapsed { width: 0 !important; }
+}

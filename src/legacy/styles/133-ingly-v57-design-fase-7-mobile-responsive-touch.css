@@ -1,0 +1,41 @@
+
+/* ═══ INGLY v57 — DESIGN Fase 7: mobile / responsive / touch ════════════════
+   Additivo. Migliora l'uso da telefono senza toccare il desktop. */
+
+/* ── Touch target ≥ 40px su elementi interattivi piccoli (accessibilità) ── */
+@media (max-width: 768px){
+  .btn, .btn-sm, .tab-btn, .nav-item, .topbar-btn, select, input[type=text],
+  input[type=number], input[type=date]{ min-height:40px; }
+  .btn-icon{ min-width:40px; min-height:40px; }
+
+  /* Tabelle larghe: scroll orizzontale nel proprio container, mai il body */
+  .table-wrap, [class*="table"]{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table{ min-width:560px; }
+
+  /* Griglie KPI: impila su mobile */
+  .grid-4, .grid-3, .grid-2, .kpi-grid{ grid-template-columns:1fr 1fr !important; }
+  #dashboard-kpis, [id*="kpi"]{ grid-template-columns:1fr 1fr !important; }
+
+  /* Header sezione: azioni a capo, non tagliate */
+  .module-header, .page-header{ flex-wrap:wrap; gap:10px; }
+  .module-actions, .page-actions{ flex-wrap:wrap; }
+
+  /* Contenuto: padding ridotto per più spazio */
+  #content-inner{ padding:14px; }
+
+  /* Modali: quasi fullscreen su mobile */
+  .modal, .modal-lg{ max-width:96vw !important; max-height:92vh; border-radius:16px; }
+
+  /* Titoli leggermente più compatti */
+  .module-title, .page-title{ font-size:17px; }
+  .kpi-value{ font-size:22px; }
+}
+
+/* ── Molto stretto (telefoni piccoli): KPI a colonna singola ── */
+@media (max-width: 460px){
+  .grid-4, .grid-3, .grid-2, .kpi-grid, #dashboard-kpis{ grid-template-columns:1fr !important; }
+  .tabs{ overflow-x:auto; }
+}
+
+/* ── Il body non scrolla MAI in orizzontale ── */
+html, body{ overflow-x:hidden; max-width:100vw; }

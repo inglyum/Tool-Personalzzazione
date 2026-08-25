@@ -1,0 +1,39 @@
+
+/* Product Hunter / MarketAgent layout */
+.ph-card{background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:16px;transition:.2s;cursor:pointer}
+.ph-card:hover{border-color:var(--primary-border);transform:translateY(-2px)}
+.ph-score{width:44px;height:44px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:14px;font-weight:800;
+  flex-shrink:0}
+.ph-tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;
+  font-weight:700;margin:2px}
+/* LiveIntel feed */
+.li-item{padding:10px 14px;border-bottom:1px solid var(--border);
+  display:flex;gap:10px;align-items:flex-start;transition:.15s}
+.li-item:hover{background:var(--bg-card2)}
+.li-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+/* EtsySEO Wizard steps */
+.esw-step{display:flex;gap:10px;align-items:flex-start;padding:12px;
+  border-radius:8px;margin-bottom:8px;border:1px solid var(--border)}
+.esw-num{width:26px;height:26px;border-radius:50%;background:var(--primary-dim);
+  color:var(--primary);font-size:12px;font-weight:800;display:flex;
+  align-items:center;justify-content:center;flex-shrink:0}
+/* Dashboard oggi widget */
+#oggi-widget{background:linear-gradient(135deg,var(--primary-dim),transparent);
+  border:1px solid var(--primary-border);border-radius:var(--radius);
+  padding:16px;margin-bottom:16px;max-width:900px}
+.oggi-action{display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:var(--bg-card);border-radius:8px;margin-bottom:6px;
+  border:1px solid var(--border);cursor:pointer;transition:.15s;font-size:12px}
+.oggi-action:hover{border-color:var(--primary-border);color:var(--primary)}
+/* WhatsApp template picker */
+.wa-tpl{padding:10px 14px;border:1px solid var(--border);border-radius:8px;
+  margin-bottom:6px;cursor:pointer;transition:.15s}
+.wa-tpl:hover{border-color:#25D36640;background:#25D36610}
+.wa-tpl-name{font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px}
+.wa-tpl-preview{font-size:11px;color:var(--text-muted);line-height:1.4}
+/* Stripe link badge */
+.stripe-badge{display:inline-flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:99px;background:#635bff22;
+  border:1px solid #635bff40;color:#a78bfa;font-size:11px;font-weight:700}

@@ -1,0 +1,78 @@
+
+/* ╔═══════════════════════════════════════════════════════════════════════╗
+   ║ Z-INDEX HIERARCHY - Single Source of Truth                           ║
+   ║ Evita conflitti z-index definendo tutti i layer in un unico posto    ║
+   ╚═══════════════════════════════════════════════════════════════════════╝ */
+
+:root {
+  /* Z-Index Layers */
+  --z-base: 1;              /* Contenuto normale */
+  --z-dropdown: 100;        /* Dropdown, select, combobox */
+  --z-sticky: 200;          /* Sticky headers, breadcrumbs */
+  --z-sidebar: 300;         /* Sidebar navigation */
+  --z-header: 400;          /* Topbar header */
+  --z-popover: 500;         /* Popovers, tooltips piccoli */
+  --z-overlay-backdrop: 900; /* Backdrop overlay scuri */
+  --z-modal: 1000;          /* Modali standard */
+  --z-toast: 2000;          /* Toast notifications */
+  --z-tooltip: 3000;        /* Tooltip grandi */
+  --z-critical: 9000;       /* Wizard, onboarding, blocking UI */
+}
+
+/* Applicazione z-index ai componenti principali */
+#sidebar { 
+  z-index: var(--z-sidebar); 
+}
+
+#topbar { 
+  z-index: var(--z-header); 
+}
+
+#health-panel {
+  z-index: calc(var(--z-header) + 10); /* Sopra topbar */
+}
+
+#theme-picker-panel {
+  z-index: calc(var(--z-header) + 20); /* Sopra health-panel */
+}
+
+.modal-overlay { 
+  z-index: var(--z-modal); 
+}
+
+#toast-container { 
+  z-index: var(--z-toast); 
+}
+
+#cmd-overlay {
+  z-index: calc(var(--z-modal) + 100); /* Command palette sopra tutto */
+}
+
+#mod-mgr-overlay {
+  z-index: calc(var(--z-modal) + 90); /* Module manager */
+}
+
+/* Dynamic modals gestite da ModalManager useranno z-index calcolato */
+
+/* ── v15 UI Improvements ──────────────────────────────── */
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.25); transform: translateY(-1px); }
+.card { transition: box-shadow .15s, transform .15s; }
+.nav-item { transition: background .12s, color .12s; }
+.btn { transition: opacity .12s, box-shadow .12s; }
+.btn:hover { opacity: .88; }
+.btn-primary:hover { box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+.kpi-card { transition: transform .15s, box-shadow .15s; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+/* Scrollbar improvements */
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--border2, rgba(255,255,255,.15)); border-radius: 99px; }
+/* Form focus improvements */
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--prim, #6366f1) !important; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+/* Badge utility */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; }
+/* Table improvements */
+.table-responsive { overflow-x: auto; }
+tr:hover td { background: rgba(255,255,255,.02) !important; }
+/* Tooltip */
+[title] { cursor: help; }

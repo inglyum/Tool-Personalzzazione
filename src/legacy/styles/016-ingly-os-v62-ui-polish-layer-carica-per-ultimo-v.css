@@ -1,0 +1,135 @@
+
+/* ═══════════════════════════════════════════════════════════════
+   INGLY OS v62 — UI POLISH LAYER (carica per ultimo, vince la cascata)
+   Effetti moderni condivisi: bottoni, card, input, nav, header.
+   Solo transform/shadow/transition → non altera il layout esistente.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ring: 0 0 0 3px var(--primary-dim);
+}
+@media (prefers-reduced-motion: no-preference){
+  /* ── BOTTONI ── */
+  .btn{
+    transition: transform .18s var(--ease-out), box-shadow .2s var(--ease-out),
+                background .18s ease, opacity .15s ease, filter .18s ease !important;
+    will-change: transform;
+    position: relative;
+  }
+  .btn:hover{ transform: translateY(-1px); opacity: 1 !important; filter: brightness(1.06); }
+  .btn:active{ transform: translateY(0) scale(.97); filter: brightness(.96); transition-duration: .06s !important; }
+  .btn-primary:hover{ box-shadow: 0 6px 18px -4px var(--primary-dim), 0 2px 6px rgba(0,0,0,.3) !important; }
+  .btn-secondary:hover{ border-color: var(--primary-border) !important; box-shadow: var(--shadow-sm); }
+
+  /* ── CARD & KPI ── */
+  .card, .kpi-card{
+    transition: transform .22s var(--ease-out), box-shadow .22s var(--ease-out), border-color .22s ease !important;
+  }
+  .card:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .kpi-card:hover{ transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--primary-border); }
+
+  /* ── NAV ── */
+  .nav-item{ transition: background .16s ease, color .16s ease, padding-left .16s var(--ease-out), transform .16s ease !important; }
+  .nav-item:hover{ padding-left: 11px; }
+  .nav-item.active{ position: relative; }
+
+  /* ── TABELLE ── */
+  tbody tr{ transition: background .12s ease; }
+}
+/* ── FOCUS RING accessibile (sempre attivo, anche reduced-motion) ── */
+.btn:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+.form-control:focus-visible, [contenteditable]:focus-visible{
+  outline: none !important;
+  box-shadow: var(--ring) !important;
+  border-color: var(--primary) !important;
+}
+/* ── INPUT/SELECT: bordo morbido su focus ── */
+input, select, textarea, .form-control{
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled),
+.form-control:hover:not(:disabled){ border-color: var(--border2); }
+
+/* ── SCROLLBAR raffinata ── */
+*::-webkit-scrollbar{ width: 10px; height: 10px; }
+*::-webkit-scrollbar-track{ background: transparent; }
+*::-webkit-scrollbar-thumb{ background: var(--border2); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover{ background: var(--text-dim); background-clip: padding-box; }
+
+/* ── nav active: indicatore laterale ── */
+.nav-item.active::before{
+  content:''; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:3px; height:60%; background:var(--primary); border-radius:0 3px 3px 0;
+}
+
+/* ── module-header: separatore più elegante ── */
+.module-header{ position: relative; }
+
+/* ── badge/pill hover micro-feedback su elementi cliccabili generici ── */
+[onclick]:not(.btn):not(.nav-item):not(input):not(select){ transition: filter .15s ease, transform .15s ease; }
+
+/* ═══ SECONDA ONDATA — componenti condivisi presenti in tutte le sezioni ═══ */
+
+/* ── KPI CARD: barra accento a gradiente + icona con glow ── */
+.kpi-card::before{
+  height: 3px !important;
+  background: linear-gradient(90deg, var(--primary), transparent) !important;
+  opacity: .7 !important;
+  transition: opacity .22s ease, height .22s var(--ease-out);
+}
+.kpi-card:hover::before{ opacity: 1 !important; height: 4px !important; }
+.kpi-icon{ transition: transform .25s var(--ease-spring), opacity .2s ease; }
+.kpi-card:hover .kpi-icon{ transform: scale(1.12) rotate(-4deg); opacity: .65; }
+
+/* ── BADGE: micro-lift ── */
+.badge{ transition: transform .14s var(--ease-out), filter .14s ease; }
+.badge[onclick]:hover, [onclick] > .badge:hover{ transform: translateY(-1px); filter: brightness(1.1); }
+
+/* ── TAB: attivo con ombra morbida, hover feedback ── */
+.tab-btn{ transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease !important; }
+.tab-btn:hover:not(.active){ color: var(--text); background: var(--bg-card3); }
+.tab-btn.active{ box-shadow: var(--shadow-sm); }
+.tab-btn:active{ transform: scale(.96); }
+
+/* ── KANBAN CARD: sollevamento + ombra ── */
+@media (prefers-reduced-motion: no-preference){
+  .kanban-card{ transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), border-color .2s ease !important; }
+  .kanban-card:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--primary-border); }
+  .goal-card:hover, .leak-card:hover, .dp-card:hover, .qi-stat:hover{ transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+  .qi-stat, .goal-card, .leak-card, .dp-card{ transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), border-color .2s ease; }
+}
+
+/* ── PROGRESS BAR: shimmer sottile ── */
+.progress-bar, .goal-fill, .hp-bar-fill{ position: relative; overflow: hidden; }
+@media (prefers-reduced-motion: no-preference){
+  .progress-bar::after, .goal-fill::after{
+    content:''; position:absolute; inset:0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+    transform: translateX(-100%); animation: v49shimmer 2.2s var(--ease-out) infinite;
+  }
+  @keyframes v49shimmer{ to{ transform: translateX(100%); } }
+}
+
+/* ── MODAL: backdrop blur + entrata spring ── */
+.modal-overlay{ backdrop-filter: blur(3px); }
+@media (prefers-reduced-motion: no-preference){
+  .modal-overlay.open .modal{ animation: v49modalIn .32s var(--ease-spring); }
+  @keyframes v49modalIn{ 0%{ opacity:0; transform: translateY(24px) scale(.96); } to{ opacity:1; transform: translateY(0) scale(1); } }
+}
+
+/* ── TABELLE: hover riga con accento ── */
+tr:hover td{ box-shadow: inset 3px 0 0 -1px var(--primary-border); }
+
+/* ── ALERT: accento laterale ── */
+.alert{ border-left-width: 3px !important; }
+
+/* ── ICON BUTTON: press ── */
+.btn-icon{ transition: transform .16s var(--ease-out), border-color .18s ease, color .18s ease, background .18s ease !important; }
+.btn-icon:hover{ transform: translateY(-1px); }
+.btn-icon:active{ transform: scale(.92); }
+
+/* ── SIDEBAR gruppi: hover icona ── */
+.nav-item i{ transition: transform .16s var(--ease-out); }
+.nav-item:hover i{ transform: scale(1.12); }

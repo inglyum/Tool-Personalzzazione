@@ -1,0 +1,77 @@
+
+/* ═══ INGLY v58 — CHROME NORMALIZATION: topbar + sidebar coerenti e precisi ══
+   Unifica i bottoni iniettati con stili hardcoded incoerenti (indaco/grigio/
+   arcobaleno) in un sistema unico ambra. !important perché sovrascrive gli
+   stili inline. Solo aspetto, nessuna logica. */
+
+/* ── TOPBAR: altezza, allineamento, respiro ── */
+#topbar{ height:56px; gap:8px; padding:0 14px; align-items:center; }
+#topbar .logo{ font-size:15px; font-weight:800; }
+
+/* Tutti i bottoni topbar → un solo stile coerente (icona/pill neutra) ── */
+#topbar > button,
+#topbar .topbar-btn,
+#quick-capture-btn, #global-search-btn, #lic-topbar-btn,
+#cmd-launch-btn, #notif-btn, #ai-btn{
+  height:36px !important;
+  min-width:36px;
+  padding:0 11px !important;
+  display:inline-flex !important; align-items:center !important; gap:6px !important;
+  background:var(--bg-card2) !important;
+  border:1px solid var(--border) !important;
+  border-radius:10px !important;
+  color:var(--text-muted) !important;
+  font-size:12px !important; font-weight:600 !important;
+  white-space:nowrap !important; line-height:1 !important;
+  box-shadow:none !important;
+  transition:transform .14s cubic-bezier(.16,1,.3,1), background .16s ease, border-color .16s ease, color .16s ease !important;
+}
+#topbar > button:hover,
+#topbar .topbar-btn:hover,
+#global-search-btn:hover, #cmd-launch-btn:hover, #notif-btn:hover, #ai-btn:hover, #lic-topbar-btn:hover{
+  border-color:var(--primary-border) !important;
+  color:var(--primary) !important;
+  background:var(--primary-dim) !important;
+  transform:translateY(-1px);
+}
+#topbar > button:active, #topbar .topbar-btn:active{ transform:scale(.95); }
+
+/* Cattura = AZIONE PRIMARIA: ambra piena, spicca ma coerente ── */
+#quick-capture-btn{
+  background:linear-gradient(180deg, var(--primary), color-mix(in srgb,var(--primary) 86%,#000)) !important;
+  color:#1a1400 !important;
+  border-color:var(--primary) !important;
+  font-weight:800 !important;
+}
+#quick-capture-btn:hover{ filter:brightness(1.06); transform:translateY(-1px); }
+
+/* Badge conteggi nei bottoni topbar (notifiche/ai): pill rossa coerente ── */
+#topbar .badge, #notif-count, #ai-count{
+  font-size:9px !important; padding:1px 5px !important; border-radius:99px !important;
+  font-weight:800 !important; min-width:16px; text-align:center;
+}
+
+/* ── SIDEBAR: barra ricerca + toolbar precise ── */
+#sidebar-search{ padding:12px 12px 10px; }
+#nav-search{
+  height:38px; border-radius:10px; font-size:13px;
+  background:var(--bg-card2); border:1px solid var(--border);
+}
+#nav-search:focus{ border-color:var(--primary) !important; box-shadow:0 0 0 3px var(--primary-dim); }
+
+/* Toolbar sidebar (Espandi/Comprimi + quick tools): un solo stile ── */
+#sidebar-toolbar button{
+  border-radius:9px !important;
+  transition:transform .14s var(--ease-out), background .16s ease, border-color .16s ease, color .16s ease !important;
+}
+/* Quick tools icona: quadrati coerenti, hover ambra uniforme (niente arcobaleno) */
+#sidebar-toolbar button[title]:not([onclick*="expandAll"]):not([onclick*="collapseAll"]):hover{
+  border-color:var(--primary) !important;
+  background:var(--primary-dim) !important;
+}
+#sidebar-toolbar button:active{ transform:scale(.92); }
+
+/* Espandi/Comprimi: leggermente più forti */
+#sidebar-toolbar button[onclick*="expandAll"], #sidebar-toolbar button[onclick*="collapseAll"]{
+  font-size:11px !important; font-weight:700 !important;
+}

@@ -1,0 +1,16 @@
+Copyright (c) 2026 INGLY DESIGN — Giuseppe Inglima. Tutti i diritti riservati.
+
+Questo software e la documentazione che lo accompagna sono proprietari.
+Non è concessa alcuna licenza d'uso, copia, modifica, distribuzione o
+sublicenza senza autorizzazione scritta del titolare dei diritti.
+
+Le librerie di terze parti incluse in `src/legacy/vendor/` restano soggette
+alle rispettive licenze originali:
+
+  Chart.js 4.4.1 ............ MIT
+  jsPDF 2.5.1 ............... MIT
+  jspdf-autotable 3.8.2 ..... MIT
+  html2canvas 1.4.1 ......... MIT
+  SheetJS xlsx 0.18.5 ....... Apache-2.0
+  simple-statistics 7.8.3 ... ISC
+  JSZip 3.10.1 .............. MIT / GPLv3

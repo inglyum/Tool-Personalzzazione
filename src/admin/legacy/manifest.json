@@ -1,0 +1,117 @@
+{
+  "source": "INGLY-OS-Enterprise-Admin-v1.2.html",
+  "sourceBytes": 334909,
+  "sourceSha256": "7f43ee9eff4a393df2041d125676dd3efd34a1b544e24a792c66b1f2782c796b",
+  "extractedAt": "2026-08-25",
+  "parts": [
+    {
+      "type": "markup",
+      "text": "<!DOCTYPE html>\n<html lang=\"it\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>INGLY OS — Enterprise Admin</title>\n<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css\">\n",
+      "bytes": 281
+    },
+    {
+      "type": "style",
+      "file": "styles/001-ingly-enterprise-design-system.css",
+      "attrs": "",
+      "bytes": 19030,
+      "sha256": "1161db0436b40f4e",
+      "label": "INGLY ENTERPRISE — DESIGN SYSTEM"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/002-https-enforcement-deve-girare-su-https-in-produz.js",
+      "attrs": "",
+      "bytes": 792,
+      "sha256": "512ef94ffbac8a0f",
+      "label": "HTTPS enforcement — deve girare su HTTPS in produzione"
+    },
+    {
+      "type": "markup",
+      "file": "markup/001.html",
+      "bytes": 15965
+    },
+    {
+      "type": "script",
+      "file": "patches/003-engine-enterprise-database-demo-data.js",
+      "attrs": "",
+      "bytes": 269167,
+      "sha256": "6be0c45449c26e3a",
+      "label": "ENGINE — ENTERPRISE DATABASE + DEMO DATA"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/004-generatore-licenze-codec-identico-a-ingly-os-mai.js",
+      "attrs": "",
+      "bytes": 5201,
+      "sha256": "00d853ac938302ae",
+      "label": "GENERATORE LICENZE (codec identico a INGLY OS main) ═══════════════════ */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n</body>\n\n",
+      "bytes": 11
+    },
+    {
+      "type": "script",
+      "file": "patches/005-admin-session-enhancement-v2-0.js",
+      "attrs": "",
+      "bytes": 6993,
+      "sha256": "95416ff4c8a74110",
+      "label": "ADMIN SESSION ENHANCEMENT v2.0 === */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/006-admin-delete-suspend-enhancement-v1-0.js",
+      "attrs": "",
+      "bytes": 7422,
+      "sha256": "bd0206b8b2bc6be1",
+      "label": "ADMIN DELETE & SUSPEND ENHANCEMENT v1.0 === */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "style",
+      "file": "styles/007-fase-6-accento-ambra-contrasto-bottoni-pieni-tes.css",
+      "attrs": "id=\"admin-premium-polish\"",
+      "bytes": 3313,
+      "sha256": "318e811019445752",
+      "label": "Fase 6: accento ambra — contrasto bottoni pieni (testo scuro) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/008-azioni-bulk-utenti-selezione-multipla-layer-non-.js",
+      "attrs": "",
+      "bytes": 6560,
+      "sha256": "13898c32ec9d2b83",
+      "label": "AZIONI BULK UTENTI (selezione multipla) — layer non invasivo ═══════════"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n</html>\n",
+      "bytes": 10
+    }
+  ]
+}

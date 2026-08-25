@@ -1,0 +1,258 @@
+
+</head>
+<body>
+
+<!-- TOASTS -->
+<div id="toasts"></div>
+<div id="modal-host"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     LOGIN SCREEN
+═══════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="lc">
+    <div class="lc-logo">
+      <div style="width:56px;height:56px;background:linear-gradient(135deg,var(--accent),var(--acc2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;box-shadow:0 0 32px #6366f140">🎨</div>
+      <div style="font-size:22px;font-weight:900;letter-spacing:-.02em">INGLY <span style="color:var(--acc3)">OS</span></div>
+      <div style="font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:3px">Enterprise Admin Console</div>
+    </div>
+    <div class="lc-card">
+      <div style="font-size:16px;font-weight:800;margin-bottom:4px">Accesso sicuro</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:18px">Console riservata agli amministratori autorizzati</div>
+      <div class="lc-input-wrap"><i class="fas fa-user"></i><input id="l-user" placeholder="Username" value="superadmin" autocomplete="username"></div>
+      <div class="lc-input-wrap"><i class="fas fa-lock"></i><input id="l-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="lc-input-wrap" id="l-2fa-wrap" style="display:none">
+        <i class="fas fa-shield-alt"></i>
+        <input id="l-2fa" placeholder="Codice 2FA (lascia vuoto per demo)">
+      </div>
+      <button class="lc-btn" onclick="doLogin()"><i class="fas fa-sign-in-alt"></i> Accedi</button>
+      <div class="lc-err" id="l-err"></div>
+      <div style="margin-top:14px;padding:12px 14px;background:#6366f112;border:1px solid #6366f135;border-radius:10px;font-size:12px">
+        <div style="font-weight:800;color:var(--acc3);margin-bottom:8px;font-size:13px">🔑 Credenziali predefinite</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="color:var(--text2)">Username:</span>
+          <code style="background:#111;padding:2px 8px;border-radius:4px;color:#e2e2f0;font-size:12px">superadmin</code>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="color:var(--text2)">Password:</span>
+          <code style="background:#111;padding:2px 8px;border-radius:4px;color:#e2e2f0;font-size:12px">admin</code>
+        </div>
+        <button onclick="document.getElementById('l-user').value='superadmin';document.getElementById('l-pass').value='admin';doLogin();" 
+          style="width:100%;padding:8px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px">
+          ⚡ Accedi con credenziali predefinite
+        </button>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:10px;font-size:10px;color:var(--text4)">🔐 Connessione crittografata · Sessione monitorata · v2.0 Enterprise</div>
+    <div style="text-align:center;margin-top:6px">
+      <button onclick="resetAdminDB()" style="background:none;border:none;font-size:10px;color:var(--text4);cursor:pointer;text-decoration:underline">⚠️ Problemi di accesso? Reset database</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════ -->
+<div id="app" style="display:none">
+
+  <!-- TOPBAR -->
+  <header id="topbar">
+    <div class="tb-brand" id="tb-brand">
+      <div class="tb-logo">🎨</div>
+      <div id="tb-names">
+        <div class="tb-name">INGLY <span style="color:var(--acc3)">OS</span></div>
+        <div class="tb-ver">Enterprise v2.0</div>
+      </div>
+    </div>
+    <button class="tb-btn" onclick="toggleSidebar()" title="Toggle sidebar" style="margin-left:8px"><i class="fas fa-bars"></i></button>
+    <div class="tb-sep"></div>
+    <div class="tb-search">
+      <i class="fas fa-search"></i>
+      <input placeholder="Cerca utenti, log, sessioni..." oninput="globalSearch(this.value)" id="global-search">
+    </div>
+    <div class="tb-actions">
+      <button class="tb-btn" onclick="nav('billing-expiration')" title="Scadenze"><i class="fas fa-calendar-exclamation"></i><div class="tb-notif-dot" id="exp-dot" style="display:none"></div></button>
+      <button class="tb-btn" onclick="nav('security')" title="Sicurezza"><i class="fas fa-shield-alt"></i></button>
+      <button class="tb-btn" onclick="nav('audit-log')" title="Audit Log"><i class="fas fa-list-alt"></i></button>
+      <div class="tb-sep"></div>
+      <span id="tb-role-badge" class="tb-role-badge role-superadmin">Super Admin</span>
+      <div style="width:6px"></div>
+      <div style="display:flex;align-items:center;gap:5px;padding:4px 10px;background:#10b98110;border:1px solid #10b98130;border-radius:99px;cursor:default" title="Sincronizzazione Admin↔Tool attiva via BroadcastChannel + localStorage polling">
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite"></div>
+        <span style="font-size:9px;font-weight:700;color:var(--green);letter-spacing:.04em">SYNC ATTIVO</span>
+      </div>
+      <div style="width:6px"></div>
+      <div class="tb-avatar" id="tb-avatar" onclick="openAdminProfile()">SA</div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sb-section">Overview</div>
+    <div class="sb-item active" data-page="dashboard" onclick="nav('dashboard')"><i class="fas fa-chart-line"></i><span class="sb-label">Dashboard KPI</span></div>
+
+    <div class="sb-section">Gestione Utenti</div>
+    <div class="sb-item" data-page="users" onclick="nav('users')"><i class="fas fa-users"></i><span class="sb-label">User Management</span><div class="sb-badge" id="sb-badge-users">0</div></div>
+    <div class="sb-item" data-page="sessions" onclick="nav('sessions')"><i class="fas fa-desktop"></i><span class="sb-label">Session Management</span></div>
+    <div class="sb-item" data-page="devices" onclick="nav('devices')"><i class="fas fa-fingerprint"></i><span class="sb-label">Device Fingerprint</span></div>
+
+    <div class="sb-section">Billing & Piani</div>
+    <div class="sb-item" data-page="subscriptions" onclick="nav('subscriptions')"><i class="fas fa-credit-card"></i><span class="sb-label">Subscription Control</span></div>
+    <div class="sb-item" data-page="billing-expiration" onclick="nav('billing-expiration')"><i class="fas fa-calendar-times"></i><span class="sb-label">Expiration Center</span><div class="sb-badge yellow" id="sb-badge-exp">0</div></div>
+    <div class="sb-item" data-page="plans" onclick="nav('plans')"><i class="fas fa-layer-group"></i><span class="sb-label">Plan Management</span></div>
+
+    <div class="sb-section">Sicurezza</div>
+    <div class="sb-item" data-page="security" onclick="nav('security')"><i class="fas fa-shield-alt"></i><span class="sb-label">Security Center</span></div>
+    <div class="sb-item" data-page="anti-sharing" onclick="nav('anti-sharing')"><i class="fas fa-ban"></i><span class="sb-label">Anti-Sharing</span></div>
+    <div class="sb-item" data-page="license-server" onclick="nav('license-server')"><i class="fas fa-key"></i><span class="sb-label">License Server</span></div>
+    <div class="sb-item" data-page="audit-log" onclick="nav('audit-log')"><i class="fas fa-list-check"></i><span class="sb-label">Audit Log</span></div>
+
+    <div class="sb-section">Contenuti</div>
+    <div class="sb-item" data-page="creations" onclick="nav('creations')"><i class="fas fa-folder-open"></i><span class="sb-label">Creations</span></div>
+    <div class="sb-item" data-page="storage" onclick="nav('storage')"><i class="fas fa-database"></i><span class="sb-label">Storage</span></div>
+    <div class="sb-item" data-page="notifications" onclick="nav('notifications')"><i class="fas fa-bell"></i><span class="sb-label">Notifications</span></div>
+
+    <div class="sb-section">Sistema</div>
+    <div class="sb-item" data-page="admin-roles" onclick="nav('admin-roles')"><i class="fas fa-user-shield"></i><span class="sb-label">Admin & Ruoli</span></div>
+    <div class="sb-item" data-page="architecture" onclick="nav('architecture')"><i class="fas fa-sitemap"></i><span class="sb-label">Architettura</span></div>
+    <div class="sb-item" data-page="roadmap" onclick="nav('roadmap')"><i class="fas fa-map"></i><span class="sb-label">Roadmap Enterprise</span></div>
+    <div class="sb-sec" style="color:var(--acc3)">Cloud</div>
+    <div class="sb-item" data-page="cloud-settings" onclick="nav('cloud-settings')">
+      <i class="fas fa-cloud" style="color:var(--acc3)"></i>
+      <span class="sb-label">☁️ Cloud Sync</span>
+      <span id="sb-cloud-dot" style="width:7px;height:7px;border-radius:50%;background:#555;flex-shrink:0;margin-left:auto"></span>
+    </div>
+
+    <div class="sb-footer">
+      <div class="sb-user" onclick="openAdminProfile()">
+        <div class="tb-avatar" style="width:32px;height:32px;font-size:12px;border-radius:var(--r)" id="sb-avatar">SA</div>
+        <div class="sb-user-info">
+          <div class="sb-user-name" id="sb-username">Super Admin</div>
+          <div class="sb-user-role" id="sb-userrole">superadmin@ingly.io</div>
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="event.stopPropagation();doLogout()" title="Logout" style="margin-left:auto;width:24px;height:24px"><i class="fas fa-sign-out-alt" style="font-size:10px"></i></button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main id="content">
+    <div id="page-dashboard"></div>
+    <div id="page-users"             style="display:none"></div>
+    <div id="page-sessions"          style="display:none"></div>
+    <div id="page-devices"           style="display:none"></div>
+    <div id="page-subscriptions"     style="display:none"></div>
+    <div id="page-billing-expiration"style="display:none"></div>
+    <div id="page-plans"             style="display:none"></div>
+    <div id="page-security"          style="display:none"></div>
+    <div id="page-anti-sharing"      style="display:none"></div>
+    <div id="page-license-server"    style="display:none"></div>
+    <div id="page-audit-log"         style="display:none"></div>
+    <div id="page-creations"         style="display:none"></div>
+    <div id="page-storage"           style="display:none"></div>
+    <div id="page-notifications"     style="display:none"></div>
+    <div id="page-admin-roles"       style="display:none"></div>
+    <div id="page-architecture"      style="display:none"></div>
+    <div id="page-roadmap"           style="display:none"></div>
+  >
+
+    <div id="page-cloud-settings" style="display:none">
+      <div class="page-header">
+        <div>
+          <div class="page-title">&#9729;&#65039; Cloud Sync</div>
+          <div class="page-sub">Database cloud cross-browser</div>
+        </div>
+        <span class="badge b-warn" id="cloud-status-badge">Non configurato</span>
+      </div>
+      <div class="card mb-12">
+        <div class="card-title mb-8">Configurazione Supabase</div>
+        <div class="alert a-blue mb-12">
+          Crea un progetto gratuito su <strong>supabase.com</strong>, poi incolla qui URL e chiave API.
+        </div>
+        <div class="form-group mb-8">
+          <label>Supabase URL</label>
+          <input id="sb-url" placeholder="https://xxxx.supabase.co" value="https://efphymfbjaxbtuujcgvr.supabase.co" style="font-family:monospace">
+        </div>
+        <div class="form-group mb-12">
+          <label>Anon Key</label>
+          <input id="sb-key" placeholder="eyJhbGci..." value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcGh5bWZiamF4YnR1dWpjZ3ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyOTgyNTcsImV4cCI6MjA5Nzg3NDI1N30.s5vwCaNobMT9uHFsnn5wNM0ODeLOk1f1JGHNTo3dSOc" style="font-family:monospace;font-size:10px">
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveSupabaseConfig()">
+            <i class="fas fa-save"></i> Salva e Attiva
+          </button>
+          <button class="btn btn-ghost" onclick="testSupabaseConnection()">
+            <i class="fas fa-plug"></i> Testa Connessione
+          </button>
+          <button class="btn btn-success" onclick="syncAllUsersToCloud()">
+            <i class="fas fa-cloud-upload-alt"></i> Sincronizza Utenti
+          </button>
+        </div>
+        <div id="sb-test-result" class="mt-8"></div>
+      </div>
+      <div class="card">
+        <div class="card-title mb-8">SQL da eseguire su Supabase</div>
+        <div class="text-sm text-muted mb-8">
+          Supabase &#8594; SQL Editor &#8594; New query &#8594; incolla &#8594; Run
+        </div>
+        <textarea id="supabase-sql" readonly rows="16"
+          style="width:100%;font-family:monospace;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px;color:var(--text2);resize:vertical"
+>create table if not exists public.ingly_users (
+  id            text primary key,
+  username      text unique not null,
+  email         text,
+  password_hash text not null,
+  plan_id       text,
+  status        text,
+  active        boolean default true,
+  expires_at    timestamptz,
+  lab_name      text,
+  modules_json  text,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now(),
+  last_login    timestamptz
+);
+create table if not exists public.ingly_sessions (
+  id           text primary key default gen_random_uuid()::text,
+  user_id      text references ingly_users(id) on delete cascade,
+  username     text,
+  token        text,
+  device_fp    text,
+  browser      text,
+  screen       text,
+  platform     text,
+  logged_in_at timestamptz default now(),
+  logged_out_at timestamptz,
+  last_seen    timestamptz default now(),
+  active       boolean default true,
+  created_at   timestamptz default now()
+);
+create table if not exists public.ingly_audit (
+  id      text primary key default gen_random_uuid()::text,
+  action  text, detail text, user_id text,
+  ts      timestamptz default now()
+);
+alter table public.ingly_users enable row level security;
+create policy open_pol on public.ingly_users for all using (true) with check (true);
+alter table public.ingly_sessions enable row level security;
+create policy open_pol on public.ingly_sessions for all using (true) with check (true);
+alter table public.ingly_audit enable row level security;
+create policy open_pol on public.ingly_audit for all using (true) with check (true);
+alter publication supabase_realtime add table public.ingly_users;</textarea>
+        <button class="btn btn-ghost btn-sm mt-8"
+          onclick="navigator.clipboard.writeText(document.getElementById('supabase-sql').value).then(function(){toast('SQL copiato!','success')})">
+          <i class="fas fa-copy"></i> Copia SQL
+        </button>
+        <div class="alert a-blue mt-12">
+          <b>Istruzioni (5 minuti):</b><br>
+          1. Vai su <a href="https://supabase.com" target="_blank">supabase.com</a> &#8594; crea account &#8594; New Project<br>
+          2. SQL Editor &#8594; New query &#8594; incolla il SQL qui sopra &#8594; Run<br>
+          3. Settings &#8594; API &#8594; copia Project URL e anon key<br>
+          4. Incolla nei campi qui sopra &#8594; Salva e Attiva &#8594; Testa Connessione<br>
+          5. Sincronizza Utenti &#8594; fatto!
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+

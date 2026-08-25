@@ -1,0 +1,2301 @@
+{
+  "source": "INGLY-OS-v96-STANDALONE.html",
+  "sourceBytes": 9363377,
+  "sourceSha256": "d30a1278e4c399ba8cc29044d1ed183b0be11f9aeadfaad657b296d75e836399",
+  "extractedAt": "2026-08-25",
+  "parts": [
+    {
+      "type": "markup",
+      "file": "markup/001.html",
+      "bytes": 1298
+    },
+    {
+      "type": "script",
+      "file": "vendor/chartjs.js",
+      "attrs": "",
+      "bytes": 205203,
+      "sha256": "44ac048e8238af24",
+      "label": "Chart.js 4.4.1 — VENDORED inline (offline-first, sostituisce il CDN) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "vendor/jspdf.js",
+      "attrs": "",
+      "bytes": 364518,
+      "sha256": "f10ffaa641b3e848",
+      "label": "jsPDF 2.5.1 — VENDORED inline (offline-first) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "vendor/html2canvas.js",
+      "attrs": "",
+      "bytes": 198750,
+      "sha256": "1cd86a2cdae24354",
+      "label": "html2canvas 1.4.1 — VENDORED inline (offline-first) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "vendor/sheetjs-xlsx.js",
+      "attrs": "",
+      "bytes": 881790,
+      "sha256": "540d16d559bad91e",
+      "label": "SheetJS xlsx 0.18.5 — VENDORED inline (offline-first) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "vendor/jspdf-autotable.js",
+      "attrs": "",
+      "bytes": 39041,
+      "sha256": "d7964de6ab793a52",
+      "label": "jspdf-autotable 3.8.2 — VENDORED inline (offline-first) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/006-fallback-offline-per-librerie-cdn.js",
+      "attrs": "",
+      "bytes": 1163,
+      "sha256": "010114c6b8293113",
+      "label": "FALLBACK OFFLINE per librerie CDN ═══════════════════════════════════"
+    },
+    {
+      "type": "markup",
+      "file": "markup/002.html",
+      "bytes": 1937
+    },
+    {
+      "type": "script",
+      "file": "vendor/simple-statistics.js",
+      "attrs": "",
+      "bytes": 24055,
+      "sha256": "f0c7139b14e8a0f9",
+      "label": "simple-statistics 7.8.3 — VENDORED inline (offline-first) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "external/008-block.js",
+      "attrs": "src=\"https://cdn.jsdelivr.net/npm/ml-kmeans@6.0.0/lib/index.min.js\"",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c14",
+      "label": ""
+    },
+    {
+      "type": "markup",
+      "text": "\n  ",
+      "bytes": 3
+    },
+    {
+      "type": "style",
+      "file": "styles/009-favs-quickbar-display-none.css",
+      "attrs": "rel=\"stylesheet\" crossorigin",
+      "bytes": 44884,
+      "sha256": "61d9287d21ae263e",
+      "label": "#favs-quickbar{display:none}"
+    },
+    {
+      "type": "markup",
+      "file": "markup/003.html",
+      "bytes": 529
+    },
+    {
+      "type": "style",
+      "file": "styles/010-z-index-hierarchy-single-source-of-truth.css",
+      "attrs": "",
+      "bytes": 3261,
+      "sha256": "68468ae09bf6e056",
+      "label": "Z-INDEX HIERARCHY - Single Source of Truth                           ║"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- ══ SPRINT 1 — Sidebar icon-only collapse ══════════════════════════════ -->\n",
+      "bytes": 149
+    },
+    {
+      "type": "style",
+      "file": "styles/011-desktop-collapsed-icon-only-60px-not-fully-hidde.css",
+      "attrs": "",
+      "bytes": 1973,
+      "sha256": "61e4e807e4d471db",
+      "label": "Desktop collapsed = icon-only (60px), not fully hidden */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- ══════════════════════════════════════════════════════════\n     INGLY OS v45 — Professional UI System\n     Sidebar classes, filter bar, section headers, table UX\n     ══════════════════════════════════════════════════════════ -->\n",
+      "bytes": 471
+    },
+    {
+      "type": "style",
+      "file": "styles/012-sidebar-nav-variant-classes-replace-inline-style.css",
+      "attrs": "",
+      "bytes": 9044,
+      "sha256": "45b689b478c6190e",
+      "label": "Sidebar nav variant classes (replace inline styles) ── */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" crossorigin>\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap\" rel=\"stylesheet\">\n",
+      "bytes": 378
+    },
+    {
+      "type": "style",
+      "file": "styles/013-html-body-background-09090b-color-e5e5e5.css",
+      "attrs": "",
+      "bytes": 297,
+      "sha256": "662327b4639c74b8",
+      "label": "html,body{background:#09090b;color:#e5e5e5}"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "vendor/jszip.js",
+      "attrs": "",
+      "bytes": 97686,
+      "sha256": "52ba194d3e5eb7fa",
+      "label": "JSZip 3.10.1 — VENDORED inline (offline-first) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n  <link rel=\"apple-touch-icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='36' fill='%236366f1'/><text x='90' y='122' text-anchor='middle' font-size='100' font-family='Arial'>🎨</text></svg>\">\n",
+      "bytes": 275
+    },
+    {
+      "type": "script",
+      "file": "patches/015-ingly-os-v92-seed-licenza-owner-login-riattivato.js",
+      "attrs": "",
+      "bytes": 1127,
+      "sha256": "c770a415d08a2031",
+      "label": "INGLY OS v92 — SEED LICENZA OWNER (login RIATTIVATO) ════"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "style",
+      "file": "styles/016-ingly-os-v62-ui-polish-layer-carica-per-ultimo-v.css",
+      "attrs": "id=\"v49-ui-polish\"",
+      "bytes": 7078,
+      "sha256": "076822fe7e89ca21",
+      "label": "INGLY OS v62 — UI POLISH LAYER (carica per ultimo, vince la cascata)"
+    },
+    {
+      "type": "markup",
+      "file": "markup/004.html",
+      "bytes": 533834
+    },
+    {
+      "type": "style",
+      "file": "styles/017-qrp-modal-rp-cat-all-unset-display-flex-align-it.css",
+      "attrs": "",
+      "bytes": 2235,
+      "sha256": "818ab46e12c92ac8",
+      "label": "#qrp-modal .rp-cat{all:unset;display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:9px;cursor:pointer;f"
+    },
+    {
+      "type": "markup",
+      "file": "markup/005.html",
+      "bytes": 134386
+    },
+    {
+      "type": "script",
+      "file": "patches/018-ingly-os-v27-pro-x-master-fix-patch.js",
+      "attrs": "id=\"v27-prox-fix\"",
+      "bytes": 72165,
+      "sha256": "2d47ab8e9e641756",
+      "label": "INGLY OS v27 — PRO X MASTER FIX PATCH"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/019-ingly-os-bootstrap-safety-layer.js",
+      "attrs": "",
+      "bytes": 1141,
+      "sha256": "f434bb78eeff406f",
+      "label": "INGLY OS — Bootstrap Safety Layer ════ */"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/020-early-safety-stubs-prevent-referenceerror-during.js",
+      "attrs": "",
+      "bytes": 689,
+      "sha256": "8156419018bea114",
+      "label": "Early safety stubs — prevent ReferenceError during load ──"
+    },
+    {
+      "type": "markup",
+      "file": "markup/006.html",
+      "bytes": 14037
+    },
+    {
+      "type": "script",
+      "file": "app/src/core/ai-provider.js",
+      "attrs": "",
+      "bytes": 20741,
+      "sha256": "3191bb281695b176",
+      "label": "src/core/ai-provider.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/core/idb.js",
+      "attrs": "",
+      "bytes": 23362,
+      "sha256": "8bf873a70edb0da1",
+      "label": "src/core/idb.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/core/bus.js",
+      "attrs": "",
+      "bytes": 2180,
+      "sha256": "582f1303e66a226d",
+      "label": "src/core/bus.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/core/store.js",
+      "attrs": "",
+      "bytes": 7152,
+      "sha256": "799024c4d55ff271",
+      "label": "src/core/store.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- Layer 2: Utilities + Currency -->\n",
+      "bytes": 41
+    },
+    {
+      "type": "script",
+      "file": "app/src/utils/helpers.js",
+      "attrs": "",
+      "bytes": 83195,
+      "sha256": "bdabbd57ba33a880",
+      "label": "src/utils/helpers.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/core/currency.js",
+      "attrs": "",
+      "bytes": 12517,
+      "sha256": "9395943afb8b7d71",
+      "label": "src/core/currency.js ==="
+    },
+    {
+      "type": "markup",
+      "file": "markup/007.html",
+      "bytes": 526
+    },
+    {
+      "type": "script",
+      "file": "patches/027-modal-manager-global-modal-overlay-management-sy.js",
+      "attrs": "",
+      "bytes": 6874,
+      "sha256": "0ba684b019b1d348",
+      "label": "MODAL MANAGER - Global modal/overlay management system                ║"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- Layer 3: App Core -->\n",
+      "bytes": 29
+    },
+    {
+      "type": "script",
+      "file": "app/src/core/app.js",
+      "attrs": "",
+      "bytes": 46545,
+      "sha256": "09bf90ca4c11895e",
+      "label": "src/core/app.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- Layer 4: Business Modules (dependency order) -->\n",
+      "bytes": 56
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/dashboard/index.js",
+      "attrs": "",
+      "bytes": 66873,
+      "sha256": "f39ff49eae71cb06",
+      "label": "src/modules/dashboard/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/quoter/index.js",
+      "attrs": "",
+      "bytes": 150226,
+      "sha256": "11aa484cc0c8551d",
+      "label": "src/modules/quoter/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/items/index.js",
+      "attrs": "",
+      "bytes": 288433,
+      "sha256": "5217c9acd5c74d44",
+      "label": "src/modules/items/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/clients/index.js",
+      "attrs": "",
+      "bytes": 95667,
+      "sha256": "db45d8e3512857c4",
+      "label": "src/modules/clients/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/sales/index.js",
+      "attrs": "",
+      "bytes": 190162,
+      "sha256": "abc77ca6573de1bd",
+      "label": "src/modules/sales/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/orders/index.js",
+      "attrs": "",
+      "bytes": 162908,
+      "sha256": "282c1ce61941fdc1",
+      "label": "src/modules/orders/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/pipeline/index.js",
+      "attrs": "",
+      "bytes": 81587,
+      "sha256": "a339ffa051d89f42",
+      "label": "src/modules/pipeline/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/catalog/index.js",
+      "attrs": "",
+      "bytes": 254820,
+      "sha256": "9e273414d57e6755",
+      "label": "src/modules/catalog/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/marketing/index.js",
+      "attrs": "",
+      "bytes": 414811,
+      "sha256": "329fdc36890f4293",
+      "label": "src/modules/marketing/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/ai/index.js",
+      "attrs": "",
+      "bytes": 199488,
+      "sha256": "909e30639f3112d2",
+      "label": "src/modules/ai/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "app/src/modules/settings/index.js",
+      "attrs": "",
+      "bytes": 537996,
+      "sha256": "ed3b85fbea56cdca",
+      "label": "src/modules/settings/index.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- Layer 5: Entry Point -->\n",
+      "bytes": 32
+    },
+    {
+      "type": "script",
+      "file": "app/src/main.js",
+      "attrs": "",
+      "bytes": 93230,
+      "sha256": "060e70d7db049e75",
+      "label": "src/main.js ==="
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/041-ingly-os-v10-remaining-real-modules.js",
+      "attrs": "",
+      "bytes": 40324,
+      "sha256": "3b9a486d198ddc0b",
+      "label": "INGLY OS v10 — REMAINING REAL MODULES"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/042-ingly-os-v10-workflow-sync-engine.js",
+      "attrs": "",
+      "bytes": 24055,
+      "sha256": "d2405f17a1ed240a",
+      "label": "INGLY OS v10 — WORKFLOW SYNC ENGINE"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/043-ingly-os-v10-lab-setup-lista-acquisti-ai.js",
+      "attrs": "",
+      "bytes": 57825,
+      "sha256": "ac94c0159ba3fdc7",
+      "label": "INGLY OS v10 — LAB SETUP & LISTA ACQUISTI AI"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/044-ingly-os-v10-pipeline-lavori-pro-patch.js",
+      "attrs": "",
+      "bytes": 25447,
+      "sha256": "adff5e3518afba20",
+      "label": "INGLY OS v10 — PIPELINE LAVORI PRO PATCH"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/045-ingly-os-v10-sales-pro-patch.js",
+      "attrs": "",
+      "bytes": 11482,
+      "sha256": "1e7358b706bbb500",
+      "label": "INGLY OS v10 — SALES PRO PATCH"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/046-ingly-os-v10-all-improvements-pack.js",
+      "attrs": "",
+      "bytes": 48198,
+      "sha256": "0a0fa039b1736f49",
+      "label": "INGLY OS v10 — ALL IMPROVEMENTS PACK"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/047-ingly-os-v10-final-features-pack.js",
+      "attrs": "",
+      "bytes": 18455,
+      "sha256": "7cd865428494334e",
+      "label": "INGLY OS v10 — FINAL FEATURES PACK"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/048-window-archiveorder-async-function-orderid.js",
+      "attrs": "",
+      "bytes": 774,
+      "sha256": "53e96f4345ad1b85",
+      "label": "window._archiveOrder = async function(orderId) {"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/049-ingly-os-v10-final-polish-pack.js",
+      "attrs": "",
+      "bytes": 16895,
+      "sha256": "6528684ef0a4ebc2",
+      "label": "INGLY OS v10 — FINAL POLISH PACK"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/050-ingly-os-v10-pdf-template-system.js",
+      "attrs": "",
+      "bytes": 49584,
+      "sha256": "a0f167cedeeec00e",
+      "label": "INGLY OS v10 — PDF & TEMPLATE SYSTEM"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/051-ingly-os-v17-stability-workflow-sync-engine.js",
+      "attrs": "",
+      "bytes": 16439,
+      "sha256": "79dda8b70b4f58ee",
+      "label": "INGLY OS v17 — STABILITY & WORKFLOW SYNC ENGINE"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/052-ingly-os-v17-gestione-ordini-workflow-unificato.js",
+      "attrs": "",
+      "bytes": 60998,
+      "sha256": "54b346d0a72a31df",
+      "label": "INGLY OS v17 — GESTIONE ORDINI & WORKFLOW UNIFICATO"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n</script>\n\n",
+      "bytes": 13
+    },
+    {
+      "type": "script",
+      "file": "patches/053-auto-refresh-globale-su-orderupdated.js",
+      "attrs": "",
+      "bytes": 957,
+      "sha256": "18016ed8747d2e3a",
+      "label": "Auto-refresh GLOBALE su orderUpdated"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/054-template-documenti-editabile-v17.js",
+      "attrs": "",
+      "bytes": 27936,
+      "sha256": "4b6af1feeec11d7e",
+      "label": "TEMPLATE DOCUMENTI EDITABILE — v17"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/055-ingly-os-v17-patch-completa.js",
+      "attrs": "",
+      "bytes": 33504,
+      "sha256": "b7cb927dd919a6fb",
+      "label": "INGLY OS v17 — PATCH COMPLETA"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/056-ingly-os-v18-tour-guidato-pwa-profilo-azienda-ap.js",
+      "attrs": "",
+      "bytes": 38019,
+      "sha256": "4ccf3fcbafa70b8c",
+      "label": "INGLY OS v18 — TOUR GUIDATO + PWA + PROFILO AZIENDA + API KEY MANAGER"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/057-ingly-os-v19-produzione-avanzata.js",
+      "attrs": "",
+      "bytes": 23793,
+      "sha256": "8775d49a5279857e",
+      "label": "INGLY OS v19 — PRODUZIONE AVANZATA"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/058-ingly-os-v20-report-mensile-ai-memoria-briefing-.js",
+      "attrs": "",
+      "bytes": 28762,
+      "sha256": "c221ed6da4957da6",
+      "label": "INGLY OS v20 — REPORT MENSILE · AI MEMORIA · BRIEFING AZIONI · LICENZE"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/059-ingly-os-v11-dashboard-widget-import-csv-etsy-li.js",
+      "attrs": "",
+      "bytes": 68187,
+      "sha256": "38ad1fb808f7e68d",
+      "label": "INGLY OS v11 — DASHBOARD WIDGET · IMPORT CSV ETSY · LINK PREVENTIVO"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/060-ingly-os-brand-identity-module.js",
+      "attrs": "",
+      "bytes": 34122,
+      "sha256": "d384d4efcb54bd7e",
+      "label": "INGLY OS — BRAND IDENTITY MODULE"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/061-ingly-os-v11-english-100-cloud-update-system.js",
+      "attrs": "",
+      "bytes": 22530,
+      "sha256": "d9aef131d55751e9",
+      "label": "INGLY OS v11 — ENGLISH 100% + CLOUD UPDATE SYSTEM"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/062-ingly-os-laboratorio-must-have.js",
+      "attrs": "",
+      "bytes": 40128,
+      "sha256": "1ae705ea5b65f869",
+      "label": "INGLY OS — LABORATORIO MUST HAVE"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/063-ingly-os-roadmap-continuation.js",
+      "attrs": "",
+      "bytes": 41613,
+      "sha256": "06dbb5c1ef77270b",
+      "label": "INGLY OS — ROADMAP CONTINUATION"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/064-ingly-os-next-roadmap-batch.js",
+      "attrs": "",
+      "bytes": 52647,
+      "sha256": "bab7531eb90be98f",
+      "label": "INGLY OS — NEXT ROADMAP BATCH"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/065-ingly-os-final-roadmap-batch.js",
+      "attrs": "",
+      "bytes": 48574,
+      "sha256": "bc74877db6664827",
+      "label": "INGLY OS — FINAL ROADMAP BATCH"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/066-ingly-os-immagine-prodotto-nel-quoter-gestione-o.js",
+      "attrs": "",
+      "bytes": 35122,
+      "sha256": "de552f89ea3eb5d8",
+      "label": "INGLY OS — IMMAGINE PRODOTTO NEL QUOTER & GESTIONE ORDINI"
+    },
+    {
+      "type": "markup",
+      "file": "markup/008.html",
+      "bytes": 12440
+    },
+    {
+      "type": "script",
+      "file": "patches/067-var-inspireboard-function.js",
+      "attrs": "",
+      "bytes": 26300,
+      "sha256": "b1a1fe1ea8a55d9b",
+      "label": "var InspireBoard = (function(){"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/068-quote-pdf-customizer-professionale.js",
+      "attrs": "",
+      "bytes": 16562,
+      "sha256": "10d3a1eb23875427",
+      "label": "📄 QUOTE PDF CUSTOMIZER — Professionale"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/069-smart-quote-apparel-v2-modulo-professionale-abbi.js",
+      "attrs": "",
+      "bytes": 88799,
+      "sha256": "d6c89a6dfa62023b",
+      "label": "👕 SMART QUOTE APPAREL v2 — Modulo professionale abbigliamento"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/070-competitors-board-analisi-competitor-personalizz.js",
+      "attrs": "",
+      "bytes": 53380,
+      "sha256": "7e2928f4330db82e",
+      "label": "🔍 COMPETITORS BOARD — Analisi competitor personalizzazione laser"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/071-competitors-sezione-monitoraggio-concorrenza.js",
+      "attrs": "",
+      "bytes": 41422,
+      "sha256": "2a993ee658b5d3cc",
+      "label": "🏆 COMPETITORS — Sezione monitoraggio concorrenza"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n<!-- ═══════════════ INGLY SYNC v1 ═══════════════ -->\n",
+      "bytes": 117
+    },
+    {
+      "type": "script",
+      "file": "patches/072-ingly-sync-real-time-multi-device-sync.js",
+      "attrs": "",
+      "bytes": 29198,
+      "sha256": "4b7e2fd844ec1f92",
+      "label": "🔄 INGLY SYNC — Real-time multi-device sync"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/073-patch-order-ing-codes-enhanced-pdf-with-image.js",
+      "attrs": "",
+      "bytes": 5500,
+      "sha256": "81aa9265e0475c08",
+      "label": "PATCH: Order ING codes + enhanced PDF with image"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/074-function-archivepatch.js",
+      "attrs": "",
+      "bytes": 4238,
+      "sha256": "8229fbc1bb449e82",
+      "label": ";(function _archivePatch(){"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/075-ingly-os-v18-ai-market-intelligence-bank-funds-l.js",
+      "attrs": "",
+      "bytes": 101229,
+      "sha256": "11048b85da0550d5",
+      "label": "INGLY OS v18 — AI MARKET INTELLIGENCE + BANK FUNDS + LASER QUOTER B2B"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n\n",
+      "bytes": 3
+    },
+    {
+      "type": "script",
+      "file": "patches/076-ingly-os-v21-mega-patch.js",
+      "attrs": "",
+      "bytes": 57344,
+      "sha256": "ab19b5e3fe601063",
+      "label": "INGLY OS v21 — Mega Patch"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/077-ingly-os-v22-cloud-sync-etsy-analytics-fix-b2b-p.js",
+      "attrs": "",
+      "bytes": 30300,
+      "sha256": "624fac4d08c31ae3",
+      "label": "INGLY OS v22 — Cloud Sync + Etsy Analytics Fix + B2B Products"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/078-ingly-os-v23-laser-b2b-pro-catalogo-completo-cru.js",
+      "attrs": "",
+      "bytes": 65067,
+      "sha256": "5b7583aa269cb317",
+      "label": "INGLY OS v23 — Laser B2B Pro: Catalogo completo + CRUD + UI Pro"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/079-ingly-os-v24-fix-tofixed-magazzino-unificato-pro.js",
+      "attrs": "",
+      "bytes": 41736,
+      "sha256": "d66b3772086530b4",
+      "label": "INGLY OS v24 — Fix toFixed + Magazzino Unificato Pro"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/080-ingly-os-v25-crm-vcf-import-add-modal-cloud-sync.js",
+      "attrs": "",
+      "bytes": 22651,
+      "sha256": "70304d821de96262",
+      "label": "INGLY OS v25 — CRM VCF Import + Add Modal + Cloud Sync improved"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/081-ingly-os-v26-crm-selezione-multipla-elimina-expo.js",
+      "attrs": "",
+      "bytes": 23550,
+      "sha256": "4c538eea7cf35c92",
+      "label": "INGLY OS v26 — CRM: Selezione multipla + Elimina + Export VCF/CSV"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/082-ingly-os-v27-crm-tags-note-preset-depth-fixes.js",
+      "attrs": "",
+      "bytes": 22114,
+      "sha256": "ce5894ef6b15be42",
+      "label": "INGLY OS v27 — CRM Tags + Note preset + Depth fixes"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/083-ingly-os-v28-feature-pack-part-1.js",
+      "attrs": "",
+      "bytes": 33672,
+      "sha256": "6222012ff14c6b7a",
+      "label": "INGLY OS v28 — Feature Pack Part 1"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/084-ingly-os-v28-feature-pack-part-2.js",
+      "attrs": "",
+      "bytes": 51687,
+      "sha256": "9cf613849c77c440",
+      "label": "INGLY OS v28 — Feature Pack Part 2"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/085-ingly-os-v30-professional-improvements.js",
+      "attrs": "",
+      "bytes": 48368,
+      "sha256": "e0ab9c6af87f6a7a",
+      "label": "INGLY OS v30 — Professional Improvements"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/086-ingly-os-v32-laserb2b-pro-ultimate.js",
+      "attrs": "",
+      "bytes": 53939,
+      "sha256": "78c3487b64ed8a5f",
+      "label": "INGLY OS v32 — LaserB2B Pro Ultimate"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/087-ingly-os-v33-catalogo-b2b-professionale.js",
+      "attrs": "",
+      "bytes": 34582,
+      "sha256": "c28b8718095ee358",
+      "label": "INGLY OS v33 — Catalogo B2B Professionale"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/088-ingly-os-v35-feature-pack-part-1-features-1-8.js",
+      "attrs": "",
+      "bytes": 30079,
+      "sha256": "42ca9ecd10f37fcc",
+      "label": "INGLY OS v35 — Feature Pack Part 1 (Features 1-8)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/089-ingly-os-v35-feature-pack-part-2-features-9-15.js",
+      "attrs": "",
+      "bytes": 40131,
+      "sha256": "3674396ff694011c",
+      "label": "INGLY OS v35 — Feature Pack Part 2 (Features 9-15)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/090-ingly-os-v36-6-feature-pack.js",
+      "attrs": "",
+      "bytes": 48448,
+      "sha256": "303a449b435d3f23",
+      "label": "INGLY OS v36 — 6 Feature Pack"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/091-ingly-os-v37-task-force-best-version.js",
+      "attrs": "",
+      "bytes": 21284,
+      "sha256": "47ba533a8faa04e7",
+      "label": "INGLY OS v37 — Task Force Best Version"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/092-ingly-os-v37-task-force-best-version.js",
+      "attrs": "",
+      "bytes": 23163,
+      "sha256": "9dbb60a757386482",
+      "label": "INGLY OS v37 — Task Force Best Version"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/093-ingly-os-v37-task-force-best-version.js",
+      "attrs": "",
+      "bytes": 20715,
+      "sha256": "df9a9fdd87329954",
+      "label": "INGLY OS v37 — Task Force Best Version"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/094-ingly-os-v37b-task-force-final-remaining-24-item.js",
+      "attrs": "",
+      "bytes": 30123,
+      "sha256": "260fdf6ad85a015f",
+      "label": "INGLY OS v37b — Task Force FINAL · Remaining 24 Items"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/095-ingly-os-v37b-task-force-final-part-2.js",
+      "attrs": "",
+      "bytes": 34259,
+      "sha256": "dbc1e275600a61ca",
+      "label": "INGLY OS v37b — Task Force FINAL · Part 2"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/096-ingly-os-v37c-laserb2b-master-consolidato.js",
+      "attrs": "",
+      "bytes": 30290,
+      "sha256": "6e9a7a6bd3c8aedd",
+      "label": "INGLY OS v37c — LaserB2B Master Consolidato"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/097-ingly-os-v37c-gantt-ordini-multi-profile-passwor.js",
+      "attrs": "",
+      "bytes": 17228,
+      "sha256": "838b4f690b253066",
+      "label": "INGLY OS v37c — Gantt Ordini + Multi-Profile (password locale)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/098-ingly-os-v38-supply-chain-market-intelligence-pr.js",
+      "attrs": "",
+      "bytes": 65992,
+      "sha256": "4308375215afa06d",
+      "label": "INGLY OS v38 — Supply Chain & Market Intelligence Pro"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/099-ingly-prox-js-ingly-os-pro-x-v2.js",
+      "attrs": "",
+      "bytes": 106731,
+      "sha256": "08797e9abd663407",
+      "label": "ingly-prox.js — INGLY OS PRO X · v2"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/100-ingly-prox-boost-js-ingly-os-pro-x-boost-layer-v.js",
+      "attrs": "",
+      "bytes": 112255,
+      "sha256": "5af5817ea82c3532",
+      "label": "ingly-prox-boost.js — INGLY OS PRO X · Boost Layer v3"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/101-ingly-prox-v2-js-ingly-os-v1-fondamenta-operativ.js",
+      "attrs": "",
+      "bytes": 69126,
+      "sha256": "df442b25d7038a73",
+      "label": "ingly-prox-v2.js — INGLY OS · V1 Fondamenta Operative + V2 Intelligenza Commerciale"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/102-ingly-prox-v3-js-ingly-os-v3-production-hub-maga.js",
+      "attrs": "",
+      "bytes": 75361,
+      "sha256": "0d4b363cc00330e7",
+      "label": "ingly-prox-v3.js — INGLY OS · V3 Production Hub + Magazzino ERP Pro"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/103-ingly-enterprise-v1-fondamenta-operative.js",
+      "attrs": "",
+      "bytes": 57632,
+      "sha256": "8d05ed62dea7a878",
+      "label": "INGLY ENTERPRISE V1 — Fondamenta Operative"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/104-ingly-enterprise-v2-finance-command-center.js",
+      "attrs": "",
+      "bytes": 47420,
+      "sha256": "fd177d563750a92a",
+      "label": "INGLY ENTERPRISE V2 — Finance Command Center"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/105-ingly-enterprise-v3-production-hub-machine-intel.js",
+      "attrs": "",
+      "bytes": 53403,
+      "sha256": "4ce2a4fc36cb9cfd",
+      "label": "INGLY ENTERPRISE V3 — Production Hub + Machine Intelligence"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n\n\n\n\n\n",
+      "bytes": 7
+    },
+    {
+      "type": "script",
+      "file": "patches/106-ingly-os-v27-13-moduli-ai-editabili-rendering-bu.js",
+      "attrs": "id=\"v27-ai-edit\"",
+      "bytes": 29256,
+      "sha256": "5be2c55cbf96e37a",
+      "label": "INGLY OS v27 — 13 MODULI AI EDITABILI (rendering bulletproof)"
+    },
+    {
+      "type": "markup",
+      "file": "markup/009.html",
+      "bytes": 518
+    },
+    {
+      "type": "style",
+      "file": "styles/107-view-print3d-overflow-y-auto.css",
+      "attrs": "",
+      "bytes": 4848,
+      "sha256": "745e10bf46b09247",
+      "label": "#view-print3d{overflow-y:auto}"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/108-var-print3dquoter-function.js",
+      "attrs": "",
+      "bytes": 36775,
+      "sha256": "9874ecf5e43ba68f",
+      "label": "var Print3DQuoter=(function(){"
+    },
+    {
+      "type": "markup",
+      "file": "markup/010.html",
+      "bytes": 2551
+    },
+    {
+      "type": "script",
+      "file": "patches/109-function.js",
+      "attrs": "",
+      "bytes": 27060,
+      "sha256": "42526ef3824f644a",
+      "label": "(function(){"
+    },
+    {
+      "type": "markup",
+      "file": "markup/011.html",
+      "bytes": 552
+    },
+    {
+      "type": "style",
+      "file": "styles/110-1-fix-contain-layout-che-blocca-render-sezioni.css",
+      "attrs": "",
+      "bytes": 3148,
+      "sha256": "7dfd085851028182",
+      "label": "1. Fix contain:layout che blocca render sezioni ───────── */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/111-fase-1-navigation-bus.js",
+      "attrs": "",
+      "bytes": 16793,
+      "sha256": "4d7e165915a5d9fe",
+      "label": "FASE 1 — NAVIGATION BUS"
+    },
+    {
+      "type": "markup",
+      "file": "markup/012.html",
+      "bytes": 513
+    },
+    {
+      "type": "style",
+      "file": "styles/112-f1-3-breadcrumb.css",
+      "attrs": "",
+      "bytes": 6054,
+      "sha256": "271280ad262e6333",
+      "label": "F1.3 Breadcrumb ─────────────────────────────────────── */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/113-f1-1-fix-definitivo-app-navigate-usa-proxy.js",
+      "attrs": "",
+      "bytes": 38323,
+      "sha256": "8207c393d6d2e42d",
+      "label": "F1.1 FIX DEFINITIVO APP.NAVIGATE — usa Proxy"
+    },
+    {
+      "type": "markup",
+      "file": "markup/013.html",
+      "bytes": 641
+    },
+    {
+      "type": "style",
+      "file": "styles/114-product-hunter-marketagent-layout.css",
+      "attrs": "",
+      "bytes": 2288,
+      "sha256": "4c5292053ae19aca",
+      "label": "Product Hunter / MarketAgent layout */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/115-f2-5-ai-vision-foto-prodotto-descrizione-seo.js",
+      "attrs": "",
+      "bytes": 57970,
+      "sha256": "c8945baba2268e6f",
+      "label": "F2.5 AI VISION — Foto prodotto → Descrizione + SEO"
+    },
+    {
+      "type": "markup",
+      "file": "markup/014.html",
+      "bytes": 531
+    },
+    {
+      "type": "style",
+      "file": "styles/116-search-input-upgrade.css",
+      "attrs": "",
+      "bytes": 3591,
+      "sha256": "e6d28eebfc52ab37",
+      "label": "Search input upgrade ────────────────────────────────── */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/117-ingly-smart-search-engine-v33.js",
+      "attrs": "",
+      "bytes": 173361,
+      "sha256": "200787d56cc0275a",
+      "label": "🔍 INGLY SMART SEARCH ENGINE v33"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/118-ingly-modal-ui-fix-v1-0.js",
+      "attrs": "",
+      "bytes": 9070,
+      "sha256": "1d82bec7f158b9af",
+      "label": "INGLY MODAL & UI FIX v1.0 === */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/119-ingly-calcolatore-macchina-laser-v2-0.js",
+      "attrs": "",
+      "bytes": 60768,
+      "sha256": "29b37d53c7f5082e",
+      "label": "INGLY CALCOLATORE MACCHINA LASER v2.0 === */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/120-ingly-os-calcolatore-macchine-v4-0.js",
+      "attrs": "",
+      "bytes": 69051,
+      "sha256": "612eef98efa0764b",
+      "label": "INGLY OS — CALCOLATORE MACCHINE v4.0"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/121-ingly-os-laser-quoter-b2b-v2-0.js",
+      "attrs": "",
+      "bytes": 28973,
+      "sha256": "f1e5026ff0d3e7e4",
+      "label": "INGLY OS — LASER QUOTER B2B v2.0"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/122-ingly-os-obiettivi-di-crescita-laboratorio-v1-0.js",
+      "attrs": "",
+      "bytes": 54807,
+      "sha256": "6e9a9e09cde657ca",
+      "label": "INGLY OS — 🚀 OBIETTIVI DI CRESCITA LABORATORIO v1.0"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/123-function.js",
+      "attrs": "",
+      "bytes": 554,
+      "sha256": "0e969a1c23d576be",
+      "label": "(function(){"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/124-ingly-os-obiettivi-di-crescita-v2-0-bug-free.js",
+      "attrs": "",
+      "bytes": 52565,
+      "sha256": "5cb38b5cd8d478b8",
+      "label": "INGLY OS — 🚀 OBIETTIVI DI CRESCITA v2.0  (BUG-FREE)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/125-ingly-os-v36-improvements-safe-injection-on-orig.js",
+      "attrs": "",
+      "bytes": 39172,
+      "sha256": "dd9a6185f7e4ac1e",
+      "label": "INGLY OS v36 — IMPROVEMENTS (safe injection on original tool)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/126-ingly-os-v36-sync-engine.js",
+      "attrs": "",
+      "bytes": 8498,
+      "sha256": "74541b1819f41dee",
+      "label": "INGLY OS v36 — SYNC ENGINE"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/127-ingly-os-v36-bank-funds-v2-1-unificato.js",
+      "attrs": "",
+      "bytes": 34475,
+      "sha256": "577c817377616113",
+      "label": "INGLY OS v36 — BANK & FUNDS v2.1 UNIFICATO"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/128-ingly-license-gating-moduli-per-piano-mensile-co.js",
+      "attrs": "",
+      "bytes": 9557,
+      "sha256": "383b5c73eb89ff57",
+      "label": "INGLY LICENSE — gating moduli per piano mensile (codice licenza offline)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/129-ingly-v54-design-system-fase-1-fondazione-premiu.css",
+      "attrs": "id=\"v54-design-system\"",
+      "bytes": 3339,
+      "sha256": "beb3a6cdee865eb1",
+      "label": "INGLY v54 — DESIGN SYSTEM (Fase 1: fondazione premium)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/130-ingly-v55-design-fase-2-componenti-dati-rifinitu.css",
+      "attrs": "id=\"v55-components\"",
+      "bytes": 2761,
+      "sha256": "06df689c505f06f6",
+      "label": "INGLY v55 — DESIGN Fase 2: componenti dati + rifinitura ═══════════════"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/131-fase-4-default-chart-js-coerenti-palette-ambra-g.js",
+      "attrs": "id=\"v55-chart-defaults\"",
+      "bytes": 1781,
+      "sha256": "142e67b1b7f0eeb3",
+      "label": "Fase 4: default Chart.js coerenti (palette ambra, griglia tenue, font Inter)."
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/132-ingly-v56-design-fase-3-shell-di-navigazione-mic.css",
+      "attrs": "id=\"v56-nav-shell\"",
+      "bytes": 2742,
+      "sha256": "ce27b6c367376148",
+      "label": "INGLY v56 — DESIGN Fase 3: shell di navigazione + micro-interazioni ═══"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/133-ingly-v57-design-fase-7-mobile-responsive-touch.css",
+      "attrs": "id=\"v57-responsive\"",
+      "bytes": 1731,
+      "sha256": "62333f6e6bf9b214",
+      "label": "INGLY v57 — DESIGN Fase 7: mobile / responsive / touch ════════════════"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/134-ingly-v58-chrome-normalization-topbar-sidebar-co.css",
+      "attrs": "id=\"v58-chrome\"",
+      "bytes": 3462,
+      "sha256": "efcbaacb8727d2f8",
+      "label": "INGLY v58 — CHROME NORMALIZATION: topbar + sidebar coerenti e precisi ══"
+    },
+    {
+      "type": "markup",
+      "text": "\n",
+      "bytes": 1
+    },
+    {
+      "type": "script",
+      "file": "patches/135-rimuove-gli-hover-handler-inline-arcobaleno-dai-.js",
+      "attrs": "id=\"v58-chrome-js\"",
+      "bytes": 658,
+      "sha256": "184ceaf7506b6ebc",
+      "label": "Rimuove gli hover-handler inline \"arcobaleno\" dai quick-tool della sidebar"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/136-ingly-v60-catalogo-macchine-enterprise-predefini.js",
+      "attrs": "id=\"v60-machine-catalog\"",
+      "bytes": 16055,
+      "sha256": "2556efc5d5cff6b0",
+      "label": "INGLY v60 — CATALOGO MACCHINE ENTERPRISE (predefinito, estendibile)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/137-ingly-v61-machine-hub-single-source-of-truth-mac.js",
+      "attrs": "id=\"v61-machine-hub\"",
+      "bytes": 4701,
+      "sha256": "e9876a8b7e44845d",
+      "label": "INGLY v61 — MACHINE HUB (Single Source of Truth macchine)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/138-ingly-v62-scheda-macchina-enterprise-dettaglio-c.js",
+      "attrs": "id=\"v62-machine-card\"",
+      "bytes": 13865,
+      "sha256": "5d36f1e6bc3377de",
+      "label": "INGLY v62 — SCHEDA MACCHINA ENTERPRISE (dettaglio completo + autosave)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/139-ingly-v63-design-system-consolidato-fase-4.js",
+      "attrs": "id=\"v63-design-system\"",
+      "bytes": 12720,
+      "sha256": "f7a5193c224aec4c",
+      "label": "INGLY v63 — DESIGN SYSTEM consolidato (Fase 4)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/140-ingly-v64-data-tools-personalizzazione-totale-fa.js",
+      "attrs": "id=\"v64-data-tools\"",
+      "bytes": 12034,
+      "sha256": "b8f83dd1e096d9b0",
+      "label": "INGLY v64 — DATA TOOLS / Personalizzazione totale (Fase 5)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/141-ingly-v65-investimenti-roi-macchine-fase-6.js",
+      "attrs": "id=\"v65-machine-invest\"",
+      "bytes": 8301,
+      "sha256": "c1c522521a70cf36",
+      "label": "INGLY v65 — INVESTIMENTI & ROI Macchine (Fase 6)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/142-ingly-v66-home-erp-intelligence-fase-7.js",
+      "attrs": "id=\"v66-erp-intel\"",
+      "bytes": 8116,
+      "sha256": "1c5e80c83b45e790",
+      "label": "INGLY v66 — HOME ERP INTELLIGENCE (Fase 7)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/143-ingly-v67-qualita-enterprise-fase-8.js",
+      "attrs": "id=\"v67-enterprise-quality\"",
+      "bytes": 11569,
+      "sha256": "b14beddaafe9e19a",
+      "label": "INGLY v67 — QUALITÀ ENTERPRISE (Fase 8)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/144-ingly-v68-topbar-tidy-declutter-header.js",
+      "attrs": "id=\"v68-topbar-tidy\"",
+      "bytes": 6076,
+      "sha256": "e7eb5322a1731727",
+      "label": "INGLY v68 — TOPBAR TIDY (declutter header)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/145-ingly-v69-market-hub-fornitori-ricerca-mercato-a.js",
+      "attrs": "id=\"v69-market-hub\"",
+      "bytes": 18789,
+      "sha256": "61f6b4dc043b1d32",
+      "label": "INGLY v69 — MARKET HUB: Fornitori + Ricerca Mercato AI (hunting/pricing/trend)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/146-ingly-v70-premium-shell-salto-di-qualita-ui-fasc.js",
+      "attrs": "id=\"v70-premium-shell\"",
+      "bytes": 4318,
+      "sha256": "a70b1b56deafc290",
+      "label": "INGLY v70 — PREMIUM SHELL (salto di qualità UI, fascia ERP top)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/147-ingly-v71-nav-tidy-sidebar-ordinata-dedup-prefer.js",
+      "attrs": "id=\"v71-nav-tidy\"",
+      "bytes": 4118,
+      "sha256": "e44cdbba0dbd3a29",
+      "label": "INGLY v71 — NAV TIDY (sidebar ordinata + dedup Preferiti)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/148-ingly-v72-home-erp-unificata-command-bar.js",
+      "attrs": "id=\"v72-command-bar\"",
+      "bytes": 4920,
+      "sha256": "74be58f4a57ac0c4",
+      "label": "INGLY v72 — HOME ERP UNIFICATA: Command Bar"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/149-ingly-v73-market-hub-2-0-consumabili-tipici-subl.js",
+      "attrs": "id=\"v73-consumables\"",
+      "bytes": 5354,
+      "sha256": "cf059c30793fdfb7",
+      "label": "INGLY v73 — MARKET HUB 2.0: Consumabili tipici (sublimazione/UV/DTF)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/150-ingly-v74-icone-proprietarie-line-svg-stile-bran.js",
+      "attrs": "id=\"v74-ingly-icons\"",
+      "bytes": 4787,
+      "sha256": "80e7f1bab542e75d",
+      "label": "INGLY v74 — ICONE PROPRIETARIE (line SVG, stile brand)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/151-var-inglymodules-function-w-use-strict-const-je.js",
+      "attrs": "id=\"v75-domain-bundle\"",
+      "bytes": 48767,
+      "sha256": "0648541590c3caa1",
+      "label": "var InglyModules=function(w){\"use strict\";const je=`"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/152-ingly-v75-preventivatore-collegato-al-motore-kb-.js",
+      "attrs": "id=\"v75-quoter-assist\"",
+      "bytes": 6393,
+      "sha256": "1a5f3b2f365a5aad",
+      "label": "INGLY v75 — Preventivatore collegato al MOTORE KB (Fase 1 · aggancio UI)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/153-ingly-v76-ordini-clienti-collegati-ai-motori-kb-.js",
+      "attrs": "id=\"v76-orders-clients-assist\"",
+      "bytes": 5922,
+      "sha256": "778e0e4da4dea84d",
+      "label": "INGLY v76 — Ordini & Clienti collegati ai MOTORI KB (Fase 1 · aggancio UI)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/154-ingly-v77-voci-in-preventivo-editabili-pdf-allin.js",
+      "attrs": "id=\"v77-quoter-editable\"",
+      "bytes": 3433,
+      "sha256": "d366beffcb972713",
+      "label": "INGLY v77 — VOCI IN PREVENTIVO editabili + PDF allineato allo Smart Quoter"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n\n\n\n\n",
+      "bytes": 6
+    },
+    {
+      "type": "script",
+      "file": "patches/155-ingly-v80-cruscotto-bi-collegato-al-motore-repor.js",
+      "attrs": "id=\"v80-bi-assist\"",
+      "bytes": 5382,
+      "sha256": "b2f5c2f7d96d6924",
+      "label": "INGLY v80 — Cruscotto BI collegato al motore reporting (Fase 5 · aggancio UI)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/156-ingly-v81-sidebar-unificata-fix-flicker-icone-do.js",
+      "attrs": "id=\"v81-nav-unified\"",
+      "bytes": 8960,
+      "sha256": "718a21320aafd9ec",
+      "label": "INGLY v81 — SIDEBAR unificata (fix flicker + icone doppie, preferiti in cima)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/157-ingly-v84-anteprima-fattura-piano-pagamento-fase.js",
+      "attrs": "id=\"v82-fiscal-assist\"",
+      "bytes": 7467,
+      "sha256": "30839949d180eef3",
+      "label": "INGLY v84 — Anteprima Fattura + Piano Pagamento (Fase 3 · aggancio UI)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/158-ingly-v83-polish-finale-sidebar-allineamento-sto.js",
+      "attrs": "id=\"v83-nav-polish\"",
+      "bytes": 3271,
+      "sha256": "5536f396c1552c7d",
+      "label": "INGLY v83 — Polish finale sidebar (allineamento + stop ondeggiamento)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/159-ingly-v85-icone-svg-proprietarie-su-tutta-la-sid.js",
+      "attrs": "id=\"v85-section-icons\"",
+      "bytes": 7921,
+      "sha256": "809d6bd43a8cea69",
+      "label": "INGLY v85 — Icone SVG proprietarie su TUTTA la sidebar (uniformità grafica)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/160-ingly-v86-consolidatore-strumenti-meno-clutter.js",
+      "attrs": "id=\"v86-tools-consolidator\"",
+      "bytes": 5401,
+      "sha256": "c1864dc332824cf2",
+      "label": "INGLY v86 — Consolidatore Strumenti (meno clutter)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n\n\n",
+      "bytes": 4
+    },
+    {
+      "type": "script",
+      "file": "patches/161-ingly-v88-consolidamento-sezioni-tutti-i-gruppi-.js",
+      "attrs": "id=\"v88-section-consolidation\"",
+      "bytes": 5494,
+      "sha256": "db266a7245c3ab61",
+      "label": "INGLY v88 — Consolidamento sezioni (tutti i gruppi ridondanti)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/162-ingly-v89-icone-precise-niente-doppioni.js",
+      "attrs": "id=\"v89-label-clean\"",
+      "bytes": 2849,
+      "sha256": "f4076f1b4d0fe3e9",
+      "label": "INGLY v89 — Icone precise, niente doppioni"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/163-ingly-v90-accorpamento-ai-market-intelligence-in.js",
+      "attrs": "id=\"v90-ai-consolidation\"",
+      "bytes": 6077,
+      "sha256": "472f93c57b1ceab0",
+      "label": "INGLY v90 — Accorpamento AI / Market Intelligence in 3 hub"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n\n",
+      "bytes": 3
+    },
+    {
+      "type": "script",
+      "file": "patches/164-catalogo-ingly-128-prodotti-seed-fase-a.js",
+      "attrs": "",
+      "bytes": 259365,
+      "sha256": "cce791103fbe4b2d",
+      "label": "Catalogo Ingly — 128 prodotti (seed, Fase A) */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/165-backupzip-fix-il-pulsante-backup-zip-chiamava-un.js",
+      "attrs": "",
+      "bytes": 3710,
+      "sha256": "bf05e5f36e3aee89",
+      "label": "BackupZIP — Fix: il pulsante \"Backup ZIP\" chiamava un oggetto inesistente."
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/166-preventivi-barra-a-tab-unificata-standard-appare.js",
+      "attrs": "",
+      "bytes": 1761,
+      "sha256": "abcfbdfea1b72644",
+      "label": "PREVENTIVI — barra a tab unificata (Standard/Apparel/3D/Calc/Intelligence)."
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/167-rifinitura-premium-v92-additiva-token-based-them.css",
+      "attrs": "id=\"premium-polish-v92\"",
+      "bytes": 2951,
+      "sha256": "26f8a61724bbeeff",
+      "label": "Rifinitura premium v92 (additiva, token-based, theme-safe) ── */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/168-icone-premium-rimuove-le-emoji-decorative-dalle-.js",
+      "attrs": "id=\"v92-premium-icons\"",
+      "bytes": 1285,
+      "sha256": "8216f98f0bbd3a47",
+      "label": "Icone premium: rimuove le emoji decorative dalle voci di menu che hanno"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/169-ricerca-cliente-sopra-ogni-tendina-a-cascata-quo.js",
+      "attrs": "id=\"v93-client-search\"",
+      "bytes": 2030,
+      "sha256": "156ee4afd66b7c6a",
+      "label": "Ricerca cliente sopra ogni tendina \"a cascata\" (Quoter, Ordini, Progetti…)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/170-ingly-trend-product-hunter-scouting-mercato-1-cl.js",
+      "attrs": "id=\"v93-trend-hunter\"",
+      "bytes": 14920,
+      "sha256": "6149f558cf3a6e55",
+      "label": "INGLY — TREND & PRODUCT HUNTER (scouting mercato, 1 click, gratis)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/171-apre-il-gruppo-preventivi-una-volta-le-4-smart-s.js",
+      "attrs": "id=\"v93-preventivi-open\"",
+      "bytes": 701,
+      "sha256": "363b32c9803ff7a2",
+      "label": "Apre il gruppo \"Preventivi\" una volta (le 4 smart sezioni devono vedersi). */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/172-ingly-piano-social-30-giorni-1-click-mese-pianif.js",
+      "attrs": "id=\"v94-social-planner\"",
+      "bytes": 12065,
+      "sha256": "4c1dde68f955ff61",
+      "label": "INGLY — PIANO SOCIAL 30 GIORNI (1 click → mese pianificato)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/173-blocco-b-salto-di-qualita-premium-per-le-4-sezio.css",
+      "attrs": "id=\"v94-block-b\"",
+      "bytes": 3678,
+      "sha256": "6367927252870b1e",
+      "label": "BLOCCO B — Salto di qualità premium per le 4 sezioni analitiche:"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/174-blocco-c-layer-di-traduzione-en-a-runtime-retrof.js",
+      "attrs": "id=\"v94-block-c-i18n\"",
+      "bytes": 8468,
+      "sha256": "ae766a63bba0e8ee",
+      "label": "BLOCCO C — Layer di traduzione EN a runtime (retrofit, additivo, reversibile)"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "style",
+      "file": "styles/175-white-label-branding-logo-nome-colore-additivo-r.css",
+      "attrs": "id=\"v96-brand-css\"",
+      "bytes": 2610,
+      "sha256": "450ad5c23740d97d",
+      "label": "White-label branding: logo + nome + colore (additivo, reversibile) ── */"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n",
+      "bytes": 2
+    },
+    {
+      "type": "script",
+      "file": "patches/176-white-label-branding-additivo-reversibile-csp-sa.js",
+      "attrs": "id=\"v96-brand\"",
+      "bytes": 6585,
+      "sha256": "0cad4288fe037e57",
+      "label": "WHITE-LABEL BRANDING (additivo, reversibile, CSP-safe) — v96"
+    },
+    {
+      "type": "markup",
+      "text": "\n\n</html>\n",
+      "bytes": 10
+    }
+  ]
+}

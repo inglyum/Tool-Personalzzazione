@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sintassi di ogni blocco JS
+        run: npm run verify
+      - name: Build a file singolo
+        run: npm run build
+      - name: Test (round-trip, baseline, igiene)
+        run: npm test

@@ -1,0 +1,52 @@
+
+/* ═══ INGLY v55 — DESIGN Fase 2: componenti dati + rifinitura ═══════════════
+   Additivo, token esistenti, accento AMBRA (#fbbf24 = --primary). */
+
+/* ── KPI CARD: valore protagonista, accento ambra a sinistra, respiro ── */
+.kpi-card{ padding:18px 18px 16px; border-radius:14px; }
+.kpi-card::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(180deg, var(--primary), transparent 90%); opacity:.9;
+}
+.kpi-value{ font-size:26px; line-height:1.02; margin-bottom:5px; }
+.kpi-label{ font-size:11px; text-transform:uppercase; opacity:.75; }
+.kpi-icon{ opacity:.5; }
+
+/* ── PILL DI STATO semantiche (verde/giallo/rosso separati dall'accento) ── */
+.badge, .badge-green,.badge-red,.badge-yellow,.badge-blue,.badge-purple,.badge-orange,.badge-gray{
+  border:1px solid transparent; padding:3px 10px; border-radius:99px; font-size:11px; font-weight:700;
+}
+.badge-green{  background:#22c55e1a; color:#4ade80; border-color:#22c55e33; }
+.badge-red{    background:#ef44441a; color:#f87171; border-color:#ef444433; }
+.badge-yellow{ background:#f59e0b1a; color:#fbbf24; border-color:#f59e0b33; }
+.badge-blue{   background:#3b82f61a; color:#60a5fa; border-color:#3b82f633; }
+.badge-purple{ background:#a855f71a; color:#c084fc; border-color:#a855f733; }
+.badge-orange{ background:#f973161a; color:#fb923c; border-color:#f9731633; }
+.badge-gray{   background:#8888881a; color:var(--text-muted); border-color:#88888833; }
+
+/* ── TABELLE: zebra sottile, righe più respirate, header sticky ── */
+.table-wrap{ border-radius:12px; }
+table thead th{ position:sticky; top:0; z-index:2; background:var(--bg-card2); backdrop-filter:blur(4px); }
+tbody tr:nth-child(even) td{ background:color-mix(in srgb, var(--bg-card2) 40%, transparent); }
+td{ padding-top:11px; padding-bottom:11px; }
+@media (prefers-reduced-motion: no-preference){
+  tbody tr{ transition: background .12s ease; }
+}
+tbody tr:hover td{ background:var(--bg-card2); }
+
+/* ── BOTTONE PRIMARIO: accento ambra con leggero gradiente e testo scuro ── */
+.btn-primary{
+  background:linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 86%, #000));
+  color:#1a1400; font-weight:700;
+}
+
+/* ── MODULE HEADER: separatore più elegante, titolo più forte ── */
+.module-header{ padding-bottom:14px; border-bottom:1px solid var(--border); }
+.module-title{ font-size:19px; font-weight:800; }
+.module-subtitle{ font-size:12.5px; opacity:.8; }
+
+/* ── PROGRESS: accento ambra ── */
+.progress-bar{ background:linear-gradient(90deg, var(--primary), color-mix(in srgb,var(--primary) 70%, #fff)); }
+
+/* ── CARD: angoli e bordo coerenti ── */
+.card{ border-radius:14px; }

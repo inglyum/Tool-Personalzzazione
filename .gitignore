@@ -1,0 +1,20 @@
+# artefatti di build
+dist/
+*.tsbuildinfo
+
+# dipendenze
+node_modules/
+
+# configurazione locale con segreti — non deve mai entrare nel repository
+config/*.local.js
+config/*.local.json
+.env
+.env.*
+
+# sistema
+.DS_Store
+Thumbs.db
+
+# output temporanei di QA
+tests/__screenshots__/
+tests/__artifacts__/

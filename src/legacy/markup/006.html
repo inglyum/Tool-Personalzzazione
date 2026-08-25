@@ -1,0 +1,183 @@
+
+<!-- ══ SOLLECITI PANEL MODAL ══ -->
+<div class="modal-overlay" id="modal-solleciti" onclick="if(event.target===this)closeModal('solleciti')" style="display:none">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <span class="modal-title">📧 Solleciti Pagamento Automatici</span>
+      <button class="modal-close" onclick="closeModal('solleciti')">✕</button>
+    </div>
+    <div class="modal-body" id="solleciti-body" style="max-height:75vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ══ STORICO CLIENTE MODAL ══ -->
+<div class="modal-overlay" id="modal-storico-cliente" onclick="if(event.target===this)closeModal('storico-cliente')" style="display:none">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <span class="modal-title" id="storico-title">📋 Storico Ordini</span>
+      <button class="modal-close" onclick="closeModal('storico-cliente')">✕</button>
+    </div>
+    <div class="modal-body" id="storico-body" style="max-height:70vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ══ VOICE INPUT PANEL ══ -->
+<div id="voice-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border-radius:20px;padding:32px;max-width:460px;width:90%;text-align:center;border:2px solid #6366f140">
+    <div id="voice-icon" style="font-size:56px;margin-bottom:12px">🎙️</div>
+    <div id="voice-status" style="font-size:15px;font-weight:700;color:#a5b4fc;margin-bottom:8px">Premi il microfono e parla</div>
+    <div id="voice-transcript" style="font-size:13px;color:var(--text-muted);min-height:40px;background:#0f172a;border-radius:8px;padding:10px;margin:12px 0;line-height:1.5;min-height:50px"></div>
+    <div id="voice-result" style="font-size:12px;color:#4ade80;min-height:20px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:14px">
+      <button id="voice-btn" onclick="VoiceInput.toggle()" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;font-size:26px;cursor:pointer;color:#fff;box-shadow:0 4px 20px #6366f150">🎙️</button>
+      <button onclick="VoiceInput.close()" style="padding:12px 20px;background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;color:var(--text);cursor:pointer;font-size:13px">Chiudi</button>
+    </div>
+    <div style="font-size:10px;color:#475569;line-height:1.6">
+      Es: <em>"Vendita 3 portachiavi a 12 euro"</em><br>
+<!-- ═══════════════════════════════════════════════════════════
+  RESOURCE PICKER PANEL — Material selector like LightBurn/xTool
+  Opens as a slide-in panel from the right. Categories on left,
+  items list with color swatches on right.
+════════════════════════════════════════════════════════════════ -->
+<div id="resource-picker-overlay" onclick="if(event.target===this)ResourcePicker.close()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;backdrop-filter:blur(3px)"></div>
+<div id="resource-picker-panel" style="display:none;position:fixed;top:0;right:0;width:580px;max-width:98vw;height:100vh;background:var(--bg-card);border-left:1px solid var(--border2);z-index:9999;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.5)">
+  <!-- Header -->
+  <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <div style="flex:1">
+      <div style="font-size:16px;font-weight:800;color:var(--text)">📦 Seleziona Risorsa</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px)" id="rp-subtitle">Sfoglia materiali, macchine e gadget dal tuo listino</div>
+    </div>
+    <button onclick="ResourcePicker.close()" style="background:var(--bg-card2);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-size:16px;width:32px;height:32px;border-radius:8px">✕</button>
+  </div>
+  <!-- Search -->
+  <div style="padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:0 12px">
+      <i class="fas fa-search" style="color:var(--text-dim);font-size:12px"></i>
+      <input id="rp-search" placeholder="Cerca risorsa..." oninput="ResourcePicker.filterItems()" style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;padding:9px 0">
+    </div>
+  </div>
+  <!-- Body: left cats + right list -->
+  <div style="flex:1;display:flex;overflow:hidden">
+    <!-- Left: categories -->
+    <div id="rp-cats" style="width:160px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);padding:8px 0">
+      <!-- filled by JS -->
+    </div>
+    <!-- Right: items -->
+    <div id="rp-items" style="flex:1;overflow-y:auto;padding:8px 12px">
+      <!-- filled by JS -->
+    </div>
+  </div>
+  <!-- Footer -->
+  <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+    <div style="font-size:11px;color:var(--text-muted)" id="rp-selected-label">Nessuna selezione</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="ResourcePicker.close()" style="padding:9px 18px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text-muted);border-radius:8px;cursor:pointer;font-size:13px">Annulla</button>
+      <button onclick="ResourcePicker.confirm()" style="padding:9px 22px;background:var(--primary);color:#000;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:800" id="rp-confirm-btn">✓ Usa Risorsa</button>
+    </div>
+  </div>
+</div>
+
+<!-- ITEMS PICKER — same panel for Items section -->
+<div id="items-picker-overlay" onclick="if(event.target===this)ItemsPicker.close()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;backdrop-filter:blur(3px)"></div>
+<div id="items-picker-panel" style="display:none;position:fixed;top:0;right:0;width:580px;max-width:98vw;height:100vh;background:var(--bg-card);border-left:1px solid var(--border2);z-index:9999;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.5)">
+  <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <div style="flex:1">
+      <div style="font-size:16px;font-weight:800;color:var(--text)">📦 Seleziona Item</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Tutti gli item del tuo magazzino</div>
+    </div>
+    <button onclick="ItemsPicker.close()" style="background:var(--bg-card2);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-size:16px;width:32px;height:32px;border-radius:8px">✕</button>
+  </div>
+  <div style="padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:0 12px">
+      <i class="fas fa-search" style="color:var(--text-dim);font-size:12px"></i>
+      <input id="ip-search" placeholder="Cerca item..." oninput="ItemsPicker.filterItems()" style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;padding:9px 0">
+    </div>
+  </div>
+  <div style="flex:1;display:flex;overflow:hidden">
+    <div id="ip-cats" style="width:160px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);padding:8px 0"></div>
+    <div id="ip-items" style="flex:1;overflow-y:auto;padding:8px 12px"></div>
+  </div>
+  <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+    <div style="font-size:11px;color:var(--text-muted)" id="ip-selected-label">Nessuna selezione</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="ItemsPicker.close()" style="padding:9px 18px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text-muted);border-radius:8px;cursor:pointer;font-size:13px">Annulla</button>
+      <button onclick="ItemsPicker.confirm()" style="padding:9px 22px;background:#38bdf8;color:#000;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:800" id="ip-confirm-btn">✓ Seleziona</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT PDF SELECTOR -->
+<div id="client-pdf-overlay" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center;padding:20px"></div>
+
+<!-- ══ QUOTER TEMPLATES MODAL ══ -->
+<div class="modal-overlay" id="modal-qt-save" onclick="if(event.target===this)closeModal('qt-save')" style="display:none">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><span class="modal-title">💾 Salva come Template</span><button class="modal-close" onclick="closeModal('qt-save')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Nome Template *</label><input class="form-control" id="qt-save-name" placeholder="es. Lavorazione laser standard, Targa personalizzata..."></div>
+      <div class="form-group"><label class="form-label">Descrizione (opzionale)</label><input class="form-control" id="qt-save-desc" placeholder="Breve descrizione del tipo di lavoro"></div>
+      <div id="qt-save-preview" style="background:var(--bg-card2);border-radius:8px;padding:12px;font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('qt-save')">Annulla</button><button class="btn btn-primary" onclick="QuoterTemplates.save()"><i class="fas fa-bookmark"></i> Salva Template</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-qt-load" onclick="if(event.target===this)closeModal('qt-load')" style="display:none">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><span class="modal-title">📋 Carica Template</span><button class="modal-close" onclick="closeModal('qt-load')">✕</button></div>
+    <div class="modal-body">
+      <div id="qt-load-list" style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SIGNATURE PAD MODAL ══ -->
+<div class="modal-overlay" id="modal-signature" onclick="if(event.target===this)SignaturePad.close()" style="display:none">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><span class="modal-title">✍️ Firma Digitale</span><button class="modal-close" onclick="SignaturePad.close()">✕</button></div>
+    <div class="modal-body" style="text-align:center">
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Firma nel riquadro sottostante con mouse o dito (touch)</p>
+      <div style="position:relative;display:inline-block;width:100%;max-width:500px">
+        <canvas id="sig-canvas" width="500" height="200" style="border:2px solid var(--border2);border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;width:100%;height:auto;display:block"></canvas>
+        <div id="sig-empty-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:14px;pointer-events:none">Firma qui →</div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+        <button class="btn btn-secondary" onclick="SignaturePad.clear()"><i class="fas fa-eraser"></i> Cancella</button>
+        <button class="btn btn-primary" onclick="SignaturePad.confirm()" id="sig-confirm-btn" disabled><i class="fas fa-check"></i> Conferma firma</button>
+      </div>
+      <div id="sig-client-name" style="margin-top:8px;font-size:12px;color:var(--text-muted)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CRM CLIENT TIMELINE MODAL (enhanced) ══ -->
+<div class="modal-overlay" id="modal-client-timeline" onclick="if(event.target===this)closeModal('client-timeline')" style="display:none">
+  <div class="modal modal-lg" style="max-width:800px">
+    <div class="modal-header">
+      <span class="modal-title" id="timeline-title">👤 Timeline Cliente</span>
+      <button class="modal-close" onclick="closeModal('client-timeline')">✕</button>
+    </div>
+    <div class="modal-body" id="timeline-body" style="padding:0"></div>
+  </div>
+</div>
+
+
+<!-- ══ AI PRICE ADVISOR MODAL ══ -->
+<div class="modal-overlay" id="modal-price-advisor" onclick="if(event.target===this)closeModal('price-advisor')" style="display:none">
+  <div class="modal modal-lg" style="max-width:800px">
+    <div class="modal-header">
+      <span class="modal-title">🤖 AI Suggerimento Prezzi</span>
+      <button class="modal-close" onclick="closeModal('price-advisor')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Analisi automatica dei margini sul tuo catalogo — identifica prodotti sotto-prezzati e opportunità di ottimizzazione.</p>
+      <div id="price-advisor-output"><div style="text-align:center;padding:40px;color:var(--text-muted)">Clicca Analizza per iniziare.</div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('price-advisor')">Chiudi</button>
+      <button class="btn btn-primary" onclick="PriceAdvisor.analyze()"><i class="fas fa-robot"></i> Analizza Margini</button>
+    </div>
+  </div>
+</div>
+<!-- ══ INGLY OS v88 — Modular Script Loading ══ -->
+<!-- Layer 1: Core Foundation -->

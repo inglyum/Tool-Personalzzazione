@@ -1,0 +1,44 @@
+{
+  "sections": [],
+  "views": [],
+  "globals": [
+    "ADMIN_ROLES",
+    "AdminCommandBus",
+    "GEN",
+    "InglyCloudAdmin",
+    "MRR_MAP",
+    "PERM_MATRIX",
+    "PLANS_CFG",
+    "TOTP"
+  ],
+  "windowGlobals": [
+    "InglyLicenseGen"
+  ],
+  "storageKeys": [
+    "_2fa_",
+    "ingly_as_config",
+    "ingly_enterprise_v2",
+    "ingly_notif_config",
+    "ingly_saas_db",
+    "ingly_stripe_pk",
+    "ingly_stripe_price_",
+    "ingly_stripe_wh",
+    "ingly_supabase_anon_key",
+    "ingly_supabase_url"
+  ],
+  "idbStores": [],
+  "vendored": [],
+  "counts": {
+    "files": 9,
+    "bytes": 334443,
+    "inlineStyleAttrs": 467,
+    "inlineOnclick": 212,
+    "hardcodedHex": 77,
+    "important": 0,
+    "emoji": 196,
+    "alertCalls": 0,
+    "confirmCalls": 6,
+    "promptCalls": 0,
+    "ariaAttrs": 0
+  }
+}

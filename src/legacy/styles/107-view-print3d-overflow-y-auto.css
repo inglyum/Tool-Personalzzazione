@@ -1,0 +1,48 @@
+
+#view-print3d{overflow-y:auto}
+#view-print3d .p3-wrap{padding:0 0 40px}
+#view-print3d .p3-ph{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 16px;flex-wrap:wrap;gap:8px}
+#view-print3d .p3-grid{display:grid;grid-template-columns:330px 1fr 295px;gap:14px;padding:0 20px 40px;align-items:start}
+#view-print3d .p3-col{display:flex;flex-direction:column;gap:12px}
+#view-print3d .p3-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+#view-print3d .p3-card.cyan{border-color:#22d3ee35;background:linear-gradient(135deg,#0a1a1f,#071520)}
+#view-print3d .p3-ct{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:12px}
+#view-print3d .p3-ct.c{color:#22d3ee}
+#view-print3d .p3-fg{margin-bottom:10px}
+#view-print3d .p3-fg:last-child{margin-bottom:0}
+#view-print3d .p3-fl{display:block;font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+#view-print3d .p3-fc{width:100%;background:var(--bg-card2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;outline:none;transition:.15s;font-family:inherit}
+#view-print3d .p3-fc:focus{border-color:#22d3ee35;box-shadow:0 0 0 3px #22d3ee12}
+#view-print3d .p3-fc::placeholder{color:var(--text-dim)}
+#view-print3d select.p3-fc option{background:var(--bg-card)}
+#view-print3d .p3-fc.acc{font-weight:700;color:#22d3ee;font-size:15px}
+#view-print3d .p3-ht{font-size:9px;color:#475569;margin-top:3px}
+#view-print3d .p3-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#view-print3d .p3-g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+#view-print3d .p3-type{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+#view-print3d .p3-tb{padding:9px;border-radius:var(--radius-sm);border:1.5px solid var(--border2);background:transparent;color:var(--text-dim);font-size:12px;font-weight:700;cursor:pointer;transition:.15s;text-align:center}
+#view-print3d .p3-tb.afdm{border-color:#22d3ee;background:#22d3ee18;color:#22d3ee}
+#view-print3d .p3-tb.ares{border-color:#a78bfa;background:#a78bfa18;color:#a78bfa}
+#view-print3d .p3-mg{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+#view-print3d .p3-mb{padding:7px 6px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg-card2);color:var(--text-dim);font-size:10px;font-weight:600;cursor:pointer;text-align:center;line-height:1.4;transition:.15s}
+#view-print3d .p3-mb:hover{border-color:#22d3ee;color:#22d3ee}
+#view-print3d .p3-mb.sel{border-color:#22d3ee;background:#22d3ee18;color:#22d3ee}
+#view-print3d .p3-ext{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+#view-print3d .p3-bkr{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px}
+#view-print3d .p3-bkt{display:flex;justify-content:space-between;padding:8px 0 0;font-weight:800;font-size:13px}
+#view-print3d .p3-tier{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;margin-bottom:7px;border:1.5px solid}
+#view-print3d .p3-empty{text-align:center;padding:40px 20px;color:var(--text-dim)}
+#view-print3d .p3-empty i{font-size:40px;opacity:.15;display:block;margin-bottom:10px}
+#view-print3d table{width:100%;border-collapse:collapse}
+#view-print3d th{padding:8px;text-align:left;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600;border-bottom:1px solid var(--border2)}
+#view-print3d td{padding:9px 8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+#view-print3d tr:hover td{background:var(--bg-card2)}
+#view-print3d .p3-tbox{background:linear-gradient(135deg,#1c1c20,#1a1a1e);border:1px solid #22d3ee35;border-radius:var(--radius);padding:16px;text-align:center;margin-top:10px}
+#view-print3d .p3-sr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+#view-print3d .p3-sv{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer}
+#view-print3d .p3-iva-btns{display:flex;gap:4px;align-items:center}
+#view-print3d .p3-iva-btn{padding:4px 10px;border-radius:6px;border:none;cursor:pointer;font-size:10px;font-weight:700;transition:.15s}
+#view-print3d .p3-disc-btns{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:6px}
+#view-print3d .p3-disc-btn{padding:5px 10px;border-radius:6px;background:var(--bg-card2);border:1px solid var(--border2);color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:600;transition:.15s}
+#view-print3d .p3-disc-btn:hover{border-color:#22d3ee35;color:#22d3ee}
+#view-print3d .p3-disc-btn.active{background:#22d3ee18;border-color:#22d3ee;color:#22d3ee}
