@@ -10,10 +10,17 @@
 ```bash
 npm run verify    # sintassi di ogni blocco JS
 npm run build     # compone INGLY OS e INGLY Cloud Admin
-npm test          # suite automatica (54 test)
+npm test          # suite automatica (55 test)
 npm run check     # i tre sopra, in sequenza — è quello che gira in CI
 
-npm run qa        # prova reale in Chromium (avvio, navigazione, console)
+npm run qa        # prova reale in Chromium (avvio, navigazione, dialoghi)
+
+# le prove mirate, una superficie per volta
+node tests/qa/dashboard.mjs  dist/INGLY-OS.html
+node tests/qa/builder.mjs    dist/INGLY-OS.html
+node tests/qa/palette.mjs    dist/INGLY-OS.html
+node tests/qa/responsive.mjs dist/INGLY-OS.html
+
 npm run baseline  # rigenera la fotografia funzionale
 npm run audit     # rigenera i numeri citati nella documentazione
 ```
@@ -33,11 +40,11 @@ Gira in secondi, senza browser, e presidia gli invarianti.
 |------|---------------|
 | `roundtrip.test.mjs` | Ogni blocco del monolite ha la stessa impronta registrata nel manifest, oppure compare in `baseline/deliberate-changes.json` con la ragione. Fallisce anche al contrario: una modifica dichiarata ma non più presente. |
 | `baseline.test.mjs` | Nessuna sezione, vista, variabile globale o chiave di storage è sparita rispetto alla baseline. Aggiungere è sempre lecito; togliere richiede di aggiornare la baseline di proposito. |
-| `nav-map.test.mjs` | La tassonomia copre esattamente le 105 sezioni: né una in meno (una funzione diventerebbe irraggiungibile), né una in più (una voce porterebbe a una schermata vuota). |
+| `nav-map.test.mjs` | La tassonomia copre le 105 sezioni storiche: né una in meno senza una motivazione scritta (una funzione diventerebbe irraggiungibile), né una in più che non sia marcata `addedBy` (una voce porterebbe a una schermata vuota). |
 | `licensing.test.mjs` | I piani sono cumulativi, i prezzi crescono, ogni feature ha un piano minimo, ogni feature citata dal menu esiste nel registro. |
 | `admin.test.mjs` | Nessuna credenziale nel sorgente, nessuna password in chiaro, il database non nasce accessibile, l'hashing usa PBKDF2 con salt e confronto a tempo costante. |
 | `compose.test.mjs` | I layer di design ritirati non tornano nel build, il design system compare una volta sola, il CSS storico è stratificato e il design system no, nessuna definizione di token circolare. |
-| `hygiene.test.mjs` | Nel codice **nuovo**: nessun colore esadecimale fuori dai primitivi, nessun `!important`, nessuna credenziale. |
+| `hygiene.test.mjs` | Nel codice **nuovo**: nessun colore esadecimale fuori dai primitivi, nessuna credenziale, e nessun `!important` che non porti scritta accanto la propria ragione con `/* !important-ok: … */`. |
 
 `src/legacy/` è escluso da `hygiene`: il suo debito è misurato, non ancora
 sanato, e bloccarlo lì renderebbe il test rosso per mesi senza dire nulla di
@@ -53,7 +60,11 @@ il prodotto in Chromium.
 | `smoke.mjs` | L'applicazione parte, `App` e `App.navigate` esistono, il tema è quello giusto, quanti overlay coprono la schermata al primo avvio, quanti errori in console. Fotografa le sezioni principali. |
 | `navigation.mjs` | Percorre **tutte le 105 sezioni** e riporta quali non diventano visibili, quali non hanno vista, quali restano quasi vuote. |
 | `admin.mjs` | Flussi critici della console: `admin/admin` deve essere rifiutato, il primo accesso deve chiedere una password, l'hash deve finire nel database, tutte le 18 pagine devono rendere contenuto. |
-| `responsive.mjs` | Quattro viewport × cinque sezioni: il documento non deve mai scorrere in orizzontale, e se sfora dice **quale elemento** lo fa. |
+| `responsive.mjs` | Cinque viewport (1440/1280/1024/768/390) × otto sezioni, più topbar, sidebar e una modale aperta apposta — vivono fuori dalla vista attiva e la misura non li vedrebbe. Il documento non deve mai scorrere in orizzontale, e se sfora dice **quale elemento** lo fa. |
+| `dashboard.mjs` | I numeri dell'Operating Center vengono dagli store: con il dataset di laboratorio i centri di lavoro, le scorte e le osservazioni devono corrispondere ai conteggi reali. |
+| `builder.mjs` | Gli otto passi del Product Builder, e il costo mostrato deve coincidere con una invocazione separata di `PricingEngine.suggest()`. |
+| `palette.mjs` | La ricerca globale trova davvero nei sei store; i pulsanti della topbar storica sono nel menu, non spariti; `Ctrl/Cmd + K` apre **una** palette. |
+| `dialogs.mjs` | La prova che conta sui dialoghi migrati: **annullare non deve cancellare**. Conta i prodotti prima e dopo, e verifica che nessuna finestra nativa compaia più. |
 
 Gli screenshot finiscono in `tests/__screenshots__/` (git-ignored).
 
@@ -62,7 +73,7 @@ Gli screenshot finiscono in `tests/__screenshots__/` (git-ignored).
 ## 3. Stato attuale
 
 ```
-npm test          54 test · 54 passati
+npm test          55 test · 55 passati
 ```
 
 | Misura | v96 di partenza | Adesso |
@@ -71,7 +82,10 @@ npm test          54 test · 54 passati
 | Overlay a schermo intero al primo avvio | 22 | 2 |
 | Sezioni percorse senza eccezioni JS | — | 105 / 105 |
 | Sezioni che rendono contenuto | — | 90 |
-| Overflow orizzontale (4 viewport × 5 sezioni) | — | 0 |
+| Voci di navigazione (105 storiche − 8 escluse + 1 fase 2) | — | 98 |
+| Overflow orizzontale (5 viewport × 8 sezioni + shell + modale) | — | 0 |
+| Notifiche di scadenza impilate all'avvio | 6 (di cui 4 duplicate) | 2 · 0 duplicate |
+| Finestre native (`alert`/`confirm`/`prompt`) nei flussi coperti | molte | 0 |
 | Errori nella console admin | 1 (`eid is not defined`) | 0 |
 | Pagine admin che rendono contenuto | — | 18 / 18 |
 

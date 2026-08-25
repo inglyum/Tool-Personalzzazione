@@ -4,11 +4,12 @@
 
    `alert()` blocca il thread, non si può stilare, mostra il nome dell'host e
    in un prodotto professionale ha l'aspetto di un errore dell'applicazione.
-   Nel v96 se ne contano 55 chiamate.
+   Nel v96 se ne contano 46 chiamate nel codice dell'applicazione
+   (più 9 dentro jsPDF, che è una libreria di terze parti).
 
    Perché qui c'è un ponte e non 45 file modificati
    ────────────────────────────────────────────────
-   Le 55 chiamate sono state lette una per una. Sono tutte della stessa forma:
+   Le 46 chiamate sono state lette una per una. Sono tutte della stessa forma:
 
        if (!nome) { alert('Inserisci un nome!'); return; }
 
@@ -21,7 +22,7 @@
    Una parte di quelle chiamate vive dentro codice generato come stringa
    (patch 076, 079, 084): modificarle a mano significherebbe riscrivere
    template JavaScript dentro letterali JavaScript. Un solo punto di sostituzione
-   è più sicuro di quarantacinque, ed è reversibile: `InglyUI.nativeAlert`
+   è più sicuro di trenta, ed è reversibile: `InglyUI.nativeAlert`
    conserva l'originale.
 
    `confirm()` e `prompt()` NON sono qui

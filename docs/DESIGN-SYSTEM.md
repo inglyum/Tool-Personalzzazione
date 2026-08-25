@@ -169,7 +169,15 @@ senza essere toccate.
 
 I componenti nuovi che il codice storico non aveva usano il prefisso `ds-`:
 `.ds-toast`, `.ds-empty`, `.ds-skeleton`, `.ds-workcenter`, `.ds-switch`,
-`.ds-breadcrumb`, `.ds-progress`.
+`.ds-breadcrumb`, `.ds-progress`, `.ds-palette`, `.ds-menu`.
+
+Le superfici della fase 2 vivono in `components/operating-center.css` con
+prefissi propri — `.oc` (operating center), `.kpi-card`, `.wc` (work center),
+`.pb` (product builder), `.tb` (topbar), `.cp` (command palette) — e i loro
+blocchi responsive stanno **accanto alla regola che modificano**, non in una
+coda di media query in fondo al foglio. Il motivo è pratico: chi cambia una
+scheda KPI deve vedere lì che cosa succede a 1024 px, altrimenti non lo vede
+affatto. Il perché di ogni superficie sta in `docs/PHASE-2.md`.
 
 ### Il bottone in caricamento non cambia larghezza
 
@@ -217,10 +225,28 @@ In cascata un layer perde sempre contro il CSS non stratificato: il design
 system, che non è in un layer, vince per ogni selettore che ridefinisce, e dove
 non dice nulla il CSS storico continua a valere.
 
-Nessuna dichiarazione del design system usa `!important`.
-`tests/hygiene.test.mjs` lo verifica, con un'unica eccezione consentita: il
-reset di `prefers-reduced-motion`, che per annullare animazioni dichiarate
-altrove deve vincere sulla loro specificità qualunque essa sia.
+`tests/hygiene.test.mjs` verifica che il design system non usi `!important`.
+Sono ammesse due eccezioni, entrambe dichiarate nel foglio stesso e nessuna
+delle due generica:
+
+1. **Il reset di `prefers-reduced-motion`**, che per annullare animazioni
+   dichiarate altrove deve vincere sulla loro specificità qualunque essa sia.
+2. **I nodi con lo stile in linea.** Alcune patch costruiscono i propri
+   elementi con `style.cssText`, quindi quei nodi portano `display:flex`
+   nell'attributo `style`. Un attributo in linea batte qualunque foglio: non
+   esiste un selettore, per quanto specifico, che possa nasconderli. L'unica
+   alternativa sarebbe rimuovere attributi altrui da JavaScript, che è più
+   invasivo, non meno.
+
+La seconda eccezione non è un permesso aperto: ogni occorrenza va marcata con
+`/* !important-ok: <ragione> */` immediatamente prima della regola. Il test
+ignora solo il blocco così marcato e continua a bloccare ogni altro `!important`
+del design system — è più severo di prima, non più permissivo, perché prima
+escludeva un intero blocco senza chiedere una motivazione.
+
+Oggi le occorrenze marcate sono due, entrambe in `components/shell.css` e
+entrambe per la sidebar in modalità barra a 1024 px: i riquadri di solo testo
+creati da JavaScript e le stelline di aggancio. Vedi `docs/PHASE-2.md` §5.
 
 ### Debito residuo, misurato
 

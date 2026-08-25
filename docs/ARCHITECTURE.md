@@ -33,7 +33,7 @@ Tool-Personalzzazione/
 │   ├── ingly-os.json
 │   └── ingly-cloud-admin.json
 ├── docs/                      audit, architettura, design system, migrazione,
-│                              testing, sicurezza
+│                              testing, sicurezza, fase 2
 ├── scripts/
 │   ├── extract.mjs            monolite → sorgenti (one-shot, riproducibile)
 │   ├── build.mjs              sorgenti → dist/*.html
@@ -42,6 +42,9 @@ Tool-Personalzzazione/
 ├── src/
 │   ├── design-system/         INGLY DESIGN SYSTEM (token + componenti)
 │   ├── app-shell/             sidebar, topbar, tassonomia di navigazione
+│   ├── product/               superfici della fase 2 — vedi docs/PHASE-2.md
+│   │                          ui · dialogs · data · work-center · dashboard
+│   │                          product-builder · topbar · command-palette
 │   ├── core/  domain/         moduli TypeScript tipizzati e testati
 │   ├── modules/ integrations/
 │   ├── legacy/                sorgenti estratti dal v96
@@ -112,6 +115,11 @@ leggibile riga per riga.
 │                   semantic tokens                    │
 │                   primitive tokens                   │
 ├─────────────────────────────────────────────────────┤
+│ PRODUCT           operating center · work center ·   │
+│ (fase 2)          product builder · ricerca globale  │
+│                   ── legge tramite InglyData, che    │
+│                      non sa scrivere ──              │
+├─────────────────────────────────────────────────────┤
 │ MODULES           105 sezioni di dominio             │
 ├─────────────────────────────────────────────────────┤
 │ DOMAIN            quote · orders · clients · fiscal  │
@@ -128,6 +136,13 @@ leggibile riga per riga.
 Le dipendenze puntano solo verso il basso. Oggi il monolite viola questa regola
 in più punti (patch che chiamano moduli di livello superiore via polling); la
 migrazione la ripristina modulo per modulo, non con un big bang.
+
+Lo strato **PRODUCT** è quello aggiunto in fase 2. Rispetta la regola in modo
+stretto: legge i dati solo attraverso `src/product/data.js`, che è di sola
+lettura e non espone alcuna scrittura. Nessuna delle superfici nuove possiede
+dati propri, un secondo database o un motore di calcolo parallelo — quando serve
+un prezzo lo chiede a `PricingEngine`, lo stesso che usa il resto
+dell'applicazione. Il perché di ogni scelta sta in `docs/PHASE-2.md`.
 
 ---
 
@@ -190,6 +205,13 @@ SYSTEM         Impostazioni · Account · Backup · Storico
 La mappa completa (105 sezioni → gruppo, etichetta, icona, origine legacy) vive
 in `src/app-shell/nav-map.js`, che è **dati, non codice**: un test verifica che
 la somma delle sezioni mappate sia esattamente quella della baseline.
+
+Il conto oggi è: **105 sezioni storiche → 98 voci in tassonomia**, cioè 8
+escluse — ognuna con una motivazione che il test pretende lunga almeno quaranta
+caratteri, perché «l'ho tolta» non è una ragione — e **1 aggiunta in fase 2**,
+il Product Builder, marcata con `addedBy` per distinguerla dalle storiche. Una
+voce che non fosse né mappata né spiegata farebbe fallire la suite: è così che
+una funzione non diventa irraggiungibile per distrazione.
 
 ### 6.1 Work Center
 
