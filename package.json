@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "node scripts/compose.mjs dist/INGLY-OS.html && node scripts/compose-admin.mjs dist/INGLY-CLOUD-ADMIN.html",
+    "build": "node scripts/compose.mjs dist/INGLY-OS.html && node scripts/compose-admin.mjs dist/INGLY-CLOUD-ADMIN.html && node scripts/build-admin-tester.mjs",
     "dev": "node scripts/dev.mjs",
     "preview": "node scripts/dev.mjs --no-watch",
     "baseline": "node scripts/baseline.mjs src/legacy baseline/ingly-os.json && node scripts/baseline.mjs src/admin/legacy baseline/ingly-cloud-admin.json",

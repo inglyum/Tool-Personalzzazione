@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INGLY CLOUD ADMIN — Collaudo automatico</title>
+<style>
+  :root{
+    --bg:#0d1014;--sunken:#070a0d;--surface:#14181d;--raised:#1f2328;--hover:#262b31;
+    --text:#e8ebee;--muted:#8a929b;--subtle:#6b7280;
+    --line:rgb(255 255 255/.1);--line-soft:rgb(255 255 255/.06);
+    --accent:#00e6d2;--accent-soft:rgb(0 230 210/.1);--accent-line:rgb(0 230 210/.32);
+    --ok:#22c07a;--ok-text:#6ee7a8;--ok-soft:rgb(34 192 122/.12);--ok-line:rgb(34 192 122/.32);
+    --no:#e03b41;--no-text:#f78e91;--no-soft:rgb(224 59 65/.12);--no-line:rgb(224 59 65/.34);
+    --warn:#de9b0b;--warn-text:#f7cd63;
+    --r:12px;--r-sm:8px;
+    --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);
+    font:15px/1.6 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    padding:30px 20px 60px}
+  .wrap{max-width:1040px;margin:0 auto}
+
+  header{margin-bottom:26px}
+  .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:700;margin-bottom:9px}
+  h1{font-size:29px;line-height:1.18;font-weight:700;letter-spacing:-.02em}
+  .lede{color:var(--muted);margin-top:9px;max-width:64ch}
+  code{font-family:var(--mono);font-size:.87em;background:var(--raised);
+    padding:2px 6px;border-radius:5px;color:var(--accent)}
+
+  /* ── Comando ─────────────────────────────────────────────────────── */
+  .run{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);
+    padding:20px 22px;margin-bottom:22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:9px;background:var(--accent);color:#062522;
+    border:none;padding:14px 26px;border-radius:var(--r-sm);
+    font:inherit;font-weight:700;font-size:16px;cursor:pointer;transition:filter .15s}
+  .btn:hover:not(:disabled){filter:brightness(1.1)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn--ghost{background:transparent;color:var(--text);border:1px solid var(--line);
+    font-size:14px;padding:11px 18px;font-weight:650}
+  .btn--ghost:hover:not(:disabled){background:var(--hover);filter:none}
+  .run__state{flex:1;min-width:200px;color:var(--muted);font-size:14px}
+  .run__state b{color:var(--text)}
+
+  .layout{display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start}
+  @media(max-width:860px){.layout{grid-template-columns:1fr}}
+
+  /* ── Prove ───────────────────────────────────────────────────────── */
+  .test{background:var(--surface);border:1px solid var(--line-soft);
+    border-left:3px solid var(--line);border-radius:var(--r);
+    padding:15px 18px;margin-bottom:10px;transition:border-color .2s,background .2s}
+  .test[data-s="run"]{border-left-color:var(--accent);background:linear-gradient(90deg,var(--accent-soft),transparent 45%)}
+  .test[data-s="ok"]{border-left-color:var(--ok)}
+  .test[data-s="no"]{border-left-color:var(--no);background:linear-gradient(90deg,var(--no-soft),transparent 45%)}
+  .test__head{display:flex;align-items:baseline;gap:10px}
+  .test__i{font-family:var(--mono);font-size:12px;color:var(--subtle);flex-shrink:0;width:18px}
+  .test__t{font-weight:650;font-size:15px;flex:1}
+  .test__b{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:3px 9px;border-radius:99px;flex-shrink:0;
+    background:var(--raised);color:var(--subtle)}
+  .test[data-s="run"] .test__b{background:var(--accent-soft);color:var(--accent)}
+  .test[data-s="ok"] .test__b{background:var(--ok-soft);color:var(--ok-text)}
+  .test[data-s="no"] .test__b{background:var(--no-soft);color:var(--no-text)}
+  .test__w{font-size:13.5px;color:var(--muted);margin-top:5px;padding-left:28px}
+  .test__r{font-size:13px;margin-top:6px;padding-left:28px;font-family:var(--mono);
+    color:var(--subtle);word-break:break-word}
+  .test[data-s="ok"] .test__r{color:var(--ok-text)}
+  .test[data-s="no"] .test__r{color:var(--no-text)}
+
+  /* ── Anteprima ───────────────────────────────────────────────────── */
+  .side{position:sticky;top:20px}
+  .panel{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);
+    overflow:hidden}
+  .panel__h{padding:11px 15px;border-bottom:1px solid var(--line-soft);
+    font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--subtle);
+    font-weight:700;display:flex;align-items:center;gap:8px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--subtle);flex-shrink:0}
+  .dot.live{background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:p 1.4s infinite}
+  @keyframes p{70%{box-shadow:0 0 0 6px rgb(0 230 210/0)}100%{box-shadow:0 0 0 0 rgb(0 230 210/0)}}
+  .stage{height:290px;background:var(--sunken);overflow:hidden;position:relative}
+  .stage iframe{position:absolute;top:0;left:0;width:1280px;height:900px;border:0;
+    transform:scale(.265);transform-origin:0 0}
+  .stage__idle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--subtle);font-size:13px;text-align:center;padding:20px}
+
+  .verdict{margin-top:14px;background:var(--raised);border:1px solid var(--line);
+    border-radius:var(--r);padding:17px 19px}
+  .verdict__s{font-size:27px;font-weight:700;letter-spacing:-.02em}
+  .verdict__t{color:var(--muted);font-size:13.5px;margin-top:3px}
+  .verdict__t b{color:var(--text)}
+  .bar{height:6px;background:var(--sunken);border-radius:99px;overflow:hidden;margin-top:11px}
+  .bar__f{height:100%;background:var(--ok);border-radius:99px;transition:width .35s ease;width:0}
+  .bar__f.fail{background:var(--no)}
+
+  #guida{margin-top:38px}
+  #guida h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--subtle);
+    font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--line-soft)}
+  #guida p{margin:10px 0;max-width:72ch}
+  .steps{counter-reset:s;list-style:none;margin:16px 0}
+  .steps>li{counter-increment:s;position:relative;padding-left:40px;margin-bottom:11px;max-width:70ch}
+  .steps>li::before{content:counter(s);position:absolute;left:0;top:-1px;
+    width:26px;height:26px;border-radius:50%;background:var(--raised);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted)}
+  .nota{background:rgb(222 155 11/.13);border:1px solid rgb(222 155 11/.34);
+    border-radius:var(--r-sm);padding:13px 16px;font-size:14px;color:var(--warn-text);max-width:72ch}
+  .nota b{color:#fff}
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line-soft);
+    color:var(--subtle);font-size:13px}
+  footer b{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">INGLY CLOUD ADMIN</div>
+  <h1>Collaudo automatico</h1>
+  <p class="lede">
+    Il pannello è dentro questo file. Premi il pulsante: viene avviato davvero,
+    guidato attraverso otto prove e giudicato. Tu guardi.
+  </p>
+</header>
+
+<div class="run">
+  <button class="btn" id="go">▶ &nbsp;Avvia il collaudo</button>
+  <div class="run__state" id="state">Pronto. Nessuna prova ancora eseguita.</div>
+  <button class="btn btn--ghost" id="copy" disabled>Copia l'esito</button>
+</div>
+
+<div class="layout">
+  <main id="tests"></main>
+
+  <aside class="side">
+    <div class="panel">
+      <div class="panel__h"><span class="dot" id="dot"></span><span id="stageLbl">Il pannello, dal vivo</span></div>
+      <div class="stage" id="stage">
+        <div class="stage__idle" id="idle">Qui vedrai il pannello mentre viene pilotato.</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <div class="verdict__s" id="score">— / 8</div>
+      <div class="verdict__t" id="vtxt">In attesa.</div>
+      <div class="bar"><div class="bar__f" id="fill"></div></div>
+    </div>
+  </aside>
+</div>
+
+<section id="guida">
+  <h2>E per usarlo davvero</h2>
+  <p>
+    Il pannello vero è il file <code>INGLY-CLOUD-ADMIN.html</code>: si apre con un
+    doppio clic, funziona senza rete e senza server, e i dati restano sul tuo
+    dispositivo. <b>Non nasce con una password</b> — nella versione precedente
+    chiunque aprisse il file entrava come Super Admin con <code>admin</code> /
+    <code>admin</code>, perché le credenziali erano scritte nel sorgente. È la
+    prima cosa che questo collaudo verifica.
+  </p>
+  <ol class="steps">
+    <li><b>Utente <code>superadmin</code></b>, password qualsiasi: al primo avvio
+        non c'è ancora nulla da confrontare.</li>
+    <li><b>Scegli la tua password</b>: minimo 8 caratteri, una maiuscola, una
+        minuscola e un numero. Va scritta due volte.</li>
+    <li><b>Sei dentro</b>: 18 pagine in 6 sezioni — Overview, Customers,
+        Subscriptions, Security, Support, Sistema.</li>
+  </ol>
+  <p class="nota">
+    <b>Quella password non è recuperabile.</b> Non esiste un server che possa
+    reimpostarla, perché non esiste un server: viene salvata come hash nel tuo
+    browser. Se la perdi si riparte cancellando i dati del sito.
+  </p>
+</section>
+
+<footer>
+  Il pannello è incorporato in questo file e viene eseguito in un riquadro isolato.
+  Il collaudo <b>azzera il database della console</b> prima di iniziare, quindi non
+  usarlo sul file dove hai già dei dati.
+  Sorgente delle prove: <b>tests/qa/admin.mjs</b> · correzioni di sicurezza: <b>docs/SECURITY.md</b>
+</footer>
+
+</div>
+
+<script id="payload" type="application/octet-stream">__PAYLOAD__</script>
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Il pannello vive qui dentro, in base64.
+
+   Un `iframe` con `srcdoc` eredita l'origine della pagina che lo contiene,
+   quindi resta pilotabile anche aprendo questo file con un doppio clic —
+   che è tutto il punto. Un `iframe src="file:///…"` avrebbe un'origine
+   opaca e nessuna prova sarebbe possibile.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const B64 = document.getElementById('payload').textContent.trim();
+
+/* Il pannello si annota da solo gli errori: attaccare un ascoltatore dal
+   di fuori arriverebbe dopo che i suoi script sono già partiti. */
+const SPIA = '<script>window.__errs=[];' +
+  'addEventListener("error",function(e){__errs.push(String(e.message||e.type))});' +
+  'addEventListener("unhandledrejection",function(e){__errs.push("promise: "+e.reason)});' +
+  '<\/script>';
+
+function sorgente() {
+  const bytes = Uint8Array.from(atob(B64), (c) => c.charCodeAt(0));
+  const html = new TextDecoder('utf-8').decode(bytes);
+  const i = html.indexOf('<head>');
+  return i === -1 ? SPIA + html : html.slice(0, i + 6) + SPIA + html.slice(i + 6);
+}
+
+const CHIAVE = 'ingly_saas_db';
+const PWD_OK = 'IngLy2026sicura';
+const PWD_DEBOLE = '12345678';
+
+const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Aspetta una condizione invece di indovinare un ritardo: il pannello non
+   impiega lo stesso tempo su ogni macchina. */
+async function finche(fn, limite = 15000, passo = 100) {
+  const fine = Date.now() + limite;
+  while (Date.now() < fine) {
+    try { if (fn()) return true; } catch (e) { /* non ancora pronto */ }
+    await attesa(passo);
+  }
+  return false;
+}
+
+const stage = document.getElementById('stage');
+let frame = null;
+
+/** Avvia (o riavvia) il pannello. `pulisci` azzera il database della console. */
+async function avvia(pulisci) {
+  if (pulisci) localStorage.removeItem(CHIAVE);
+  if (frame) frame.remove();
+  document.getElementById('idle').style.display = 'none';
+
+  frame = document.createElement('iframe');
+  frame.setAttribute('title', 'INGLY Cloud Admin in collaudo');
+  stage.appendChild(frame);
+
+  await new Promise((r) => { frame.onload = r; frame.srcdoc = sorgente(); });
+  const w = frame.contentWindow;
+  const pronto = await finche(() => w.document.getElementById('login-screen') && typeof w.doLogin === 'function');
+  if (!pronto) throw new Error('il pannello non ha completato l\'avvio');
+  await attesa(400);
+  return w;
+}
+
+const q = (w, sel) => w.document.querySelector(sel);
+const val = (w, sel, v) => { const e = q(w, sel); if (!e) throw new Error('campo assente: ' + sel); e.value = v; };
+const visibile = (w, sel) => { const e = q(w, sel); return !!e && w.getComputedStyle(e).display !== 'none'; };
+
+async function accedi(w, utente, password) {
+  val(w, '#l-user', utente);
+  val(w, '#l-pass', password);
+  await w.doLogin();
+  await attesa(900);
+}
+
+async function impostaPassword(w, p) {
+  val(w, '#fl-pwd1', p);
+  val(w, '#fl-pwd2', p);
+  await w._doFirstLogin();
+  await attesa(900);
+}
+
+const db = () => JSON.parse(localStorage.getItem(CHIAVE) || '{}');
+
+/* ── Le prove ─────────────────────────────────────────────────────────
+   Ognuna restituisce { ok, dettaglio }. Il dettaglio è ciò che è successo
+   davvero, non «superata»: se fallisce dev'essere leggibile senza aprire
+   gli strumenti di sviluppo.                                            */
+
+let W = null;
+
+const PROVE = [
+  {
+    t: 'admin / admin non entra più',
+    w: 'La credenziale che era scritta nel sorgente deve essere rifiutata.',
+    async run() {
+      W = await avvia(true);
+      await accedi(W, 'admin', 'admin');
+      const dentro = !visibile(W, '#login-screen');
+      const primoAccesso = !!q(W, '#fl-pwd1');
+      const errore = (q(W, '#l-err') || {}).textContent || '';
+      if (dentro || primoAccesso) return { ok: false, d: 'ATTENZIONE: ha dato accesso.' };
+      return { ok: !!errore.trim(), d: errore.trim() || 'rifiutato, ma senza messaggio' };
+    },
+  },
+  {
+    t: 'Il primo accesso chiede una password',
+    w: 'superadmin deve portare alla schermata di scelta, non alla console.',
+    async run() {
+      await accedi(W, 'superadmin', 'una-qualsiasi');
+      const fr = !!q(W, '#fl-pwd1');
+      return { ok: fr, d: fr ? 'schermata di primo accesso mostrata' : 'schermata non comparsa' };
+    },
+  },
+  {
+    t: 'La password debole viene rifiutata',
+    w: '12345678 non rispetta i requisiti: niente maiuscola, niente lettere.',
+    async run() {
+      await impostaPassword(W, PWD_DEBOLE);
+      const ancoraLi = !!q(W, '#fl-pwd1');
+      const err = (q(W, '#fl-err') || {}).textContent || '';
+      if (!ancoraLi) return { ok: false, d: 'ATTENZIONE: ha accettato una password debole.' };
+      return { ok: !!err.trim(), d: err.trim() || 'rifiutata, ma senza spiegazione' };
+    },
+  },
+  {
+    t: 'La password valida fa entrare',
+    w: 'Con una password conforme si arriva nella console come Super Admin.',
+    async run() {
+      await impostaPassword(W, PWD_OK);
+      await finche(() => !visibile(W, '#login-screen'), 8000);
+      const dentro = !visibile(W, '#login-screen');
+      const chi = (q(W, '#sb-username') || {}).textContent || '';
+      return { ok: dentro && /admin/i.test(chi), d: dentro ? 'dentro come «' + chi.trim() + '»' : 'non è entrato' };
+    },
+  },
+  {
+    t: 'La password non è salvata in chiaro',
+    w: 'Nel database deve esserci un hash PBKDF2, non la password.',
+    async run() {
+      const admins = db().admins || [];
+      const hash = String((admins.find((a) => a.passwordHash) || {}).passwordHash || '');
+      const inChiaro = admins.some((a) => a.passwordHash === PWD_OK);
+      if (inChiaro) return { ok: false, d: 'ATTENZIONE: password in chiaro nel database.' };
+      return { ok: hash.startsWith('pbkdf2$'), d: hash.slice(0, 26) + (hash ? '…' : '(nessun hash)') };
+    },
+  },
+  {
+    t: 'Tutte le pagine mostrano contenuto',
+    w: 'Ogni voce del menu deve rendere qualcosa: nessuna schermata bianca.',
+    async run() {
+      const voci = [...W.document.querySelectorAll('#sidebar .sb-item[data-page]')].map((e) => e.dataset.page);
+      if (!voci.length) return { ok: false, d: 'nessuna voce di menu trovata' };
+      const vuote = [];
+      for (const p of voci) {
+        W.nav(p);
+        await attesa(160);
+        const el = W.document.getElementById('page-' + p);
+        if (!el || !(el.innerText || '').trim()) vuote.push(p);
+      }
+      return { ok: !vuote.length, d: voci.length + ' pagine percorse · ' + (vuote.length ? 'vuote: ' + vuote.join(', ') : 'nessuna vuota') };
+    },
+  },
+  {
+    t: 'La password resta al riavvio',
+    w: 'Riaprendo il pannello: quella sbagliata è rifiutata, quella giusta entra.',
+    async run() {
+      W = await avvia(false); // stavolta il database non si azzera
+      await accedi(W, 'superadmin', 'password-sbagliata');
+      if (!visibile(W, '#login-screen')) return { ok: false, d: 'ATTENZIONE: è entrato con la password sbagliata.' };
+      await accedi(W, 'superadmin', PWD_OK);
+      await finche(() => !visibile(W, '#login-screen'), 8000);
+      const dentro = !visibile(W, '#login-screen');
+      const richiedeSetup = !!q(W, '#fl-pwd1');
+      if (richiedeSetup) return { ok: false, d: 'ha richiesto di nuovo il primo accesso: la password non è stata conservata' };
+      return { ok: dentro, d: dentro ? 'sbagliata rifiutata, giusta accettata' : 'non è entrato con la password corretta' };
+    },
+  },
+  {
+    t: 'Nessun errore JavaScript',
+    w: 'Durante tutto il collaudo la console del pannello deve restare pulita.',
+    async run() {
+      const errs = (W.__errs || []).filter((e) => !/net::|Failed to load resource/i.test(e));
+      return { ok: !errs.length, d: errs.length ? errs.slice(0, 3).join(' · ') : '0 errori' };
+    },
+  },
+];
+
+/* ── Rendering ────────────────────────────────────────────────────────── */
+
+const box = document.getElementById('tests');
+box.innerHTML = PROVE.map((p, i) => `
+  <div class="test" data-i="${i}">
+    <div class="test__head">
+      <span class="test__i">${String(i + 1).padStart(2, '0')}</span>
+      <span class="test__t">${p.t}</span>
+      <span class="test__b">in attesa</span>
+    </div>
+    <div class="test__w">${p.w}</div>
+    <div class="test__r"></div>
+  </div>`).join('');
+
+const carte = [...box.querySelectorAll('.test')];
+const esiti = new Array(PROVE.length).fill(null);
+
+function segna(i, stato, etichetta, dettaglio) {
+  const c = carte[i];
+  c.dataset.s = stato;
+  c.querySelector('.test__b').textContent = etichetta;
+  if (dettaglio !== undefined) c.querySelector('.test__r').textContent = dettaglio;
+}
+
+function aggiorna() {
+  const ok = esiti.filter((e) => e === true).length;
+  const no = esiti.filter((e) => e === false).length;
+  const fatti = ok + no;
+  document.getElementById('score').textContent = ok + ' / ' + PROVE.length;
+  const f = document.getElementById('fill');
+  f.style.width = (fatti / PROVE.length * 100) + '%';
+  f.classList.toggle('fail', no > 0);
+  const t = document.getElementById('vtxt');
+  if (!fatti) t.textContent = 'In attesa.';
+  else if (no) t.innerHTML = '<b>' + no + '</b> prova' + (no > 1 ? 'e' : '') + ' non superata' + (no > 1 ? 'e' : '');
+  else if (ok === PROVE.length) t.innerHTML = '<b>Tutte superate.</b>';
+  else t.innerHTML = '<b>' + ok + '</b> superate finora';
+}
+
+document.getElementById('go').addEventListener('click', async function () {
+  const btn = this;
+  btn.disabled = true;
+  btn.textContent = '⟳  Collaudo in corso…';
+  document.getElementById('copy').disabled = true;
+  document.getElementById('dot').classList.add('live');
+  esiti.fill(null);
+  carte.forEach((c, i) => segna(i, '', 'in attesa', ''));
+  aggiorna();
+
+  const stato = document.getElementById('state');
+
+  for (let i = 0; i < PROVE.length; i++) {
+    segna(i, 'run', 'in corso');
+    stato.innerHTML = 'Prova <b>' + (i + 1) + '</b> di ' + PROVE.length + ': ' + PROVE[i].t;
+    try {
+      const r = await PROVE[i].run();
+      esiti[i] = r.ok;
+      segna(i, r.ok ? 'ok' : 'no', r.ok ? 'superata' : 'fallita', r.d);
+    } catch (e) {
+      esiti[i] = false;
+      segna(i, 'no', 'errore', String(e && e.message || e));
+    }
+    aggiorna();
+  }
+
+  document.getElementById('dot').classList.remove('live');
+  btn.disabled = false;
+  btn.textContent = '▶  Ripeti il collaudo';
+  document.getElementById('copy').disabled = false;
+  const no = esiti.filter((e) => e === false).length;
+  stato.innerHTML = no
+    ? 'Concluso: <b>' + no + '</b> prova' + (no > 1 ? 'e' : '') + ' non superata' + (no > 1 ? 'e' : '') + '. Copia l\'esito e rimandalo.'
+    : 'Concluso: <b>tutte le prove superate</b>.';
+});
+
+document.getElementById('copy').addEventListener('click', async function () {
+  const testo = [
+    'INGLY CLOUD ADMIN — collaudo automatico',
+    new Date().toLocaleString('it-IT'),
+    '',
+    ...PROVE.map((p, i) => {
+      const s = esiti[i] === true ? '[OK]' : esiti[i] === false ? '[NO]' : '[ -]';
+      const d = carte[i].querySelector('.test__r').textContent;
+      return s + ' ' + (i + 1) + '. ' + p.t + (d ? '\n        ' + d : '');
+    }),
+    '',
+    'Superate: ' + esiti.filter((e) => e === true).length + ' su ' + PROVE.length,
+  ].join('\n');
+
+  const originale = this.textContent;
+  try {
+    await navigator.clipboard.writeText(testo);
+    this.textContent = '✓ Copiato';
+    setTimeout(() => { this.textContent = originale; }, 1800);
+  } catch (e) {
+    window.prompt('Copia questo testo:', testo);
+  }
+});
+
+aggiorna();
+</script>
+</body>
+</html>
