@@ -115,6 +115,19 @@ const Dashboard={
   async render(){
     try {
 
+    /* L'Operating Center (Fase 2) è la dashboard del prodotto: possiede la
+       vista e disegna KPI, produzione, attenzione, magazzino, macchine,
+       redditività e intelligence da un'unica lettura degli store.
+
+       Questa funzione orchestrava una decina di widget che si iniettavano
+       ciascuno nel proprio contenitore, creandolo se mancava: lasciarla girare
+       significa impilare le due dashboard. Resta come riserva se il modulo
+       nuovo non si carica. */
+    if (window.InglyDashboard && typeof window.InglyDashboard.render === 'function') {
+      window.InglyDashboard.render();
+      return;
+    }
+
     const kpi=await KPIEngine.run();
     this.updateKPIs(kpi);
     await this.renderCharts();

@@ -7,6 +7,21 @@
 // ─── FEATURE 1: Dashboard KPI Pro ────────────────────────────────
 window.DashboardPro = {
   render: function(){
+    /* L'Operating Center (Fase 2) è la dashboard del prodotto. Quando è
+       disponibile disegna lui, e questa funzione gli cede il posto invece di
+       sovrascrivere la vista con `el.innerHTML`.
+
+       Non è solo una questione di aspetto: il codice qui sotto legge da
+       localStorage (`ingly_sales_v1`, `ingly_orders_pro_v1`…) mentre KPIEngine
+       e tutto il resto dell'applicazione leggono da IndexedDB. Erano due
+       dashboard con due verità diverse sugli stessi numeri.
+
+       Resta come riserva: se il modulo nuovo non si carica, la dashboard
+       storica funziona ancora. */
+    if (window.InglyDashboard && typeof window.InglyDashboard.render === 'function') {
+      window.InglyDashboard.render();
+      return;
+    }
     var el=document.getElementById('view-dashboard')||document.getElementById('view-kpi');
     if(!el) return;
     try{

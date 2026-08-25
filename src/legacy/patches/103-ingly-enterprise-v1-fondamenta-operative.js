@@ -384,6 +384,12 @@
      1. EXECUTIVE DASHBOARD
   ───────────────────────────────────────────────── */
   function buildDashboard() {
+    /* Terza dashboard del monolite, dopo quella del core e quella di
+       DashboardPro: sovrascriveva `#view-dashboard` con la propria griglia di
+       KPI leggendo da localStorage. Con l'Operating Center attivo cancellava
+       la schermata appena disegnata. Cede il posto; resta come riserva. */
+    if (window.InglyDashboard && typeof window.InglyDashboard.render === 'function') return;
+
     var section = $id('view-dashboard');
     if (!section || section._ev1DashBuilt) return;
 

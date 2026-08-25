@@ -21,6 +21,7 @@ export const DESIGN_SYSTEM_FILES = [
   'components/surfaces.css',
   'components/overlays.css',
   'components/shell.css',
+  'components/operating-center.css',
 ];
 
 /** La variante per INGLY Cloud Admin: stessi token, ponte verso i suoi nomi. */

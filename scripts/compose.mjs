@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { build } from './build.mjs';
 import { designSystemCss, adminDesignSystemCss } from '../src/design-system/index.mjs';
+import { productJs, PRODUCT_HOST, RETIRED_DASHBOARD_PATCHES } from '../src/product/index.mjs';
 import {
   adminAuthJs,
   adminShellJs,
@@ -94,6 +95,7 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
   }
 
   overrides[SIDEBAR_HOST] = appShellJs();
+  overrides[PRODUCT_HOST] = productJs(fs.readFileSync(path.join(srcDir, PRODUCT_HOST), 'utf8'));
 
   /* L'unico script ancora caricato da un CDN. Sostituito da un adattatore su
      simple-statistics, che è già vendorizzata e contiene lo stesso algoritmo. */
@@ -103,7 +105,7 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
   };
 
 
-  const drop = new Set([...RETIRED_DESIGN_LAYERS, ...RETIRED_SIDEBAR_PATCHES]);
+  const drop = new Set([...RETIRED_DESIGN_LAYERS, ...RETIRED_SIDEBAR_PATCHES, ...RETIRED_DASHBOARD_PATCHES]);
   let { html } = build({ srcDir, overrides, drop });
   for (const re of [...DEAD_ICON_CDNS, ...EXTERNAL_FONT_TAGS]) html = html.replace(re, '');
   html = html.replace(
