@@ -10,3 +10,10 @@
       + '</div></div>';
   }
 })();
+
+/* `eid()` era usato in sei punti della console — il grafico della dashboard,
+   il centro scadenze, la configurazione Stripe — ma non è mai stato definito:
+   ognuna di quelle funzioni si interrompeva con "eid is not defined". È lo
+   stesso helper che usa INGLY OS. */
+function eid(id) { return document.getElementById(id); }
+window.eid = eid;

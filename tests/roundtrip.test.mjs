@@ -75,8 +75,12 @@ for (const app of apps) {
   });
 }
 
-test('INGLY Cloud Admin: il build è ancora identico al file di partenza', () => {
-  // L'Admin non è stato ancora toccato: finché è così vale la verifica forte.
-  const { html, manifest } = build({ srcDir: 'src/admin/legacy' });
-  assert.equal(crypto.createHash('sha256').update(html).digest('hex'), manifest.sourceSha256);
+test('la console dichiara le proprie differenze come l\'applicazione', () => {
+  // Entrambi i prodotti hanno ormai modifiche deliberate: la verifica forte è
+  // quella per blocco, sopra. Qui si controlla solo che il registro esista per
+  // tutte e due e non sia stato svuotato per far passare la suite.
+  for (const dir of ['src/legacy', 'src/admin/legacy']) {
+    assert.ok(declared[dir], `manca il registro delle modifiche per ${dir}`);
+    assert.ok(Object.keys(declared[dir]).length > 0, `${dir}: registro vuoto`);
+  }
 });

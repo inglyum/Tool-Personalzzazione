@@ -12,5 +12,8 @@
     "patches/091-ingly-os-v37-task-force-best-version.js": "Un !important con l'indaco scritto a mano per lo stato attivo del menu, in conflitto con l'ambra dichiarata dalla patch 103: vinceva l'ultima caricata. Rimosso: lo stato attivo è del design system.",
     "patches/083-ingly-os-v28-feature-pack-part-1.js": "Il router prendeva sempre `view-dashboard` per le sezioni dashboard e kpi, perché quell'id esiste sempre: la voce «KPI Live» apriva la dashboard e la sua pagina era irraggiungibile dal menu. Ora si risolve la vista corrispondente alla sezione richiesta."
   },
-  "src/admin/legacy": {}
+  "src/admin/legacy": {
+    "patches/002-https-enforcement-deve-girare-su-https-in-produz.js": "`eid()` era usato in sei punti della console — grafico della dashboard, centro scadenze, configurazione Stripe — ma non è mai stato definito: ognuna di quelle funzioni si interrompeva con «eid is not defined». Aggiunto l'helper, lo stesso che usa INGLY OS.",
+    "patches/003-engine-enterprise-database-demo-data.js": "Rimosso il bypass con credenziali master scritte nel sorgente (superadmin/admin e admin/admin) che scavalcava il controllo anti-brute-force e riscriveva la password dell'admin esistente. Le password sono ora hash PBKDF2 con salt, verificate dal modulo credenziali; quelle già salvate in chiaro migrano al primo accesso. Il database nasce con un solo super admin senza password: la sceglie chi installa."
+  }
 }

@@ -12,7 +12,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { build } from './build.mjs';
-import { designSystemCss } from '../src/design-system/index.mjs';
+import { designSystemCss, adminDesignSystemCss } from '../src/design-system/index.mjs';
+import {
+  adminAuthJs,
+  adminShellJs,
+  ADMIN_STYLE_HOST,
+  ADMIN_SECURITY_HOST,
+  ADMIN_SHELL_HOST,
+} from '../src/admin/index.mjs';
 import { appShellJs, RETIRED_SIDEBAR_PATCHES, SIDEBAR_HOST } from '../src/app-shell/index.mjs';
 
 const readSrc = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -109,6 +116,33 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
     retiredDesign: RETIRED_DESIGN_LAYERS.length,
     retiredSidebar: RETIRED_SIDEBAR_PATCHES.length,
   };
+}
+
+export function composeInglyCloudAdmin({ srcDir = 'src/admin/legacy' } = {}) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(srcDir, 'manifest.json'), 'utf8'));
+  const read = (f) => fs.readFileSync(path.join(srcDir, f), 'utf8');
+  const overrides = {};
+
+  for (const part of manifest.parts) {
+    if (part.type !== 'style' || !part.file) continue;
+    if (part.file !== ADMIN_STYLE_HOST) {
+      overrides[part.file] = wrapInLegacyLayer(read(part.file));
+      continue;
+    }
+    /* Quel blocco contiene i token della console *e* tutto il suo layout —
+       griglia dell'app, sidebar, topbar, tabelle. Si sostituisce solo il
+       `:root`: il resto resta, stratificato, e il design system vince dove
+       ridefinisce. Sostituirlo per intero lasciava la console senza layout. */
+    const original = read(ADMIN_STYLE_HOST).replace(/:root\s*\{[^}]*\}/, '');
+    overrides[ADMIN_STYLE_HOST] = adminDesignSystemCss() + '\n' + wrapInLegacyLayer(original);
+  }
+
+  overrides[ADMIN_SECURITY_HOST] = adminAuthJs(read(ADMIN_SECURITY_HOST));
+  overrides[ADMIN_SHELL_HOST] = adminShellJs(read(ADMIN_SHELL_HOST));
+
+  let { html } = build({ srcDir, overrides });
+  for (const re of [...DEAD_ICON_CDNS, ...EXTERNAL_FONT_TAGS]) html = html.replace(re, '');
+  return { html, manifest };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -173,15 +173,15 @@ function makeSecurityEvent(i){
 
 function createDB(){
   // ── PRODUZIONE: DB pulito, zero utenti demo ──────────────
+  /* Il database nasceva con due account già utilizzabili — superadmin/admin e
+     admin/admin — e `mustChangePassword` a false: chiunque aprisse il file
+     entrava. Ora esiste un solo super admin senza password: al primo accesso
+     la sceglie chi installa, e viene salvata come hash. */
   const admins = [
     {id:'adm-0001',username:'superadmin',email:'superadmin@ingly.io',
-     role:'superadmin',name:'Super Admin',passwordHash:'admin',
-     lastLogin:new Date().toISOString(),active:true,
-     mustChangePassword:false},
-    {id:'adm-0002',username:'admin',email:'admin@ingly.io',
-     role:'admin',name:'Admin',passwordHash:'admin',
-     lastLogin:new Date().toISOString(),active:true,
-     mustChangePassword:false},
+     role:'superadmin',name:'Super Admin',passwordHash:null,
+     lastLogin:null,active:true,
+     mustChangePassword:true},
   ];
   const db={
     users:[],
@@ -322,65 +322,54 @@ var InglyCloudAdmin = {
   }
 };
 
-function doLogin(){
+async function doLogin(){
   const u=document.getElementById('l-user').value.trim();
   const p=document.getElementById('l-pass').value;
   const err=document.getElementById('l-err');
   err.style.display='none';
   if(!u||!p){err.textContent='Inserisci credenziali';err.style.display='block';return;}
-  // Brute force check
   const bfCheck = _checkLoginAllowed();
   if(!bfCheck.allowed){err.textContent=bfCheck.msg;err.style.display='block';return;}
   _db = dbLoad();
 
-  // ── EMERGENCY BYPASS: accesso garantito con credenziali master ──
-  // Se il DB locale è corrotto o ha password diverse, questo garantisce accesso
-  const MASTER_CREDENTIALS = [
-    {username:'superadmin', password:'admin'},
-    {username:'admin',      password:'admin'},
-  ];
-  const isMaster = MASTER_CREDENTIALS.some(function(c){ return c.username===u && c.password===p; });
-  if(isMaster){
-    // Trova o crea l'admin nel DB e normalizza la password
-    let adm2 = (_db.admins||[]).find(function(a){ return a.username===u; });
-    if(!adm2){
-      adm2 = {id:'adm-master-'+u, username:u, email:u+'@ingly.io',
-               role:u==='superadmin'?'superadmin':'admin', name:u==='superadmin'?'Super Admin':'Admin',
-               passwordHash:'admin', active:true, mustChangePassword:false,
-               lastLogin:new Date().toISOString()};
-      if(!_db.admins) _db.admins=[];
-      _db.admins.push(adm2);
-    } else {
-      adm2.passwordHash='admin'; // normalizza
-      adm2.active=true;
-      adm2.mustChangePassword=false;
-    }
-    adm2.lastLogin=new Date().toISOString();
-    dbSave(_db);
-    _recordLoginSuccess();
-    _me=adm2;
-    addAuditLog('admin_login','Master login','Admin: '+_me.name,_me.id);
-    document.getElementById('login-screen').style.display='none';
-    _finishAppInit();
+  /* Qui c'era un "EMERGENCY BYPASS" con due credenziali master scritte nel
+     sorgente (superadmin/admin e admin/admin) che scavalcava il controllo
+     anti-brute-force appena eseguito e riscriveva la password dell'admin
+     esistente. È stato rimosso: la password si verifica contro l'hash. */
+
+  const adm=(_db.admins||[]).find(function(a){ return (a.username===u||a.email===u)&&a.active; });
+
+  /* Primo accesso: l'installazione parte senza password impostata. */
+  if(adm && !adm.passwordHash){
+    _me=adm;
+    _showFirstLoginSetup(adm);
     return;
   }
 
-  // ── Login normale ──
-  const adm=(_db.admins||[]).find(function(a){ return (a.username===u||a.email===u)&&a.active; });
-  if(!adm||adm.passwordHash!==p){
+  const check = adm
+    ? await InglyAdminAuth.verify(p, adm.passwordHash)
+    : { ok:false, needsUpgrade:false };
+
+  if(!check.ok){
     _recordLoginFail();
     const remaining = 5 - _loginAttempts.count;
     err.textContent='Credenziali non valide'+(remaining>0&&remaining<5?' ('+remaining+' tentativi rimanenti)':'');
     err.style.display='block';return;
   }
+
+  /* Password ancora in chiaro da un'installazione precedente: si riscrive
+     come hash adesso, senza chiedere nulla all'utente. */
+  if(check.needsUpgrade){
+    try{ adm.passwordHash = await InglyAdminAuth.hash(p); }catch(e){}
+  }
+
   _recordLoginSuccess();
   _me=adm;
   adm.lastLogin=new Date().toISOString();
   dbSave(_db);
   addAuditLog('admin_login','Console login','Admin: '+_me.name,_me.id);
 
-  // mustChangePassword disabilitato per semplicità operativa
-  // if(adm.mustChangePassword){ ... }
+  if(adm.mustChangePassword){ _showFirstLoginSetup(adm); return; }
 
   document.getElementById('login-screen').style.display='none';
   _finishAppInit();
@@ -415,19 +404,17 @@ function _showFirstLoginSetup(adm){
   document.getElementById('login-screen').style.display = 'flex';
 }
 
-function _doFirstLogin(){
+async function _doFirstLogin(){
   const p1 = document.getElementById('fl-pwd1').value;
   const p2 = document.getElementById('fl-pwd2').value;
   const err = document.getElementById('fl-err');
   err.style.display = 'none';
-  if(p1.length < 8){ err.textContent='Password troppo corta (min 8 caratteri)'; err.style.display='block'; return; }
-  if(!/[0-9]/.test(p1)){ err.textContent='Inserisci almeno un numero'; err.style.display='block'; return; }
-  if(!/[A-Z]/.test(p1)){ err.textContent='Inserisci almeno una lettera maiuscola'; err.style.display='block'; return; }
+  const problem = InglyAdminAuth.validate(p1);
+  if(problem){ err.textContent=problem; err.style.display='block'; return; }
   if(p1 !== p2){ err.textContent='Le password non coincidono'; err.style.display='block'; return; }
-  // Salva nuova password
   const adm = (_db.admins||[]).find(a=>a.id===_me.id);
   if(adm){
-    adm.passwordHash = p1;
+    adm.passwordHash = await InglyAdminAuth.hash(p1);
     adm.mustChangePassword = false;
     adm.passwordChangedAt = new Date().toISOString();
     dbSave(_db);
@@ -2468,9 +2455,11 @@ function openNewAdminModal(){
   `);
 }
 
-function doCreateAdmin(){
+async function doCreateAdmin(){
   const pwd=genPwd();
-  const adm={id:'adm-'+Date.now(),username:document.getElementById('na-user').value,email:document.getElementById('na-email').value,role:document.getElementById('na-role').value,name:document.getElementById('na-name').value,passwordHash:pwd,lastLogin:null,active:true};
+  /* La password generata si mostra una volta sola qui sotto; nel database
+     entra solo il suo hash. Prima ci finiva in chiaro. */
+  const adm={id:'adm-'+Date.now(),username:document.getElementById('na-user').value,email:document.getElementById('na-email').value,role:document.getElementById('na-role').value,name:document.getElementById('na-name').value,passwordHash:await InglyAdminAuth.hash(pwd),lastLogin:null,active:true,mustChangePassword:true};
   _db.admins.push(adm); dbSave(_db);
   addAuditLog('admin_created',adm.name+' ('+adm.role+')');
   openModal(`<div class="modal modal-sm"><div class="modal-header"><div class="font-bold">✅ Admin Creato</div></div><div class="modal-body"><div style="background:var(--bg3);border-radius:var(--r);padding:14px;font-family:monospace;font-size:12px"><div class="mb-4"><strong>Username:</strong> ${adm.username}</div><div class="mb-4"><strong>Email:</strong> ${adm.email}</div><div><strong>Password:</strong> <span style="color:var(--green);font-size:14px;font-weight:800">${pwd}</span></div></div></div><div class="modal-footer"><button class="btn btn-primary btn-sm" onclick="closeModal();nav('admin-roles')">OK</button></div></div>`);
@@ -3471,14 +3460,20 @@ function openEditAdminFull(id) {
   );
 }
 
-function saveEditAdminFull(id) {
+async function saveEditAdminFull(id) {
   var a = (_db.admins||[]).find(function(x){ return x.id===id; });
   if (!a) return;
   a.name  = document.getElementById('ea2-name').value.trim() || a.name;
   a.email = document.getElementById('ea2-email').value.trim() || a.email;
   a.role  = document.getElementById('ea2-role').value;
   var pwd = document.getElementById('ea2-pwd').value;
-  if (pwd && pwd.length >= 4) { a.passwordHash = pwd; }
+  if (pwd) {
+    /* Accettava qualunque cosa da 4 caratteri in su, e la salvava in chiaro. */
+    var problem = InglyAdminAuth.validate(pwd);
+    if (problem) { toast(problem, 'error'); return; }
+    a.passwordHash = await InglyAdminAuth.hash(pwd);
+    a.passwordChangedAt = new Date().toISOString();
+  }
   /* Save custom permissions */
   a.customPerms = {};
   Object.keys(PERM_MATRIX).forEach(function(perm) {

@@ -1,0 +1,61 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   INGLY DESIGN SYSTEM · PONTE VERSO INGLY CLOUD ADMIN
+   ═══════════════════════════════════════════════════════════════════════════
+
+   L'Admin aveva la propria scala di variabili, indipendente da quella
+   dell'applicazione: `--bg`…`--bg5`, `--text`…`--text4`, `--accent` ambra,
+   `--r`/`--r2` per i raggi. Stessi concetti, nomi diversi, valori diversi: due
+   prodotti dello stesso marchio che non si somigliavano.
+
+   Qui quei nomi restano — le 438 dichiarazioni inline dell'Admin continuano a
+   funzionare — ma diventano alias dei token semantici. Console e applicazione
+   condividono la stessa palette, la stessa tipografia e gli stessi componenti.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Superfici: cinque livelli mappati sui quattro del design system,
+        con il quinto che riusa la superficie sovrapposta. ─────────────────  */
+  --bg: var(--color-bg);
+  --bg2: var(--color-surface);
+  --bg3: var(--color-surface-elevated);
+  --bg4: var(--color-surface-overlay);
+  --bg5: var(--color-surface-hover);
+
+  --border: var(--color-border-subtle);
+  --border2: var(--color-border);
+  --border3: var(--color-border-strong);
+
+  --text: var(--color-text);
+  --text2: var(--color-text-muted);
+  --text3: var(--color-text-subtle);
+  --text4: var(--color-text-disabled);
+
+  /* L'accento era l'ambra, la stessa che nell'applicazione dava l'aria del
+     pannello di amministrazione generico. Diventa il ciano del marchio; l'oro
+     resta disponibile come `--acc3` per i segnali premium (piani, licenze). */
+  --accent: var(--color-primary);
+  --acc2: var(--color-primary-hover);
+  --acc3: var(--color-premium);
+
+  --green: var(--color-success);
+  --green2: var(--color-success-text);
+  --yellow: var(--color-warning);
+  --yellow2: var(--color-warning-text);
+  --red: var(--color-danger);
+  --red2: var(--color-danger-text);
+  --blue: var(--color-info);
+  --cyan: var(--cyan-500);
+  --purple: var(--violet-500);
+  --pink: var(--violet-400);
+  --orange: var(--color-warning);
+
+  /* La console dispone sidebar e contenuto con una griglia a colonna fissa da
+     220px. Il design system dimensiona `#sidebar` con questa variabile: se i
+     due valori divergono, il contenuto scivola sotto il menu. */
+  --shell-sidebar-width: 220px;
+
+  --r: var(--radius-md);
+  --r2: var(--radius-lg);
+  --shadow: var(--shadow-lg);
+  --shadow2: var(--shadow-sm);
+}

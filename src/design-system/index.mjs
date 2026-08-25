@@ -23,6 +23,21 @@ export const DESIGN_SYSTEM_FILES = [
   'components/shell.css',
 ];
 
+/** La variante per INGLY Cloud Admin: stessi token, ponte verso i suoi nomi. */
+export function adminDesignSystemCss() {
+  const files = DESIGN_SYSTEM_FILES.map((f) =>
+    f === 'tokens/legacy-bridge.css' ? 'tokens/admin-bridge.css' : f,
+  );
+  const banner =
+    '/* ═══ INGLY DESIGN SYSTEM v1.0 · INGLY CLOUD ADMIN ══════════════════════\n' +
+    '   Gli stessi token dell\'applicazione. La console aveva una propria scala\n' +
+    '   di variabili, indipendente e con l\'accento ambra: due prodotti dello\n' +
+    '   stesso marchio che non si somigliavano.\n' +
+    '   Sorgenti in src/design-system/ — questo blocco è generato, non si edita.\n' +
+    '   ═══════════════════════════════════════════════════════════════════════ */\n';
+  return banner + files.map((f) => fs.readFileSync(path.join(HERE, f), 'utf8')).join('\n');
+}
+
 export function designSystemCss() {
   const banner =
     '/* ═══ INGLY DESIGN SYSTEM v1.0 ═══════════════════════════════════════════\n' +
