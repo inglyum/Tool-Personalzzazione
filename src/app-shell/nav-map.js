@@ -21,6 +21,8 @@
    · `feature` collega la voce al registro licenze: il gating deriva da qui.
    · `countId` è l'id di un contatore che il codice esistente aggiorna: va
      conservato, altrimenti la voce perde il proprio badge.
+   · `addedBy` marca le sezioni che non esistevano nel v96 e che vengono create
+     da codice nuovo: il test le riconosce invece di segnalarle come fantasmi.
 
    Il test `tests/nav-map.test.mjs` verifica che la somma di voci, alias ed
    esclusioni sia esattamente l'elenco della baseline. Aggiungere una sezione
@@ -62,6 +64,8 @@ export const NAV_GROUPS = [
     icon: 'briefcase',
     items: [
       { id: 'catalog', label: 'Prodotti', icon: 'grid', primary: true, feature: 'core' },
+      // Sezione introdotta dalla Fase 2: la vista la crea src/product/product-builder.js.
+      { id: 'product_builder', label: 'Product Builder', icon: 'box', primary: true, feature: 'quotes', addedBy: 'phase-2' },
       { id: 'quoter', label: 'Preventivi', icon: 'file-text', primary: true, feature: 'quotes' },
       { id: 'gestione_ordini', label: 'Ordini', icon: 'clipboard', primary: true, feature: 'core' },
       { id: 'clienti', label: 'Clienti', icon: 'users', primary: true, feature: 'core' },

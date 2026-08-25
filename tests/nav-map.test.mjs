@@ -18,8 +18,21 @@ test('ogni sezione dell applicazione è collocata', () => {
 });
 
 test('la tassonomia non inventa sezioni inesistenti', () => {
-  const ghosts = [...mapped].filter((s) => !baseline.sections.includes(s));
+  // Le sezioni introdotte dopo il v96 dichiarano chi le crea: senza `addedBy`
+  // una voce che non corrisponde a nulla resta un errore.
+  const added = new Set(items.filter((i) => i.addedBy).map((i) => i.id));
+  const ghosts = [...mapped].filter((s) => !baseline.sections.includes(s) && !added.has(s));
   assert.deepEqual(ghosts, [], `voci che non corrispondono a nessuna sezione: ${ghosts.join(', ')}`);
+});
+
+test('ogni sezione nuova è davvero creata da codice del progetto', () => {
+  const sources = fs.readdirSync('src/product').map((f) => fs.readFileSync('src/product/' + f, 'utf8')).join('\n');
+  for (const i of items.filter((x) => x.addedBy)) {
+    assert.ok(
+      sources.includes("'view-' + SECTION") || sources.includes('view-' + i.id),
+      `la sezione ${i.id} è dichiarata come nuova ma nessun modulo ne crea la vista`,
+    );
+  }
 });
 
 test('nessuna sezione compare due volte nel menu', () => {
