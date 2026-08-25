@@ -37,7 +37,26 @@ export function snapshot(srcDir) {
     views: uniqSorted(grab(/id="view-([a-z0-9_-]+)"/g, html)),
     globals: uniqSorted(grab(/^\s*(?:const|var|let)\s+([A-Z][A-Za-z0-9_]{2,})\s*=\s*[{(]/gm, js)),
     windowGlobals: uniqSorted(grab(/window\.([A-Z][A-Za-z0-9_]{2,})\s*=/g, js)),
-    storageKeys: uniqSorted(grab(/(?:localStorage|sessionStorage)\.(?:get|set|remove)Item\(\s*['"]([^'"]+)['"]/g, js)),
+    /* Due forme, perché il codice ne usa due.
+
+       La prima è la chiamata diretta con la chiave scritta dentro. La seconda
+       è la tabella dichiarativa `FAMILIES` del consolidamento storage, che
+       elenca le famiglie di chiavi da unire invece di ripetere tre volte la
+       stessa logica. Senza la seconda, spostare delle chiavi in una tabella le
+       renderebbe invisibili a questo presidio: il test resterebbe verde mentre
+       perde di vista ciò che deve sorvegliare.
+
+       Il riconoscimento è ancorato al nome della tabella, non a `target:` o
+       `sources:` in generale — quei due nomi ricorrono anche altrove e
+       porterebbero dentro percorsi SVG e selettori CSS. */
+    storageKeys: uniqSorted([
+      ...grab(/(?:localStorage|sessionStorage)\.(?:get|set|remove)Item\(\s*['"]([^'"]+)['"]/g, js),
+      ...grab(/\bFAMILIES\s*=\s*\[([\s\S]*?)\];/g, js).flatMap((tabella) => [
+        ...[...tabella.matchAll(/target:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+        ...[...tabella.matchAll(/sources:\s*\[([^\]]+)\]/g)].flatMap((m) =>
+          [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1])),
+      ]),
+    ]),
     idbStores: uniqSorted(grab(/createObjectStore\(\s*['"]([^'"]+)['"]/g, js)),
     vendored: uniqSorted(
       fs.existsSync(path.join(srcDir, 'vendor'))

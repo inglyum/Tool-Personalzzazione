@@ -125,31 +125,66 @@ peggiore di quasi ogni bug.
 | `ingly_theme` (usata da due sistemi con valori incompatibili: `dark`/`light` e gli id delle palette) | `ingly_color_scheme` per la modalità chiaro/scuro; `ingly_theme` resta alle palette | Alla lettura, se `ingly_color_scheme` manca e `ingly_theme` contiene `dark` o `light`, il valore viene adottato e riscritto. Nessuna perdita. |
 | `passwordHash` in chiaro (console) | record `pbkdf2$…` | Al primo accesso riuscito la password viene riscritta come hash. Nessun intervento manuale. |
 
-### Da fare, con attenzione
+### Misurato di nuovo (fase 3)
 
-Tre famiglie mostrano schema drift: il codice legge la versione più recente ma
-le precedenti restano nel browser dell'utente.
+La sezione precedente diceva «113 chiavi, un solo object store IndexedDB
+(`pipeline`)» e indicava la migrazione a IndexedDB come prossimo lavoro
+strutturale. **Era un dato vecchio.** Rimisurato su un'installazione con dati
+reali:
 
+| | Allora | Adesso |
+|---|---:|---:|
+| Chiavi `localStorage` | 113 | **30** |
+| Peso totale | — | **61,5 KB** |
+| Object store IndexedDB | 1 (`pipeline`) | **58**, in `InglyMasterDB v30` |
+
+Gli aggregati che quella sezione voleva spostare — ordini, catalogo, clienti,
+macchine, vendite, materiali, preventivi, fornitori — **sono già in IndexedDB**.
+Il tetto dei 5–10 MB non è vicino: la chiave più pesante è il catalogo B2B con
+26 KB, e lo storico delle notifiche è già tagliato a 100 voci.
+
+Scrivere quella migrazione avrebbe risolto un problema che non esiste più.
+
+### Quello che invece esisteva
+
+**Il consolidamento perdeva dati.** `_storageConsolidate` (patch 093)
+prometteva nel commento «merge … newer always wins» e faceva:
+
+```js
+if(v23) v33 = v23; else if(v1) v33 = v1;
 ```
-lb2b_catalog_v1   lb2b_catalog_v23   lb2b_catalog_v33
-lb2b_machines_v1  lb2b_machines_v32
-ingly_settings    ingly_settings_main
-```
 
-Vanno consolidate con una migrazione che legge tutte le versioni, unisce e
-scrive una chiave sola — **dopo** aver creato un checkpoint. Non prima di aver
-stabilizzato la UI: è un cambiamento di persistenza, non va mescolato a un
-refactor visivo.
+che non è un'unione ma una scelta: ogni record presente solo nella versione più
+vecchia spariva, e la console stampava «migration completed». Riprodotto con due
+cataloghi di prodotti diversi — dopo la migrazione ne sopravviveva uno solo.
+
+Ora si uniscono record per record: sulla stessa chiave vince la versione più
+recente, una chiave presente in una sola versione sopravvive sempre, un record
+senza chiave non viene scartato. Gira sotto il contrassegno `v38` proprio per
+passare anche su chi ha già eseguito la v37, e a quegli utenti **recupera** ciò
+che era stato scartato. Scrive un checkpoint (`_ckpt_<chiave>`) prima di
+riscrivere e rifiuta qualunque unione che ridurrebbe la destinazione.
+
+Le chiavi di origine **non** vengono cancellate: patch 076 legge ancora
+`lb2b_catalog_v1` (riga 854). Sarebbe la pulizia ovvia, e spegnerebbe una
+funzione per fare ordine.
 
 ### Il tetto di `localStorage`
 
-113 chiavi, un solo object store IndexedDB (`pipeline`). `localStorage` ha un
-limite pratico di 5–10 MB e fallisce **in silenzio** quando si satura: un
-laboratorio con qualche migliaio di ordini ci arriva.
+Non è vicino, ma quando lo si tocca il guasto è della categoria peggiore: le 297
+chiamate a `setItem` non intercettano `QuotaExceededError`, quasi tutte stanno
+dentro un `catch(e){}` vuoto, quindi il salvataggio fallisce, l'interfaccia
+mostra il successo e il dato non c'è più.
 
-La migrazione a IndexedDB è il prossimo lavoro strutturale importante. Va fatta
-per aggregato (ordini, poi vendite, poi magazzino), ciascuno con la propria
-migrazione, il proprio test e la possibilità di tornare indietro.
+`src/core/storage/guard.js` è anteposto al primo script del documento e
+intercetta la saturazione in un punto solo — trecento modifiche sarebbero state
+trecento occasioni di sbagliare. **La semantica non cambia**: l'errore viene
+rilanciato come prima, così chi lo gestiva continua a gestirlo. L'unica
+differenza è che adesso qualcuno se ne accorge: un messaggio che dice cosa fare,
+e in console quali chiavi occupano lo spazio.
+
+`InglyStorage.occupazione()` e `InglyStorage.provaResiduo()` permettono di
+verificarlo prima che sia tardi.
 
 ---
 

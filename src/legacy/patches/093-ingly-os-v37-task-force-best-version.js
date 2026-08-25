@@ -6,38 +6,108 @@
 // ═══════════════════════════════════════════════════════════════════
 
 // ─── STORAGE CONSOLIDATION (migrate orphan keys) ─────────────────
+/* Questa migrazione perdeva dati.
+
+   Il commento diceva «merge … newer always wins», ma il codice faceva:
+
+       if(v23) v33 = v23; else if(v1) v33 = v1;
+
+   che non è un'unione: è una scelta. Un prodotto presente solo in `v1` non
+   arrivava mai in `v33`, e le chiavi vecchie restavano lì a far credere il
+   contrario. Riprodotto: due cataloghi con prodotti diversi, dopo la
+   migrazione ne sopravviveva uno solo — e la console stampava «completed».
+
+   Ora si uniscono record per record. Su una chiave presente in entrambi vince
+   la versione più recente, che è ciò che il commento prometteva; una chiave
+   presente in una sola versione sopravvive sempre.
+
+   Gira sotto un contrassegno nuovo (`v38`) proprio per passare anche su chi ha
+   già eseguito la versione precedente: a quegli utenti **recupera** i record
+   che erano stati scartati.
+
+   Le chiavi di origine non vengono cancellate. Sarebbe la pulizia ovvia, ma
+   patch 076 legge ancora `lb2b_catalog_v1` (riga 854): toglierla qui
+   spegnerebbe una funzione per fare ordine. Restano, e non fanno danno finché
+   l'unione è corretta. */
 (function _storageConsolidate(){
-  if(localStorage.getItem('_storage_migrated_v37')) return;
+  var FLAG = '_storage_migrated_v38';
+  if(localStorage.getItem(FLAG)) return;
+
+  function read(k){
+    try{ return JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){ return null; }
+  }
+
+  /* Unisce più lists in uno. Le origini sono ordinate dalla più recente:
+     chi arriva before vince sulla stessa chiave. */
+  function merge(lists, keyField){
+    var seen = Object.create(null);
+    var unkeyed = [];
+    var kept = 0;
+    lists.forEach(function(list){
+      if(!Array.isArray(list)) return;
+      list.forEach(function(rec){
+        if(!rec || typeof rec !== 'object') return;
+        var k = rec[keyField];
+        // Un record senza chiave non è confrontabile: si conserva com'è,
+        // perché scartarlo sarebbe di nuovo una perdita silenziosa.
+        if(k === undefined || k === null || k === ''){ unkeyed.push(rec); kept++; return; }
+        k = String(k);
+        if(seen[k]) return;          // già presente da una versione più recente
+        seen[k] = rec;
+        kept++;
+      });
+    });
+    return Object.keys(seen).map(function(k){ return seen[k]; }).concat(unkeyed);
+  }
+
+  /* Ogni famiglia: dove scrivere, da dove leggere (dalla più recente), e con
+     quale campo si riconosce lo stesso record. */
+  var FAMILIES = [
+    { target:'lb2b_catalog_v33',      sources:['lb2b_catalog_v33','lb2b_catalog_v23','lb2b_catalog_v1'], key:'id' },
+    { target:'lb2b_machines_v32',     sources:['lb2b_machines_v32','lb2b_machines_v1'],                  key:'id' },
+    { target:'ingly_magazzino_v34',   sources:['ingly_magazzino_v34','ingly_warehouse_v1'],              key:'id' },
+  ];
+
+  var report = [];
   try{
-    // Merge lb2b_catalog_v1 and v23 into v33 (newer always wins)
-    var v33=JSON.parse(localStorage.getItem('lb2b_catalog_v33')||'null');
-    if(!v33){
-      var v23=JSON.parse(localStorage.getItem('lb2b_catalog_v23')||'null');
-      var v1=JSON.parse(localStorage.getItem('lb2b_catalog_v1')||'null');
-      if(v23) localStorage.setItem('lb2b_catalog_v33',JSON.stringify(v23));
-      else if(v1) localStorage.setItem('lb2b_catalog_v33',JSON.stringify(v1));
+    FAMILIES.forEach(function(f){
+      var lists = f.sources.map(read).filter(Array.isArray);
+      if(!lists.length) return;
+
+      var before = read(f.target);
+      var after  = merge(lists, f.key);
+
+      // Un'unione non può restituire meno record della destinazione di partenza.
+      if(Array.isArray(before) && after.length < before.length){
+        console.warn('[v38] unione ignorata per', f.target, '— avrebbe ridotto', before.length, '→', after.length);
+        return;
+      }
+      if(Array.isArray(before) && after.length === before.length) return;  // niente da recuperare
+
+      // Copia di sicurezza before di scrivere: se qualcosa va storto, il dato
+      // di partenza è ancora readbile.
+      if(before) localStorage.setItem('_ckpt_' + f.target, JSON.stringify(before));
+      localStorage.setItem(f.target, JSON.stringify(after));
+      report.push(f.target + ': ' + ((before && before.length) || 0) + ' → ' + after.length);
+    });
+
+    /* La configurazione cloud non è un list: resta una copia, ma solo se la
+       destinazione è vuota. */
+    if(!read('ingly_gdrive_cfg')){
+      var oldSync = read('ingly_cloud_sync_v1');
+      if(oldSync && oldSync.clientId){
+        localStorage.setItem('ingly_gdrive_cfg', JSON.stringify({ clientId: oldSync.clientId }));
+        report.push('ingly_gdrive_cfg: ripristinata da ingly_cloud_sync_v1');
+      }
     }
-    // Merge lb2b_machines_v1 into v32
-    var mv32=JSON.parse(localStorage.getItem('lb2b_machines_v32')||'null');
-    if(!mv32){
-      var mv1=JSON.parse(localStorage.getItem('lb2b_machines_v1')||'null');
-      if(mv1) localStorage.setItem('lb2b_machines_v32',JSON.stringify(mv1));
-    }
-    // Merge ingly_warehouse_v1 into ingly_magazzino_v34
-    var mag=JSON.parse(localStorage.getItem('ingly_magazzino_v34')||'null');
-    if(!mag||!mag.length){
-      var wh=JSON.parse(localStorage.getItem('ingly_warehouse_v1')||'null');
-      if(wh&&wh.length) localStorage.setItem('ingly_magazzino_v34',JSON.stringify(wh));
-    }
-    // Migrate cloud sync
-    var gdrive=JSON.parse(localStorage.getItem('ingly_gdrive_cfg')||'null');
-    if(!gdrive){
-      var oldSync=JSON.parse(localStorage.getItem('ingly_cloud_sync_v1')||'null');
-      if(oldSync?.clientId) localStorage.setItem('ingly_gdrive_cfg',JSON.stringify({clientId:oldSync.clientId}));
-    }
-    localStorage.setItem('_storage_migrated_v37','1');
-    console.log('[v37] Storage migration completed');
-  }catch(e){ console.warn('[v37] Storage migration partial:',e.message); }
+
+    localStorage.setItem(FLAG,'1');
+    console.log('[v38] Consolidamento storage:', report.length ? report.join(' · ') : 'niente da unire');
+  }catch(e){
+    // Senza contrassegno: al prossimo avvio ci riprova invece di dare per
+    // fatto un lavoro rimasto a metà.
+    console.warn('[v38] Consolidamento storage interrotto:', e.message);
+  }
 })();
 
 // ─── DASHBOARD PRO v37 (Enhanced) ───────────────────────────────

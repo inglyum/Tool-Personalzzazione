@@ -863,9 +863,9 @@
   ],
   "storageKeys": [
     "${this._SK}",
+    "_ckpt_",
     "_ingly_hb_",
     "_last_backup_reminder",
-    "_storage_migrated_v37",
     "_v37sidebar_done",
     "ingly_ae_last_run",
     "ingly_ai_calls_today",
@@ -880,6 +880,7 @@
     "ingly_brand_v1",
     "ingly_client_bday_",
     "ingly_cloud_sync_v1",
+    "ingly_color_scheme",
     "ingly_company_name",
     "ingly_crm_v1",
     "ingly_custom_sections_v1",
@@ -990,15 +991,15 @@
   ],
   "counts": {
     "files": 190,
-    "bytes": 9357428,
+    "bytes": 9365259,
     "inlineStyleAttrs": 16292,
     "inlineOnclick": 2543,
-    "hardcodedHex": 8210,
-    "important": 199,
+    "hardcodedHex": 8206,
+    "important": 181,
     "emoji": 9158,
     "alertCalls": 55,
-    "confirmCalls": 145,
-    "promptCalls": 82,
+    "confirmCalls": 123,
+    "promptCalls": 69,
     "ariaAttrs": 26
   }
 }
