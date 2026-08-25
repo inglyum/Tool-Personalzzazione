@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INGLY CLOUD ADMIN — Guida e collaudo</title>
+<style>
+  :root{
+    --bg:#0d1014; --sunken:#070a0d; --surface:#14181d; --raised:#1f2328; --hover:#262b31;
+    --text:#e8ebee; --muted:#8a929b; --subtle:#6b7280;
+    --line:rgb(255 255 255/.1); --line-soft:rgb(255 255 255/.06);
+    --accent:#00e6d2; --accent-soft:rgb(0 230 210/.1); --accent-line:rgb(0 230 210/.32);
+    --ok:#22c07a; --ok-text:#6ee7a8; --ok-soft:rgb(34 192 122/.12); --ok-line:rgb(34 192 122/.32);
+    --no:#e03b41; --no-text:#f78e91; --no-soft:rgb(224 59 65/.12); --no-line:rgb(224 59 65/.34);
+    --warn:#de9b0b; --warn-text:#f7cd63; --warn-soft:rgb(222 155 11/.13); --warn-line:rgb(222 155 11/.34);
+    --r:12px; --r-sm:8px;
+    --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:15px/1.6 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:860px;margin:0 auto}
+
+  header{margin-bottom:36px}
+  .kicker{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:700;margin-bottom:10px;
+  }
+  h1{font-size:30px;line-height:1.2;font-weight:700;letter-spacing:-.02em}
+  .lede{color:var(--muted);margin-top:10px;max-width:62ch}
+
+  h2{
+    font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--subtle);
+    font-weight:700;margin:40px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line-soft);
+  }
+  h3{font-size:16px;font-weight:650;margin:22px 0 8px}
+  p{margin:8px 0}
+  code{font-family:var(--mono);font-size:.88em;background:var(--raised);
+       padding:2px 6px;border-radius:5px;color:var(--accent)}
+
+  .card{background:var(--surface);border:1px solid var(--line-soft);
+        border-radius:var(--r);padding:20px 22px;margin:14px 0}
+
+  .steps{counter-reset:s;list-style:none}
+  .steps>li{counter-increment:s;position:relative;padding-left:44px;margin-bottom:20px}
+  .steps>li::before{
+    content:counter(s);position:absolute;left:0;top:-1px;
+    width:28px;height:28px;border-radius:50%;
+    background:var(--raised);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:700;color:var(--muted);
+  }
+
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;
+    background:var(--accent);color:#062522;border:none;
+    padding:13px 22px;border-radius:var(--r-sm);
+    font:inherit;font-weight:700;font-size:15px;cursor:pointer;
+    text-decoration:none;transition:filter .15s;
+  }
+  .btn:hover{filter:brightness(1.1)}
+  .btn--ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .btn--ghost:hover{background:var(--hover);filter:none}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--subtle);font-weight:700}
+  td code{background:var(--sunken)}
+
+  /* ── Collaudo ─────────────────────────────────────────────────────── */
+  .test{
+    background:var(--surface);border:1px solid var(--line-soft);border-left:3px solid var(--line);
+    border-radius:var(--r);padding:18px 20px;margin-bottom:12px;transition:border-color .15s;
+  }
+  .test[data-state="ok"]{border-left-color:var(--ok);background:linear-gradient(90deg,var(--ok-soft),transparent 40%)}
+  .test[data-state="no"]{border-left-color:var(--no);background:linear-gradient(90deg,var(--no-soft),transparent 40%)}
+  .test__head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  .test__n{font-family:var(--mono);font-size:12px;color:var(--subtle);flex-shrink:0}
+  .test__t{font-weight:650;font-size:15px}
+  .test__do{color:var(--muted);font-size:14px;margin-bottom:4px}
+  .test__want{font-size:14px;margin-bottom:12px}
+  .test__want b{color:var(--accent);font-weight:650}
+  .verdict{display:flex;gap:8px}
+  .v{
+    flex:0 0 auto;padding:7px 15px;border-radius:var(--r-sm);cursor:pointer;
+    font:inherit;font-size:13px;font-weight:650;
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+    transition:.13s;
+  }
+  .v:hover{background:var(--hover);color:var(--text)}
+  .test[data-state="ok"] .v[data-v="ok"]{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok-text)}
+  .test[data-state="no"] .v[data-v="no"]{background:var(--no-soft);border-color:var(--no-line);color:var(--no-text)}
+
+  /* ── Riepilogo ────────────────────────────────────────────────────── */
+  .summary{
+    position:sticky;bottom:0;margin-top:28px;
+    background:var(--raised);border:1px solid var(--line);border-radius:var(--r);
+    padding:18px 22px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+    box-shadow:0 -8px 32px rgb(0 0 0/.5);
+  }
+  .summary__score{font-size:26px;font-weight:700;letter-spacing:-.02em;flex-shrink:0}
+  .summary__txt{color:var(--muted);font-size:14px;flex:1;min-width:180px}
+  .summary__txt b{color:var(--text)}
+  .bar{height:6px;background:var(--sunken);border-radius:99px;overflow:hidden;margin-top:8px}
+  .bar__fill{height:100%;background:var(--ok);border-radius:99px;transition:width .3s ease;width:0}
+  .bar__fill.has-fail{background:var(--no)}
+
+  .note{
+    background:var(--warn-soft);border:1px solid var(--warn-line);
+    border-radius:var(--r-sm);padding:13px 16px;margin:14px 0;font-size:14px;color:var(--warn-text);
+  }
+  .note b{color:#fff}
+  .ref{
+    background:var(--sunken);border:1px solid var(--line-soft);border-radius:var(--r-sm);
+    padding:14px 16px;font-family:var(--mono);font-size:12.5px;color:var(--muted);
+    white-space:pre-wrap;overflow-x:auto;line-height:1.7;
+  }
+  .ref b{color:var(--ok-text);font-weight:400}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line-soft);
+         color:var(--subtle);font-size:13px}
+  @media(max-width:600px){
+    body{padding:22px 14px 70px} h1{font-size:24px}
+    .steps>li{padding-left:38px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">INGLY CLOUD ADMIN</div>
+  <h1>Guida e collaudo del pannello</h1>
+  <p class="lede">
+    Apri il pannello, seguine i passi, e segna quello che vedi. Alla fine hai un
+    esito che puoi copiare e rimandarmi. Non serve installare niente.
+  </p>
+</header>
+
+<h2>1 · Come si apre</h2>
+
+<div class="card">
+  <p style="margin-bottom:16px">
+    Il pannello è <b>un unico file HTML</b>: si apre con un doppio clic, funziona
+    senza rete e senza server, e i dati restano sul tuo dispositivo.
+  </p>
+  <a class="btn" id="apri" href="INGLY-CLOUD-ADMIN.html" target="_blank" rel="noopener">
+    ▶ &nbsp;Apri INGLY CLOUD ADMIN
+  </a>
+  <a class="btn btn--ghost" href="../dist/INGLY-CLOUD-ADMIN.html" target="_blank" rel="noopener"
+     style="margin-left:8px">Apri dal repository</a>
+  <p style="color:var(--subtle);font-size:13px;margin-top:14px">
+    Il primo pulsante vale se i due file stanno <b>nella stessa cartella</b> — è
+    il caso se li hai appena scaricati. Il secondo vale dentro il repository,
+    dove il pannello sta in <code>dist/</code>. In ogni caso puoi sempre aprire
+    <code>INGLY-CLOUD-ADMIN.html</code> con un doppio clic.
+  </p>
+</div>
+
+<h2>2 · Il primo accesso</h2>
+
+<p>
+  Il pannello <b>non nasce con una password</b>. È una scelta di sicurezza: nella
+  versione precedente chiunque aprisse il file entrava come Super Admin con
+  <code>admin</code> / <code>admin</code>, perché le credenziali erano scritte
+  nel sorgente. Ora quel blocco non esiste più e il primo accesso te la fa
+  scegliere.
+</p>
+
+<ol class="steps" style="margin-top:18px">
+  <li>
+    <h3>Entra come <code>superadmin</code></h3>
+    <p>Nel campo utente scrivi <code>superadmin</code>. Nella password puoi
+    scrivere qualsiasi cosa: al primo avvio non c'è ancora nulla da confrontare.</p>
+  </li>
+  <li>
+    <h3>Scegli la tua password</h3>
+    <p>Compare la schermata di primo accesso. Servono almeno <b>8 caratteri, una
+    maiuscola, una minuscola e un numero</b>. Va scritta due volte.</p>
+    <div class="note">
+      <b>Da qui in poi è quella la password.</b> Non è recuperabile: non esiste un
+      server che possa reimpostarla, perché non esiste un server. Se la perdi si
+      riparte cancellando i dati del sito dal browser.
+    </div>
+  </li>
+  <li>
+    <h3>Sei dentro</h3>
+    <p>Vedi la console con 18 pagine in 6 sezioni: Overview, Customers,
+    Subscriptions, Security, Support, Sistema.</p>
+  </li>
+</ol>
+
+<h2>3 · Cosa contiene</h2>
+
+<table>
+  <thead><tr><th>Sezione</th><th>Pagine</th></tr></thead>
+  <tbody>
+    <tr><td>Overview</td><td>Dashboard</td></tr>
+    <tr><td>Customers</td><td>Utenti · Creazioni · Storage</td></tr>
+    <tr><td>Subscriptions</td><td>Piani · Abbonamenti · Licenze · Scadenze</td></tr>
+    <tr><td>Security</td><td>Sessioni · Dispositivi · Security Center · Anti-Sharing · Audit Log · Admin &amp; ruoli</td></tr>
+    <tr><td>Support</td><td>Notifiche</td></tr>
+    <tr><td>Sistema</td><td>Impostazioni cloud · Architettura · Roadmap</td></tr>
+  </tbody>
+</table>
+
+<h2>4 · Collaudo — sette prove</h2>
+
+<p style="margin-bottom:6px">
+  Fai ogni prova sul pannello aperto e segna cosa è successo. La più importante è
+  la prima: è quella che dice se la falla di sicurezza è davvero chiusa.
+</p>
+
+<div id="tests"></div>
+
+<div class="summary">
+  <div class="summary__score" id="score">0 / 7</div>
+  <div class="summary__txt">
+    <span id="verdict">Nessuna prova ancora segnata.</span>
+    <div class="bar"><div class="bar__fill" id="fill"></div></div>
+  </div>
+  <button class="btn btn--ghost" id="copia">Copia l'esito</button>
+</div>
+
+<h2>5 · Per confronto — il collaudo automatico</h2>
+
+<p>
+  Le stesse prove girano da sole in Chromium. Questo è l'esito dell'ultima
+  esecuzione: se le tue risposte coincidono, il pannello si comporta come deve.
+</p>
+
+<div class="ref">admin / admin  →  <b>rifiutato</b> · «Credenziali non valide (4 tentativi rimanenti)»
+superadmin     →  <b>schermata di primo accesso</b>
+dopo il setup  →  password salvata come <b>pbkdf2$310000$…</b>, mai in chiaro
+pagine percorse:  <b>18</b>       pagine vuote:  <b>nessuna</b>
+errori in console: <b>0</b></div>
+
+<p style="margin-top:14px;color:var(--muted);font-size:14px">
+  Se hai Node 20+ e il repository, lo rilanci con:<br>
+  <code>node tests/qa/admin.mjs dist/INGLY-CLOUD-ADMIN.html</code>
+</p>
+
+<footer>
+  INGLY CLOUD ADMIN · console di controllo SaaS.
+  Dettagli sulle correzioni di sicurezza in <code>docs/SECURITY.md</code>,
+  sull'architettura in <code>docs/ARCHITECTURE.md</code>.
+</footer>
+
+</div>
+
+<script>
+'use strict';
+
+/* Le prove sono dati: aggiungerne una è aggiungere una riga, non toccare il
+   rendering. La prima è la sola che verifichi una vulnerabilità chiusa. */
+const PROVE = [
+  {
+    t: 'Le vecchie credenziali non entrano più',
+    do: 'Scrivi <code>admin</code> come utente e <code>admin</code> come password, poi accedi.',
+    want: 'Viene <b>rifiutato</b>, con un messaggio che conta i tentativi rimasti. Non deve entrare in nessun caso.',
+  },
+  {
+    t: 'Il primo accesso chiede una password',
+    do: 'Utente <code>superadmin</code>, password qualsiasi.',
+    want: 'Compare la schermata che ti fa <b>scegliere una password</b>, non la console.',
+  },
+  {
+    t: 'La password debole viene rifiutata',
+    do: 'Nella schermata di primo accesso prova con <code>12345678</code>.',
+    want: 'Non la accetta: servono <b>maiuscola, minuscola e numero</b>.',
+  },
+  {
+    t: 'La password buona ti fa entrare',
+    do: 'Scegli una password valida (esempio: <code>IngLy2026sicura</code>) e confermala.',
+    want: 'Entri nella console. In alto a sinistra leggi <b>Super Admin</b>.',
+  },
+  {
+    t: 'Tutte le 18 pagine mostrano contenuto',
+    do: 'Clicca ogni voce del menu di sinistra, dall\'alto in basso.',
+    want: 'Nessuna pagina resta <b>bianca o vuota</b>. Sono 18 in 6 sezioni.',
+  },
+  {
+    t: 'La password resta dopo la chiusura',
+    do: 'Chiudi la scheda del pannello, riaprilo, entra con <code>superadmin</code> e la password che hai scelto.',
+    want: 'Entra <b>senza richiedere di nuovo il primo accesso</b>. La password sbagliata viene rifiutata.',
+  },
+  {
+    t: 'Nessun errore nella console del browser',
+    do: 'Premi F12 (su Mac ⌥⌘I), apri la scheda <b>Console</b> e ricarica la pagina.',
+    want: 'Nessun messaggio in <b>rosso</b>. Gli avvisi gialli non contano.',
+  },
+];
+
+const box = document.getElementById('tests');
+box.innerHTML = PROVE.map((p, i) => `
+  <div class="test" data-i="${i}">
+    <div class="test__head">
+      <span class="test__n">${String(i + 1).padStart(2, '0')}</span>
+      <span class="test__t">${p.t}</span>
+    </div>
+    <div class="test__do">${p.do}</div>
+    <div class="test__want">Atteso: ${p.want}</div>
+    <div class="verdict">
+      <button class="v" data-v="ok">✓ &nbsp;Come atteso</button>
+      <button class="v" data-v="no">✗ &nbsp;No</button>
+    </div>
+  </div>`).join('');
+
+const esiti = new Array(PROVE.length).fill(null);
+
+/* Un solo gestore delegato: nessun onclick sparso nel markup. */
+box.addEventListener('click', (e) => {
+  const b = e.target.closest('.v');
+  if (!b) return;
+  const card = b.closest('.test');
+  const i = +card.dataset.i;
+  const v = b.dataset.v;
+  // Ripremere lo stesso verdetto lo annulla: correggersi non deve costare un ricarico.
+  esiti[i] = esiti[i] === v ? null : v;
+  card.dataset.state = esiti[i] || '';
+  aggiorna();
+});
+
+function aggiorna() {
+  const fatti = esiti.filter(Boolean).length;
+  const ok = esiti.filter((v) => v === 'ok').length;
+  const no = esiti.filter((v) => v === 'no').length;
+
+  document.getElementById('score').textContent = ok + ' / ' + PROVE.length;
+  const fill = document.getElementById('fill');
+  fill.style.width = (fatti / PROVE.length * 100) + '%';
+  fill.classList.toggle('has-fail', no > 0);
+
+  const v = document.getElementById('verdict');
+  if (!fatti) v.textContent = 'Nessuna prova ancora segnata.';
+  else if (no > 0) v.innerHTML = `<b>${no}</b> prova${no > 1 ? 'e' : ''} non superata${no > 1 ? 'e' : ''}. Copia l'esito e rimandamelo.`;
+  else if (ok === PROVE.length) v.innerHTML = '<b>Tutte superate.</b> Il pannello si comporta come deve.';
+  else v.innerHTML = `<b>${fatti}</b> su ${PROVE.length} segnate, nessun problema finora.`;
+}
+
+document.getElementById('copia').addEventListener('click', async (e) => {
+  const righe = PROVE.map((p, i) =>
+    `${esiti[i] === 'ok' ? '[OK]' : esiti[i] === 'no' ? '[NO]' : '[ -]'} ${i + 1}. ${p.t}`);
+  const ok = esiti.filter((x) => x === 'ok').length;
+  const testo = [
+    'INGLY CLOUD ADMIN — esito del collaudo',
+    new Date().toLocaleString('it-IT'),
+    '',
+    ...righe,
+    '',
+    `Superate: ${ok} su ${PROVE.length}`,
+  ].join('\n');
+
+  const b = e.currentTarget;
+  const originale = b.textContent;
+  try {
+    await navigator.clipboard.writeText(testo);
+    b.textContent = '✓ Copiato';
+  } catch (err) {
+    // Da file:// gli appunti possono essere negati: meglio mostrarlo che perderlo.
+    window.prompt('Copia questo testo:', testo);
+    b.textContent = originale;
+    return;
+  }
+  setTimeout(() => { b.textContent = originale; }, 1800);
+});
+
+aggiorna();
+</script>
+</body>
+</html>
