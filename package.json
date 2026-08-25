@@ -5,7 +5,9 @@
   "type": "module",
   "description": "INGLY OS — Professional Production OS per laboratori laser, 3D, UV, DTF e sublimazione.",
   "license": "UNLICENSED",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "node scripts/compose.mjs dist/INGLY-OS.html && node scripts/build.mjs src/admin/legacy dist/INGLY-CLOUD-ADMIN.html",
     "dev": "node scripts/dev.mjs",
@@ -18,6 +20,8 @@
     "qa": "node tests/qa/smoke.mjs dist/INGLY-OS.html && node tests/qa/navigation.mjs dist/INGLY-OS.html"
   },
   "devDependencies": {
+    "@fontsource/inter": "^5.0.20",
+    "@fortawesome/fontawesome-free": "^6.5.2",
     "playwright": "^1.48.0"
   }
 }

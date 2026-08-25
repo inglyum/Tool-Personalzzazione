@@ -27,25 +27,14 @@
       remove:['magazzino'] }
   ];
 
-  // ── rimozione STABILE dal menu (CSS vince anche sulle voci ricreate) ──
-  var allRemove={};
-  GROUPS.forEach(function(g){ g.remove.forEach(function(s){ allRemove[s]=1; }); });
-  var sel=Object.keys(allRemove).map(function(s){ return '#sidebar-nav .nav-item[data-section="'+s+'"]'; }).join(',');
-  var st=document.createElement('style'); st.id='v88-consolidation-css';
-  st.textContent=sel+'{ display:none !important; }';
-  (document.head||document.documentElement).appendChild(st);
+  // Questa patch nascondeva le voci ridondanti dal menu iniettando
+  // `display:none !important` e ripuliva i doppioni con un MutationObserver
+  // sulla sidebar. Era un rimedio al sintomo: le voci venivano ricreate da
+  // altre patch e questa le rinascondeva. La gerarchia ora la definisce
+  // src/app-shell/nav-map.js, che le colloca invece di occultarle.
+  // Della patch resta ciò che vale: la barra "Viste" dentro le sezioni hub.
 
   function slice(n){ return Array.prototype.slice.call(n); }
-
-  function dedupeNav(){
-    var nav=document.getElementById('sidebar-nav'); if(!nav) return;
-    var seen={};
-    slice(nav.querySelectorAll('.nav-item[data-section]')).forEach(function(el){
-      if(el.closest('#nav-fav-top')) return;
-      var s=el.getAttribute('data-section');
-      if(seen[s]) el.remove(); else seen[s]=1;
-    });
-  }
 
   function injectBar(g){
     var view=document.getElementById('view-'+g.hub); if(!view) return;
@@ -69,21 +58,20 @@
     else view.insertBefore(bar, view.firstChild);
   }
 
-  function run(){ dedupeNav(); GROUPS.forEach(injectBar); }
+  function run(){ GROUPS.forEach(injectBar); }
 
   function boot(){
-    var nav=document.getElementById('sidebar-nav'); if(!nav) return setTimeout(boot,600);
+    var content=document.getElementById('content-inner')||document.getElementById('content');
+    if(!content) return setTimeout(boot,600);
     run();
+    // Le sezioni che si ri-renderizzano cancellano la barra "Viste": va
+    // reinserita. Si osserva solo l'area contenuti — la sidebar non viene
+    // più toccata da questa patch.
     if(window.MutationObserver){
-      var mo=new MutationObserver(function(){ clearTimeout(boot._t); boot._t=setTimeout(run,200); });
-      mo.observe(nav,{childList:true,subtree:true});
-      // osserva anche l'area contenuti: le sezioni che ri-renderizzano cancellano la barra Viste → re-inject
-      var content=document.getElementById('content-inner')||document.getElementById('content');
-      if(content){ var mo2=new MutationObserver(function(){ clearTimeout(boot._c); boot._c=setTimeout(function(){ GROUPS.forEach(injectBar); },250); });
-        mo2.observe(content,{childList:true,subtree:true}); }
+      var mo=new MutationObserver(function(){ clearTimeout(boot._c); boot._c=setTimeout(run,250); });
+      mo.observe(content,{childList:true,subtree:true});
     }
     try{ if(window.Bus&&Bus.on){ Bus.on('nav',function(){ setTimeout(run,300); }); } }catch(e){}
-    var n=0, iv=setInterval(function(){ run(); if(++n>8) clearInterval(iv); }, 1400);
   }
   if(document.readyState!=='loading') setTimeout(boot,2200); else document.addEventListener('DOMContentLoaded',function(){ setTimeout(boot,2200); });
 })();

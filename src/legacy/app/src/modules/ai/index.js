@@ -17,8 +17,11 @@ const AILayer={
     const decisions=this.rules.filter(r=>{try{return r.check(kpi)}catch{return false}}).map(r=>({...r,message:r.msg(kpi),_ts:Date.now()}));
     for(const d of decisions)await IDB.put('ai_log',{type:d.id,msg:d.message,priority:d.priority,ts:Date.now()}).catch(()=>{});
     const count=decisions.length;
-    eid('ai-count').textContent=count;
-    eid('nav-ai-count').textContent=count;
+    // I due contatori sono elementi opzionali della chrome: se il tema o la
+    // navigazione non li espone, l'analisi deve comunque restituire i risultati.
+    // Prima un contatore assente interrompeva analyze() a metà.
+    const aiCount=eid('ai-count'); if(aiCount) aiCount.textContent=count;
+    const navCount=eid('nav-ai-count'); if(navCount) navCount.textContent=count;
     return{kpi,decisions};
   },
   async render(){

@@ -20,11 +20,17 @@ export function build({ srcDir, manifestPath, overrides = {}, drop = new Set() }
       out.push(part.text ?? fs.readFileSync(path.join(srcDir, part.file), 'utf8'));
       continue;
     }
-    const body =
-      part.file in overrides
-        ? overrides[part.file]
-        : fs.readFileSync(path.join(srcDir, part.file), 'utf8');
-    const attrs = part.attrs ? ' ' + part.attrs : '';
+    // Un override può essere una stringa (solo il contenuto) oppure
+    // { body, attrs } quando serve cambiare anche il tag — per esempio per
+    // togliere un `src` che punta a un CDN.
+    const override = overrides[part.file];
+    const hasOverride = part.file in overrides;
+    const isDetailed = hasOverride && typeof override === 'object' && override !== null;
+    const body = hasOverride
+      ? (isDetailed ? override.body : override)
+      : fs.readFileSync(path.join(srcDir, part.file), 'utf8');
+    const rawAttrs = isDetailed && 'attrs' in override ? override.attrs : part.attrs;
+    const attrs = rawAttrs ? ' ' + rawAttrs : '';
     out.push(`<${part.type}${attrs}>${body}</${part.type}>`);
   }
   return { html: out.join(''), manifest };

@@ -334,8 +334,16 @@ window.ReportGenerator = {
     App.renderSection=async function(s){
       if(s==='dashboard'||s==='kpi'){
         document.querySelectorAll('.section-view.active').forEach(function(v){v.classList.remove('active');});
-        var e=document.getElementById('view-dashboard')||document.getElementById('view-kpi');
-        if(e){e.classList.add('active');DashboardPro.render();return;}
+        // Si prendeva sempre `view-dashboard` perché il primo id esiste
+        // sempre: la voce "KPI Live" apriva la dashboard e la sua pagina era
+        // irraggiungibile dal menu.
+        var e=document.getElementById('view-'+s)||document.getElementById('view-dashboard');
+        if(e){
+          e.classList.add('active');
+          if(s==='kpi'&&typeof KPIEngine!=='undefined'&&KPIEngine.renderPage) KPIEngine.renderPage();
+          else DashboardPro.render();
+          return;
+        }
       }
       if(s==='order_tracker'||s==='orders_pro'){
         document.querySelectorAll('.section-view.active').forEach(function(v){v.classList.remove('active');});

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export const DESIGN_SYSTEM_FILES = [
+  'assets/fonts.css',
   'tokens/primitive.css',
   'tokens/semantic.css',
   'tokens/component.css',

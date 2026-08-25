@@ -21,35 +21,12 @@
       views:[{sec:'opportunity',label:'🟡 Opportunity Scanner'},{sec:'leadscorer',label:'⭐ Lead Scorer'}] }
   ];
 
-  // rimozione STABILE dal menu (CSS vince anche sulle voci ricreate)
-  var allRemove={}; GROUPS.forEach(function(g){ g.remove.forEach(function(s){ allRemove[s]=1; }); });
-  var sel=Object.keys(allRemove).map(function(s){ return '#sidebar-nav .nav-item[data-section="'+s+'"]'; }).join(',');
-  var st=document.createElement('style'); st.id='v90-ai-css'; st.textContent=sel+'{ display:none !important; }';
-  (document.head||document.documentElement).appendChild(st);
+  // Come la v88: questa patch nascondeva le voci con `display:none !important`
+  // e rinominava gli hub nel menu tramite un MutationObserver sulla sidebar.
+  // La gerarchia ora sta in src/app-shell/nav-map.js. Resta la barra "Viste"
+  // dentro le sezioni hub, che è la parte che aggiunge qualcosa.
 
   function slice(n){ return Array.prototype.slice.call(n); }
-
-  function setLabel(item, name){
-    // sostituisce il testo-etichetta (nodi testo diretti, non icona/controlli)
-    var set=false;
-    slice(item.childNodes).forEach(function(n){
-      if(n.nodeType===3){ if(n.textContent.trim().length){ if(!set){ n.textContent=' '+name+' '; set=true; } else n.textContent=''; } }
-    });
-    if(!set){
-      // fallback: uno <span> di testo non-controllo
-      var span=slice(item.children).find(function(c){ return !c.classList.contains('nav-svg-ico')&&!c.classList.contains('nav-ctrl')&&!c.classList.contains('nav-badge')&&!c.classList.contains('nav-pin')&&(c.textContent||'').trim().length; });
-      if(span){ span.textContent=name; set=true; }
-      else { item.appendChild(document.createTextNode(' '+name+' ')); }
-    }
-  }
-
-  function relabelHubs(){
-    GROUPS.forEach(function(g){
-      slice(document.querySelectorAll('#sidebar-nav .nav-item[data-section="'+g.hub+'"]')).forEach(function(el){
-        if(el.__hubName!==g.name){ setLabel(el, g.name); el.__hubName=g.name; }
-      });
-    });
-  }
 
   function injectBar(g){
     var view=document.getElementById('view-'+g.hub); if(!view) return;
@@ -72,20 +49,17 @@
     else view.insertBefore(bar, view.firstChild);
   }
 
-  function run(){ relabelHubs(); GROUPS.forEach(injectBar); }
+  function run(){ GROUPS.forEach(injectBar); }
 
   function boot(){
-    var nav=document.getElementById('sidebar-nav'); if(!nav) return setTimeout(boot,600);
+    var content=document.getElementById('content-inner')||document.getElementById('content');
+    if(!content) return setTimeout(boot,600);
     run();
     if(window.MutationObserver){
-      var mo=new MutationObserver(function(){ clearTimeout(boot._t); boot._t=setTimeout(run,220); });
-      mo.observe(nav,{childList:true,subtree:true});
-      var content=document.getElementById('content-inner')||document.getElementById('content');
-      if(content){ var mo2=new MutationObserver(function(){ clearTimeout(boot._c); boot._c=setTimeout(function(){ GROUPS.forEach(injectBar); },260); });
-        mo2.observe(content,{childList:true,subtree:true}); }
+      var mo=new MutationObserver(function(){ clearTimeout(boot._c); boot._c=setTimeout(run,260); });
+      mo.observe(content,{childList:true,subtree:true});
     }
     try{ if(window.Bus&&Bus.on) Bus.on('nav',function(){ setTimeout(run,300); }); }catch(e){}
-    var i=0, iv=setInterval(function(){ run(); if(++i>8) clearInterval(iv); }, 1400);
   }
   if(document.readyState!=='loading') setTimeout(boot,2400); else document.addEventListener('DOMContentLoaded',function(){ setTimeout(boot,2400); });
 })();

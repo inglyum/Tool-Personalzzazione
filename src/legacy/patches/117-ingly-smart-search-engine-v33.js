@@ -2090,8 +2090,24 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   }
 
   /* ── P2: DARK / LIGHT MODE ────────────────────────────────── */
+  /* `ingly_theme` era scritta da due sistemi con valori incompatibili: qui
+     'dark'/'light', e in ThemeSwitcher gli id delle palette ('default',
+     'midnight', 'emerald'…). Scegliere "Midnight Blue" faceva quindi ripartire
+     l'applicazione in tema chiaro. La modalità chiaro/scuro ha ora una chiave
+     propria; questa migrazione recupera la preferenza già salvata. */
+  function readColorScheme() {
+    var v = localStorage.getItem('ingly_color_scheme');
+    if (v) return v;
+    var legacy = localStorage.getItem('ingly_theme');
+    if (legacy === 'dark' || legacy === 'light') {
+      localStorage.setItem('ingly_color_scheme', legacy);
+      return legacy;
+    }
+    return null;
+  }
+
   function initDarkMode() {
-    var saved = localStorage.getItem('ingly_theme');
+    var saved = readColorScheme();
     // INGLY OS è dark-first: senza una preferenza salvata si parte scuri.
     // Prima si ereditava l'impostazione del sistema operativo, e su una
     // macchina in tema chiaro il prodotto si apriva con una palette che non
@@ -2101,15 +2117,14 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   }
 
   function applyTheme(dark) {
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-    localStorage.setItem('ingly_theme', dark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-color-scheme', dark ? 'dark' : 'light');
+    localStorage.setItem('ingly_color_scheme', dark ? 'dark' : 'light');
     var btn = document.getElementById('_ingly_theme_btn');
     if (btn) btn.title = dark ? 'Passa a modalità chiara' : 'Passa a modalità scura';
   }
 
   function toggleTheme() {
-    var current = document.documentElement.getAttribute('data-theme');
-    applyTheme(current !== 'dark');
+    applyTheme(document.documentElement.getAttribute('data-color-scheme') !== 'dark');
   }
 
   window._inglyToggleTheme = toggleTheme;
@@ -2922,7 +2937,7 @@ body.saas-active main {
 
   /* ─── P1: DARK / LIGHT MODE (visibile nella UI) ─────────── */
   function initDarkMode() {
-    var saved = localStorage.getItem('ingly_theme');
+    var saved = localStorage.getItem('ingly_color_scheme');
     // Vedi sopra: `prefersDark !== false` intendeva "scuro salvo diversa
     // indicazione", ma con matchMedia che risponde `false` dava chiaro.
     var isDark = saved ? saved === 'dark' : true;
@@ -2935,27 +2950,27 @@ body.saas-active main {
       setTimeout(function(){ document.documentElement.style.transition = ''; }, 400);
     }
     if (dark) {
-      document.documentElement.removeAttribute('data-theme');
+      document.documentElement.removeAttribute('data-color-scheme');
     } else {
-      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.setAttribute('data-color-scheme', 'light');
       /* Inject light mode overrides if not present */
       if (!document.getElementById('_light_css')) {
         var s = document.createElement('style');
         s.id  = '_light_css';
         s.textContent = [
-          '[data-theme="light"]{--bg-body:#f4f4f8;--bg-card:#ffffff;--bg-card2:#f8f8fc;--bg-card3:#f0f0f6;',
+          '[data-color-scheme="light"]{--bg-body:#f4f4f8;--bg-card:#ffffff;--bg-card2:#f8f8fc;--bg-card3:#f0f0f6;',
           '--text:#1a1a2e;--text-muted:#666680;--border:#e0e0ec;--border-light:#ebebf5}',
-          '[data-theme="light"] #topbar{background:#fff;border-color:#e0e0ec}',
-          '[data-theme="light"] #sidebar{background:#fff;border-color:#e0e0ec}',
-          '[data-theme="light"] #saas-session-bar{background:linear-gradient(90deg,#4f46e5,#6366f1)!important}',
-          '[data-theme="light"] ._eh-search{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1)}',
-          '[data-theme="light"] ._eh-icon-btn{background:rgba(0,0,0,.06);color:rgba(0,0,0,.6)}',
-          '[data-theme="light"] ._eh-profile{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1)}',
+          '[data-color-scheme="light"] #topbar{background:#fff;border-color:#e0e0ec}',
+          '[data-color-scheme="light"] #sidebar{background:#fff;border-color:#e0e0ec}',
+          '[data-color-scheme="light"] #saas-session-bar{background:linear-gradient(90deg,#4f46e5,#6366f1)!important}',
+          '[data-color-scheme="light"] ._eh-search{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1)}',
+          '[data-color-scheme="light"] ._eh-icon-btn{background:rgba(0,0,0,.06);color:rgba(0,0,0,.6)}',
+          '[data-color-scheme="light"] ._eh-profile{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1)}',
         ].join('');
         document.head.appendChild(s);
       }
     }
-    localStorage.setItem('ingly_theme', dark ? 'dark' : 'light');
+    localStorage.setItem('ingly_color_scheme', dark ? 'dark' : 'light');
     /* Update toggle button icon */
     var btn = document.getElementById('_theme_toggle_btn');
     if (btn) btn.innerHTML = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';

@@ -89,21 +89,10 @@
 .nav-group-title:hover { color: #52525b !important; background: none !important; }
 .ng-chevron { opacity: .3 !important; }
 
-/* Nav items */
-.nav-item {
-  border-radius: 8px !important; padding: 7px 9px !important;
-  font-size: 12.5px !important; color: #71717a !important;
-  font-weight: 400 !important; transition: all .12s !important;
-  margin-bottom: 1px !important; gap: 8px !important;
-}
-.nav-item:hover { background: rgba(255,255,255,.05) !important; color: #a1a1aa !important; }
-.nav-item.active {
-  background: rgba(251,191,36,.1) !important;
-  color: #fbbf24 !important; font-weight: 600 !important;
-  box-shadow: inset 3px 0 0 #fbbf24 !important;
-}
-.nav-item i { color: inherit !important; opacity: .7; width: 15px !important; font-size: 12px !important; }
-.nav-item.active i { opacity: 1 !important; }
+/* Le voci di menu — forma, colore, hover e stato attivo — le definisce
+   l'INGLY Design System. Qui c'erano dodici dichiarazioni !important con
+   l'ambra e i grigi scritti a mano: vincevano su qualunque tema e rendevano
+   impossibile cambiare palette senza toccare questo file. */
 
 /* Accesso Rapido: reso visibile (era nascosto per errore come "legacy") */
 #core-nav { display: block !important; }

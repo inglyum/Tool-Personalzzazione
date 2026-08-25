@@ -120,7 +120,12 @@
    INGLY OS nasce scuro: il laboratorio lavora con luci basse e schermi
    accesi tutto il giorno. Il tema chiaro esiste per la stampa, le demo e
    chi lo preferisce, e ridefinisce solo questo livello.                    */
-[data-theme='light'] {
+/* Due attributi perché due sistemi storici li scrivono: `data-theme` è la
+   palette scelta in Impostazioni, `data-color-scheme` la modalità chiaro/scuro.
+   Prima condividevano attributo e chiave di storage con valori incompatibili,
+   e scegliere una palette faceva ripartire l'applicazione in tema chiaro. */
+[data-theme='light'],
+[data-color-scheme='light'] {
   color-scheme: light;
 
   --color-bg: var(--neutral-50);

@@ -46,7 +46,9 @@
     'border-radius:4px;padding:1px 5px;font-size:9px;color:var(--text-muted);font-family:monospace}',
     // Smooth transitions
     '.section-view{transition:opacity .15s}',
-    '.nav-item.active{background:rgba(99,102,241,.12)!important;color:var(--primary)!important;border-left:2px solid var(--primary)}',
+    /* Stato attivo: lo definisce l'INGLY Design System. Qui c'era un
+       `!important` con l'indaco scritto a mano, in conflitto con l'ambra
+       dichiarata altrove: vinceva l'ultima patch caricata. */
     // Core nav panel — redesigned compact collapsible
     '#core-nav{border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden}',
     '#cn-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 4px;cursor:pointer;user-select:none}',

@@ -423,3 +423,47 @@
     --kpi-value-size: var(--text-xl);
   }
 }
+
+/* ── Ricerca nel menu ─────────────────────────────────────────────────────  */
+.nav-search {
+  padding: var(--space-2) var(--space-2) var(--space-3);
+}
+
+.nav-search .form-control {
+  height: 30px;
+  font-size: var(--text-xs);
+}
+
+/* ── Voci secondarie ──────────────────────────────────────────────────────
+   Progressive disclosure: ogni gruppo mostra le voci in evidenza e raccoglie
+   le altre. Con 105 sezioni, mostrarle tutte insieme è il motivo per cui il
+   prodotto sembrava un elenco di funzioni invece di uno strumento.          */
+.nav-more > summary {
+  list-style: none;
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+.nav-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-more[open] > summary {
+  color: var(--color-text-muted);
+}
+
+.nav-item--more i {
+  font-size: 11px;
+}
+
+.nav-item__fav {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--color-premium);
+  opacity: 0.9;
+}
+
+.nav-item[hidden],
+.nav-group[hidden] {
+  display: none;
+}

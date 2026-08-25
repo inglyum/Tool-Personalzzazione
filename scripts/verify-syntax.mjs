@@ -30,9 +30,9 @@ for (const t of targets) {
     const code = fs.readFileSync(file, 'utf8');
     checked += 1;
     try {
-      // I sorgenti estratti sono script classici. I nostri tool sono ESM e li
-      // verifica `node --check` in CI, quindi qui vengono saltati.
-      if (file.endsWith('.mjs')) continue;
+      // I sorgenti estratti sono script classici; i moduli ES (i tool e i
+      // sorgenti di src/) hanno la propria sintassi e li verifica `node --check`.
+      if (file.endsWith('.mjs') || /^\s*(import|export)\s/m.test(code)) continue;
       new vm.Script(code, { filename: file });
     } catch (e) {
       failures.push(`${file}: ${e.message}`);
