@@ -37,6 +37,8 @@ export const PRODUCT_FILES = [
   'work-center.js',
   'dashboard.js',
   'product-builder.js',
+  'topbar.js',
+  'command-palette.js',
 ];
 
 export function productJs(originalBlock) {
