@@ -116,3 +116,121 @@ test('un preventivo completo somma tutte le voci', () => {
   assert.deepEqual(r.voci.map((v) => v.id).sort(),
     ['ammortamento','energia','extra','manodopera','manutenzione','materiale','postProcesso','scarto'].sort());
 });
+
+/* ── Ammortamento, packaging, IVA, strategie, lotti ─────────────────────── */
+
+test('si ammortizza il prezzo meno il valore residuo, non il prezzo pieno', () => {
+  // 600 € di macchina, 100 € di valore residuo, 2000 h di vita, 4 h di stampa
+  const r = cost({ hours: 4, machinePrice: 600, residualValue: 100, machineLifeHours: 2000 });
+  vicino(r.costoOrarioMacchina, 0.25);
+  vicino(voce(r, 'ammortamento'), 1);
+});
+
+test('il valore residuo non può rendere negativo l\'ammortamento', () => {
+  const r = cost({ hours: 4, machinePrice: 300, residualValue: 900, machineLifeHours: 2000 });
+  assert.equal(voce(r, 'ammortamento'), 0);
+});
+
+test('il packaging è una voce per pezzo', () => {
+  const r = cost({ grams: 10, materialPricePerKg: 20, packagingPerUnit: 0.35 });
+  vicino(voce(r, 'packaging'), 0.35);
+});
+
+test('le quattro strategie salgono di prezzo e di margine', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 10 });   // costo 1,00 €
+  const s = r.strategie;
+  assert.deepEqual(s.map((x) => x.id), ['competitive', 'standard', 'premium', 'luxury']);
+  for (let i = 1; i < s.length; i++) {
+    assert.ok(s[i].netto > s[i - 1].netto, `${s[i].id} non costa più di ${s[i - 1].id}`);
+    assert.ok(s[i].margine > s[i - 1].margine);
+  }
+});
+
+test('ogni strategia sviluppa costo, netto, IVA, lordo, profitto e markup coerenti', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 10, vatRate: 22 });   // costo 1,00 €
+  const std = r.strategie.find((x) => x.id === 'standard');              // margine 40%
+  vicino(std.netto, 1.6667);
+  vicino(std.iva, 1.6667 * 0.22);
+  vicino(std.lordo, std.netto + std.iva);
+  vicino(std.profitto, std.netto - 1);
+  vicino(std.markup, 66.667);          // ×1,667 = +66,7% di ricarico
+  vicino(r.margineDi(std.netto), 40);  // ma il margine è 40%
+});
+
+test('IVA a zero non aggiunge nulla al lordo', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 10, vatRate: 0 });
+  const std = r.strategie[1];
+  assert.equal(std.iva, 0);
+  vicino(std.lordo, std.netto);
+});
+
+test('sul lotto si moltiplicano netto e profitto, non il costo unitario', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 10, qty: 25 });
+  const std = r.strategie[1];
+  vicino(std.nettoTotale, std.netto * 25);
+  vicino(std.profittoTotale, std.profitto * 25);
+  assert.equal(r.quantita, 25);
+});
+
+test('quantità zero o negativa vale uno, non divide per zero', () => {
+  for (const q of [0, -5, null, undefined, 'x']) {
+    const r = cost({ setupMin: 60, laborPerHour: 10, qty: q });
+    vicino(voce(r, 'manodopera'), 10);   // 60 min interi, non NaN né Infinity
+  }
+});
+
+test('i valori negativi vengono azzerati, non propagati', () => {
+  // Un solo segno meno: senza vincolo darebbe un costo che si SOTTRAE agli altri.
+  const r = cost({ grams: 100, materialPricePerKg: -20, hours: 4, watt: 150, kwhPrice: 0.28 });
+  assert.equal(voce(r, 'materiale'), 0, 'un prezzo negativo non deve generare uno sconto');
+  assert.ok(r.costo > 0);
+
+  // Due segni meno: senza vincolo si moltiplicherebbero in un costo positivo falso.
+  const due = cost({ grams: -100, materialPricePerKg: -20 });
+  assert.equal(due.costo, 0);
+
+  const tutti = cost({ grams: -100, materialPricePerKg: -20, hours: -4, watt: -150,
+    machinePrice: -500, maintenancePerHour: -3, packagingPerUnit: -1 });
+  assert.equal(tutti.costo, 0, 'nessun costo può nascere da valori negativi');
+});
+
+test('un ciclo di lavoro fuori scala viene riportato entro 0 e 1', () => {
+  const sopra = cost({ hours: 4, watt: 200, kwhPrice: 0.3, dutyCycle: 5 });
+  const pieno = cost({ hours: 4, watt: 200, kwhPrice: 0.3, dutyCycle: 1 });
+  vicino(sopra.costo, pieno.costo);
+});
+
+test('ore a zero azzerano energia, ammortamento e manutenzione', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 20, hours: 0,
+    watt: 200, kwhPrice: 0.3, machinePrice: 500, machineLifeHours: 1000, maintenancePerHour: 1 });
+  assert.equal(voce(r, 'energia'), 0);
+  assert.equal(voce(r, 'ammortamento'), 0);
+  assert.equal(voce(r, 'manutenzione'), 0);
+  vicino(r.costo, 2);   // resta il solo materiale
+});
+
+test('peso a zero: nessun costo di materiale', () => {
+  const r = cost({ grams: 0, materialPricePerKg: 25, hours: 2, watt: 100, kwhPrice: 0.3 });
+  assert.equal(voce(r, 'materiale'), 0);
+  assert.ok(r.costo > 0);
+});
+
+test('macchina o materiale non indicati non fanno crollare il calcolo', () => {
+  const soloMacchina = cost({ hours: 3, machinePrice: 400, machineLifeHours: 1500 });
+  const soloMateriale = cost({ grams: 80, materialPricePerKg: 22 });
+  assert.ok(soloMacchina.costo > 0 && isFinite(soloMacchina.costo));
+  assert.ok(soloMateriale.costo > 0 && isFinite(soloMateriale.costo));
+});
+
+test('margine 0 significa vendere al costo; margine oltre 95 viene limitato', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 10 });
+  vicino(r.prezzoDaMargine(0), 1);
+  assert.ok(isFinite(r.prezzoDaMargine(100)), 'margine 100 non deve dare infinito');
+  assert.equal(r.prezzoDaMargine(100), r.prezzoDaMargine(95));
+  assert.equal(r.prezzoDaMargine(150), r.prezzoDaMargine(95));
+});
+
+test('un tasso di scarto assurdo viene limitato invece di esplodere', () => {
+  const r = cost({ grams: 100, materialPricePerKg: 10, failureRate: 200 });
+  assert.ok(isFinite(r.costo) && r.costo > 0, 'costo non finito: ' + r.costo);
+});

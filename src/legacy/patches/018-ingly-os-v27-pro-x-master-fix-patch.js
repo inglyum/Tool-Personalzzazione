@@ -960,7 +960,14 @@
     clearInterval(_iv);
 
     try{ buildSections(); }catch(e){ console.error('[v27fix] sections',e); }
-    try{ buildNav(); }catch(e){ console.error('[v27fix] nav',e); }
+    /* Seconda navigazione rimossa. Verificato prima di toccarla: le nove voci
+       (`prox-command`, `prox-crm`, `prox-production`, `prox-stock`, `prox-quotes`,
+       `prox-analytics`, `prox-marketing`, `prox-agents`, `prox-automations`) non
+       hanno alcuna vista nel documento, e `navigateProx` non esiste: erano nove
+       pulsanti che non portavano da nessuna parte. In più il gruppo spariva al
+       primo re-render della sidebar, quindi non era nemmeno stabile.
+       Non è una funzione tolta: è una funzione che non c'era. */
+    // try{ buildNav(); }catch(e){ console.error('[v27fix] nav',e); }
     try{ hookNavigate(); }catch(e){ console.error('[v27fix] hook',e); }
     try{ fixCloudView(); }catch(e){}
     try{ buildCoreNav(); }catch(e){}

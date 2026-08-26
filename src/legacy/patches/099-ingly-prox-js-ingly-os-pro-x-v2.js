@@ -1571,7 +1571,14 @@ textarea.px-input{resize:vertical;min-height:90px}
     }
     try { injectCSS(); } catch (e) {}
     try { buildSections(); } catch (e) { console.error('[prox] sections', e); }
-    try { buildNav(); } catch (e) { console.error('[prox] nav', e); }
+    /* Seconda navigazione rimossa. Verificato prima di toccarla: le nove voci
+       (`prox-command`, `prox-crm`, `prox-production`, `prox-stock`, `prox-quotes`,
+       `prox-analytics`, `prox-marketing`, `prox-agents`, `prox-automations`) non
+       hanno alcuna vista nel documento, e `navigateProx` non esiste: erano nove
+       pulsanti che non portavano da nessuna parte. In più il gruppo spariva al
+       primo re-render della sidebar, quindi non era nemmeno stabile.
+       Non è una funzione tolta: è una funzione che non c'era. */
+    // try { buildNav(); } catch (e) { console.error('[prox] nav', e); }
     try { hookNavigate(); } catch (e) { console.error('[prox] navigate', e); }
     console.log('[prox] INGLY OS PRO X loaded ✅ — 9 moduli attivi');
     try { toast && toast('INGLY OS PRO X attivo ✨', 'success', 3000); } catch (e) {}

@@ -5315,6 +5315,21 @@ const NavPrefs = {
   async load() {
     const saved = await IDB.get('settings', 'nav_prefs').catch(() => null);
     if (saved) this._prefs = { favorites: saved.favorites || [], hidden: saved.hidden || [] };
+
+    /* Fino alla v88 esistevano due sistemi di preferiti che non si parlavano:
+       questo (IndexedDB, `nav_prefs`) e `Favs` (localStorage, `ingly_favs3`).
+       Ogni voce di menu portava due stelle, e aggiungere ai preferiti in una
+       non si vedeva nell'altra. Ora la sorgente è una sola — ma i preferiti
+       già salvati nel vecchio sistema non si buttano: si assorbono. */
+    try {
+      const vecchi = JSON.parse(localStorage.getItem('ingly_favs3') || '[]');
+      if (Array.isArray(vecchi) && vecchi.length) {
+        const prima = this._prefs.favorites.length;
+        vecchi.forEach((s) => { if (s && this._prefs.favorites.indexOf(s) === -1) this._prefs.favorites.push(s); });
+        if (this._prefs.favorites.length !== prima) await this.save();
+      }
+    } catch (e) { /* un JSON illeggibile non deve impedire l'avvio */ }
+
     this._loaded = true;
     this.apply();
   },
@@ -5329,7 +5344,7 @@ const NavPrefs = {
     else this._prefs.favorites.push(section);
     await this.save();
     this.apply();
-    toast(idx > -1 ? 'Removed from favorites' : 'Added to favorites ⭐', 'info');
+    toast(idx > -1 ? 'Rimosso dai preferiti' : 'Aggiunto ai preferiti ⭐', 'info');
   },
 
   async toggleHide(section) {
@@ -5426,23 +5441,39 @@ const NavPrefs = {
       }).join('');
   },
 
+  /* L'unica funzione che disegna le azioni di una voce di menu: una stella e
+     un nascondi, mai due. È idempotente per costruzione — se il gruppo esiste
+     lo aggiorna invece di aggiungerne un altro. */
+  renderSectionActions(el) {
+    if (!el || !el.dataset || !el.dataset.section) return;
+    const section = el.dataset.section;
+    const esistente = el.querySelector('.nav-ctrl');
+    if (esistente) {
+      const st = esistente.querySelector('button');
+      if (st) { st.textContent = this.isFav(section) ? '⭐' : '☆'; }
+      return;
+    }
+    this._buildNavControls(el, section);
+  },
+
   _addNavControls() {
-    document.querySelectorAll('.nav-item[data-section]').forEach(el => {
-      if (el.querySelector('.nav-ctrl')) return; // already added
-      const section = el.dataset.section;
+    document.querySelectorAll('.nav-item[data-section]').forEach(el => this.renderSectionActions(el));
+  },
+
+  _buildNavControls(el, section) {
+    {
       const ctrl = document.createElement('div');
       ctrl.className = 'nav-ctrl';
       ctrl.style.cssText = 'display:none;gap:2px;margin-left:auto;flex-shrink:0';
 
       const starBtn = document.createElement('button');
       starBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:11px;padding:1px 3px;opacity:.7;line-height:1';
-      starBtn.title = 'Pin to favorites';
+      starBtn.title = 'Aggiungi ai preferiti';
       starBtn.textContent = this.isFav(section) ? '⭐' : '☆';
       starBtn.onclick = (e) => { e.stopPropagation(); NavPrefs.toggleFavorite(section); };
 
       const hideBtn = document.createElement('button');
       hideBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:11px;padding:1px 3px;opacity:.7;line-height:1';
-      hideBtn.title = 'Hide from nav';
       hideBtn.innerHTML = '<i class="fas fa-eye-slash" style="font-size:10px"></i>';
       hideBtn.title = 'Nascondi dal menu';
       hideBtn.style.cssText += ';border-radius:4px;transition:all .15s;';
@@ -5463,7 +5494,7 @@ const NavPrefs = {
 
       el.addEventListener('mouseenter', () => { ctrl.style.display = 'flex'; });
       el.addEventListener('mouseleave', () => { ctrl.style.display = 'none'; });
-    });
+    }
 
     // Add "Show hidden" toggle at bottom of each nav group
     this._addShowHiddenButtons();
@@ -6692,7 +6723,13 @@ ATTENZIONE: I dati attuali verranno SOSTITUITI!`)) return;
 // ═══════════════════════════════════════════════════════════════════
 const Favs = {
   FK:'ingly_favs3', RK:'ingly_recent3',
-  getFavs(){ try{return JSON.parse(localStorage.getItem(this.FK)||'[]')}catch(e){return[]} },
+  /* La sorgente di verità dei preferiti è `NavPrefs` (IndexedDB, `nav_prefs`).
+     `ingly_favs3` resta letta solo come ripiego finché la migrazione in
+     `NavPrefs.load()` non è passata su questa installazione. */
+  getFavs(){
+    if (typeof NavPrefs !== 'undefined' && NavPrefs._loaded) return NavPrefs._prefs.favorites.slice();
+    try{return JSON.parse(localStorage.getItem(this.FK)||'[]')}catch(e){return[]}
+  },
   getRecent(){ try{return JSON.parse(localStorage.getItem(this.RK)||'[]')}catch(e){return[]} },
   _cat: null,
 
@@ -6719,12 +6756,18 @@ const Favs = {
     });
   },
 
+  /* Un solo interruttore. Prima ce n'erano due, su due memorie diverse:
+     l'utente aggiungeva ai preferiti e la voce compariva in un elenco ma non
+     nell'altro. `Favs.togglePin` resta perché è richiamata da `onclick` scritti
+     nel markup, ma non decide più nulla: inoltra. */
   togglePin(s, ev){
     if(ev){ev.stopPropagation();ev.preventDefault();}
+    if (typeof NavPrefs !== 'undefined') {
+      return Promise.resolve(NavPrefs.toggleFavorite(s)).then(() => this.render());
+    }
     const favs = this.getFavs();
     const i = favs.indexOf(s);
-    if(i>=0){ favs.splice(i,1); toast('📌 Rimosso dai preferiti'); }
-    else     { favs.unshift(s); toast('⭐ Aggiunto ai preferiti!'); }
+    if(i>=0) favs.splice(i,1); else favs.unshift(s);
     localStorage.setItem(this.FK, JSON.stringify(favs));
     this.render();
   },
@@ -6826,23 +6869,14 @@ const Favs = {
       </div>`;
     }).join('');
 
-    // --- Inject pin buttons into all real nav items ---
-    document.querySelectorAll('#sidebar-nav .nav-item[data-section]').forEach(el=>{
-      if(el.closest('#nav-favs-list')||el.closest('#nav-recent-list')) return;
-      const s = el.dataset.section;
-      let pin = el.querySelector('.nav-pin');
-      if(!pin){
-        pin = document.createElement('span');
-        pin.className='nav-pin';
-        pin.title='Aggiungi ai preferiti';
-        pin.addEventListener('click', ev=>Favs.togglePin(s,ev));
-        el.appendChild(pin);
-      }
-      const isFav = favs.includes(s);
-      pin.textContent = isFav ? '★' : '☆';
-      pin.style.color = isFav ? '#fbbf24' : '';
-      pin.classList.toggle('pinned', isFav);
-    });
+    /* Qui `Favs` iniettava una PROPRIA stella in ogni voce di menu, accanto a
+       quella che `NavPrefs` già disegnava: due stelle per voce, su 98 voci, e
+       due memorie che non si parlavano — cliccarne una non aggiornava l'altra.
+
+       Le azioni di una voce le disegna `NavPrefs.renderSectionActions`, e le
+       disegna una volta sola. Qui resta il compito che è davvero di `Favs`:
+       gli elenchi dei preferiti e dei recenti. */
+    if (typeof NavPrefs !== 'undefined') NavPrefs._addNavControls();
   },
 
   init(){

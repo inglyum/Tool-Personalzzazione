@@ -116,7 +116,39 @@
     return html + '</div></div>';
   }
 
+  /* Nodi che questa funzione NON ha creato e che quindi non le appartengono:
+     la barra dei preferiti, le voci aggiunte dalle patch storiche, i pulsanti
+     di ripristino. `innerHTML = …` li cancellava tutti — sette voci di menu e
+     la barra dei preferiti sparivano al primo re-render, e non tornavano.
+
+     Un render deve poter girare mille volte e lasciare lo stesso risultato:
+     compreso ciò che non ha messo lui. Si mettono da parte e si rimettono. */
+  var ADOTTATI = ['#nav-favorites-bar', '#nav-restore-bar', '#core-nav'];
+
+  function ospiti(container) {
+    var fuori = [];
+    ADOTTATI.forEach(function (sel) {
+      var el = container.querySelector(sel);
+      if (el) fuori.push(el);
+    });
+    /* Voci di menu che la tassonomia non conosce: le hanno aggiunte le patch,
+       e portano a sezioni che esistono davvero. */
+    var noti = {};
+    Nav.NAV_GROUPS.forEach(function (g) {
+      g.items.forEach(function (it) { noti[it.id] = true; });
+    });
+    var estranee = container.querySelectorAll('.nav-item[data-section]');
+    for (var i = 0; i < estranee.length; i += 1) {
+      var sec = estranee[i].getAttribute('data-section');
+      if (!noti[sec] && fuori.indexOf(estranee[i]) === -1 &&
+          !estranee[i].closest('#nav-favorites-bar')) fuori.push(estranee[i]);
+    }
+    return fuori;
+  }
+
   function render(container) {
+    var conservati = ospiti(container);
+
     var html =
       '<div class="nav-search">' +
       '<label class="ds-visually-hidden" for="nav-filter">Filtra il menu</label>' +
@@ -125,6 +157,25 @@
       favouritesMarkup();
     for (var i = 0; i < Nav.NAV_GROUPS.length; i += 1) html += groupMarkup(Nav.NAV_GROUPS[i]);
     container.innerHTML = html;
+
+    /* Rimessi dov'erano: le barre in cima, le voci estranee in fondo, dentro
+       un gruppo che dice da dove vengono invece di confonderle con le altre. */
+    var barre = conservati.filter(function (n) { return n.id; });
+    var voci = conservati.filter(function (n) { return !n.id; });
+
+    for (var b = barre.length - 1; b >= 0; b -= 1) container.insertBefore(barre[b], container.firstChild);
+
+    if (voci.length) {
+      var extra = document.createElement('div');
+      extra.className = 'nav-group';
+      extra.id = 'ng-estensioni';
+      extra.innerHTML = '<div class="nav-group-title"><span>Estensioni</span></div>';
+      var lista = document.createElement('div');
+      lista.className = 'nav-group-items';
+      voci.forEach(function (v) { lista.appendChild(v); });
+      extra.appendChild(lista);
+      container.appendChild(extra);
+    }
   }
 
   function markActive(section) {
