@@ -5400,7 +5400,17 @@ const NavPrefs = {
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'nav-favorites-bar';
-      bar.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);margin-bottom:4px;display:flex;flex-wrap:wrap;gap:4px;min-height:0';
+      /* `min-height:0` su un figlio di un contenitore flex in colonna lo lascia
+         comprimere: la barra restava alta 13 px mentre le sue pastiglie
+         continuavano a disegnarsi a grandezza naturale. Uscivano dal riquadro e
+         finivano sopra le voci del menu — erano le pastiglie ciano sovrapposte
+         a «Workspace» e «Dashboard ROI».
+
+         Non è un problema di z-index: è un riquadro che non aveva l'altezza del
+         proprio contenuto. `flex-shrink:0` glielo impedisce, `min-height:auto`
+         gli restituisce l'altezza naturale. */
+      bar.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);margin-bottom:4px;' +
+        'display:flex;flex-wrap:wrap;gap:4px;min-height:auto;flex-shrink:0;align-content:flex-start';
       const sidebar = document.querySelector('.sidebar') || document.querySelector('nav');
       if (sidebar) sidebar.insertBefore(bar, sidebar.firstChild);
     }
@@ -5488,7 +5498,10 @@ const NavPrefs = {
 
       ctrl.appendChild(starBtn);
       ctrl.appendChild(hideBtn);
-      el.style.display = 'flex';
+      /* Niente `style.display` in linea: `.nav-item` è già flex per foglio di
+         stile, e uno stile in linea batte qualunque regola d'autore — comprese
+         quelle che devono poter nascondere la voce (un «Altro (n)» chiuso, una
+         sezione nascosta). Era la causa delle voci disegnate fuori posto. */
       el.style.alignItems = 'center';
       el.appendChild(ctrl);
 
@@ -6908,7 +6921,13 @@ const NavGroups = {
       this.DEFAULT_COLLAPSED.forEach(id => { state[id] = true; });
       this._saveState(state);
     }
-    // Apply collapse state to all groups
+    /* Lo stato aperto/chiuso dei gruppi ha un solo proprietario: la sidebar
+       dell'app-shell. Qui si delegava a una classe diversa (`collapsed` invece
+       di `is-collapsed`) con una propria memoria: i due sistemi si
+       contraddicevano e nessuna categoria si apriva al primo clic — il primo
+       serviva solo ad allineare i due stati. */
+    if (window.InglySidebar && InglySidebar.syncGroups) { InglySidebar.syncGroups(); return; }
+
     document.querySelectorAll('.nav-group[id^="ng-"]').forEach(el => {
       if (state[el.id]) el.classList.add('collapsed');
       else el.classList.remove('collapsed');
@@ -6916,6 +6935,7 @@ const NavGroups = {
   },
 
   toggle(id) {
+    if (window.InglySidebar && InglySidebar.toggleGroupById) return InglySidebar.toggleGroupById(id);
     const el = document.getElementById(id);
     if (!el) return;
     const isCollapsed = el.classList.toggle('collapsed');
@@ -6930,6 +6950,7 @@ const NavGroups = {
     if (!item) return;
     const group = item.closest('.nav-group[id^="ng-"]');
     if (!group) return;
+    if (window.InglySidebar && InglySidebar.setGroup) return InglySidebar.setGroup(group.id, false);
     if (group.classList.contains('collapsed')) {
       group.classList.remove('collapsed');
       const state = this._getState() || {};
@@ -6941,7 +6962,8 @@ const NavGroups = {
   collapseAll() {
     const state = {};
     document.querySelectorAll('.nav-group[id^="ng-"]').forEach(el => {
-      el.classList.add('collapsed');
+      if (window.InglySidebar && InglySidebar.setGroup) InglySidebar.setGroup(el.id, true);
+      else el.classList.add('collapsed');
       state[el.id] = true;
     });
     this._saveState(state);
@@ -6950,7 +6972,8 @@ const NavGroups = {
   expandAll() {
     const state = {};
     document.querySelectorAll('.nav-group[id^="ng-"]').forEach(el => {
-      el.classList.remove('collapsed');
+      if (window.InglySidebar && InglySidebar.setGroup) InglySidebar.setGroup(el.id, false);
+      else el.classList.remove('collapsed');
       state[el.id] = false;
     });
     this._saveState(state);

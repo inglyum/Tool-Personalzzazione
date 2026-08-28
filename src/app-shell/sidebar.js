@@ -77,7 +77,7 @@
     var secondary = group.items.filter(function (i) { return !i.primary; });
 
     var html =
-      '<div class="nav-group' + (isCollapsed ? ' is-collapsed' : '') + '" id="ng-' + esc(group.id) + '" ' +
+      '<div class="nav-group' + (isCollapsed ? ' is-collapsed collapsed' : '') + '" id="ng-' + esc(group.id) + '" ' +
       'data-group="' + esc(group.id) + '">' +
       '<button type="button" class="nav-group-title ng-header" aria-expanded="' + (!isCollapsed) + '" ' +
       'aria-controls="ngi-' + esc(group.id) + '">' +
@@ -165,6 +165,15 @@
 
     for (var b = barre.length - 1; b >= 0; b -= 1) container.insertBefore(barre[b], container.firstChild);
 
+    /* `NavGroups.init()` (settings/index.js) applica la propria classe
+       `collapsed` ai gruppi appena esistono, secondo un suo elenco di default.
+       Si riallinea allo stato che questa sidebar possiede, altrimenti l'ultimo
+       che parla vince e l'utente vede categorie chiuse che non riesce ad aprire. */
+    var gruppi = container.querySelectorAll('.nav-group[data-group]');
+    for (var g = 0; g < gruppi.length; g += 1) {
+      applicaStato(gruppi[g], collapsed.has(gruppi[g].getAttribute('data-group')));
+    }
+
     if (voci.length) {
       var extra = document.createElement('div');
       extra.className = 'nav-group';
@@ -197,16 +206,44 @@
     }
   }
 
+  /* Due nomi per lo stesso stato, da due sistemi diversi.
+
+     Questa sidebar usa `is-collapsed`. Il CSS storico usa `.nav-group.collapsed`
+     con `max-height:0 !important`, e `settings/index.js` la applica a tutti i
+     gruppi all'avvio. Risultato: il clic sul titolo cambiava `is-collapsed`, ma
+     `collapsed` restava e il `!important` teneva la categoria chiusa. Nessuna
+     categoria si apriva, e non c'era modo di aprirla.
+
+     Lo stato lo possiede questa funzione, e lo scrive su entrambe le classi
+     finché il nome storico esiste: così i due sistemi non possono più
+     contraddirsi. È lo stesso principio che ha risolto la doppia stella —
+     un concetto, una sorgente. */
+  function applicaStato(group, chiuso) {
+    group.classList.toggle('is-collapsed', chiuso);
+    group.classList.toggle('collapsed', chiuso);
+    var body = group.querySelector('.nav-group-items');
+    var header = group.querySelector('.ng-header');
+    if (body) {
+      body.hidden = chiuso;
+      /* L'altezza si dichiara qui, non si spera che un foglio di stile sia
+         d'accordo. Sul menu agiscono più regole `max-height` di epoche diverse,
+         alcune con `!important`, e una di esse teneva i gruppi a zero anche
+         dopo aver tolto ogni classe di chiusura: nessuna categoria si apriva e
+         non c'era modo di aprirla. Chi possiede lo stato lo afferma. */
+      body.style.maxHeight = chiuso ? '0px' : 'none';
+      body.style.opacity = chiuso ? '0' : '1';
+      body.style.pointerEvents = chiuso ? 'none' : 'auto';
+      body.style.overflow = chiuso ? 'hidden' : '';
+    }
+    if (header) header.setAttribute('aria-expanded', String(!chiuso));
+  }
+
   function openGroup(group) {
     var id = group.getAttribute('data-group');
     if (!id || !collapsed.has(id)) return;
     collapsed.delete(id);
     writeSet(STORAGE_GROUPS, collapsed);
-    group.classList.remove('is-collapsed');
-    var body = group.querySelector('.nav-group-items');
-    var header = group.querySelector('.ng-header');
-    if (body) body.hidden = false;
-    if (header) header.setAttribute('aria-expanded', 'true');
+    applicaStato(group, false);
   }
 
   function toggleGroup(group) {
@@ -216,11 +253,7 @@
     if (nowCollapsed) collapsed.add(id);
     else collapsed.delete(id);
     writeSet(STORAGE_GROUPS, collapsed);
-    group.classList.toggle('is-collapsed', nowCollapsed);
-    var body = group.querySelector('.nav-group-items');
-    var header = group.querySelector('.ng-header');
-    if (body) body.hidden = nowCollapsed;
-    if (header) header.setAttribute('aria-expanded', String(!nowCollapsed));
+    applicaStato(group, nowCollapsed);
   }
 
   function filter(query) {
@@ -296,9 +329,44 @@
     container.setAttribute('aria-label', 'Navigazione principale');
     if (global.NavBus && global.NavBus.onAny) global.NavBus.onAny(markActive);
     markActive((global.App && global.App.currentSection) || 'dashboard');
-    global.InglySidebar = { render: function () { built = false; install(); }, markActive: markActive, filter: filter };
     return true;
   }
+
+  /** Applica lo stato a un gruppo per id. È il punto attraverso cui il
+      gestore storico dei gruppi delega invece di decidere per conto suo. */
+  function setGroup(id, chiuso) {
+    var g = document.getElementById(id) || document.querySelector('[data-group="' + id + '"]');
+    if (!g) return;
+    var key = g.getAttribute('data-group') || String(id).replace(/^ng-/, '');
+    if (chiuso) collapsed.add(key); else collapsed.delete(key);
+    writeSet(STORAGE_GROUPS, collapsed);
+    applicaStato(g, chiuso);
+  }
+
+  function isGroupCollapsed(id) {
+    var g = document.getElementById(id) || document.querySelector('[data-group="' + id + '"]');
+    var key = g ? (g.getAttribute('data-group') || String(id).replace(/^ng-/, '')) : String(id).replace(/^ng-/, '');
+    return collapsed.has(key);
+  }
+
+  /** Riafferma lo stato su tutti i gruppi: serve dopo che un altro modulo ha
+      toccato le classi. */
+  function syncGroups() {
+    var gruppi = document.querySelectorAll('#sidebar-nav .nav-group[data-group]');
+    for (var i = 0; i < gruppi.length; i += 1) {
+      applicaStato(gruppi[i], collapsed.has(gruppi[i].getAttribute('data-group')));
+    }
+  }
+
+  global.InglySidebar = {
+    render: function () { built = false; install(); },
+    markActive: markActive,
+    filter: filter,
+    setGroup: setGroup,
+    isGroupCollapsed: isGroupCollapsed,
+    toggleGroupById: function (id) { setGroup(id, !isGroupCollapsed(id)); },
+    syncGroups: syncGroups,
+  };
 
   /* Il DOM della sidebar viene creato dal core: si aspetta che esista, con un
      numero finito di tentativi invece di un polling che non finisce mai. */

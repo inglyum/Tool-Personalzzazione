@@ -61,7 +61,7 @@ table { min-width: 500px; }
 
 /* Fix nav items with badges — proper flex */
 .nav-item { 
-  display: flex !important; 
+  display: flex; 
   align-items: center; 
   gap: 6px;
 }

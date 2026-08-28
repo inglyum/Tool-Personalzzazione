@@ -145,7 +145,9 @@ const SidebarBadges = {
         badge = document.createElement('span');
         badge.className = 'nav-badge';
         badge.style.cssText = `display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;border-radius:99px;font-size:9px;font-weight:800;padding:0 4px;margin-left:auto;flex-shrink:0;color:#fff;background:${color}`;
-        item.style.display = 'flex';
+        // Stessa ragione di renderSectionActions: `display` in linea rende la
+        // voce non nascondibile da nessuna regola. Il foglio di stile la
+        // dichiara già flex.
         item.style.alignItems = 'center';
         item.appendChild(badge);
       }

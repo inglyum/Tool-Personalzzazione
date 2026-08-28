@@ -578,3 +578,55 @@ mark.sh {
 #sidebar-nav > .nav-search {
   display: none;
 }
+
+
+/* ── La barra dei preferiti deve essere alta quanto il suo contenuto ───────
+   È un figlio flex di `#sidebar-nav`, che è una colonna: senza questo si
+   comprime e le sue pastiglie escono dal riquadro, finendo sopra le voci del
+   menu. Il difetto si vede solo quando ci sono dei preferiti — ed è per questo
+   che è sopravvissuto a due giri di collaudo fatti su un elenco vuoto.        */
+#nav-favorites-bar,
+#nav-restore-bar {
+  flex-shrink: 0;
+  min-height: auto;
+  align-content: flex-start;
+}
+
+/* ── Il contenuto di «Altro (n)» chiuso deve restare chiuso ────────────────
+   `.nav-more` è un `<details>`. Il browser nasconde i figli di un `<details>`
+   chiuso con `details:not([open]) > *:not(summary){display:none}` — ma è una
+   regola dell'agente utente, e il CSS storico la batte con `.nav-item{display:flex}`.
+
+   Conseguenza: le voci di un «Altro» chiuso venivano disegnate a coordinate
+   reali fuori dal proprio riquadro, sopra le voci degli altri gruppi. Si vedeva
+   solo scorrendo la sidebar con i gruppi aperti — ed è per questo che è
+   sopravvissuto ai collaudi fatti a menu chiuso.
+
+   Non è un `display:none` che nasconde un difetto: è la regola del browser
+   riaffermata alla specificità giusta. Perché vincesse è stato tolto
+   `!important` da `.nav-item{display:flex}` in 009-favs-quickbar: un
+   `!important` in un layer più basso batte qualunque dichiarazione normale di
+   un layer più alto, e anche uno stile in linea — nessuna regola scritta qui
+   avrebbe potuto avere ragione finché restava. Questa è l'unica sede dello
+   stato di un «Altro» chiuso: il JavaScript non lo riafferma più. */
+.nav-more:not([open]) > *:not(summary),
+details.nav-more:not([open]) > .nav-item {
+  display: none;
+}
+
+/* ── I blocchi sopra il menu devono tenere la propria altezza ──────────────
+   `#sidebar-search` (campo, strumenti, legenda delle scorciatoie) e `#core-nav`
+   (accesso rapido) sono figli flex di una colonna che scorre. Senza
+   `flex-shrink:0` si comprimono quando il menu è lungo, e il loro contenuto —
+   le pastiglie ⌘K, le icone degli strumenti — esce dal riquadro e finisce sopra
+   le voci del menu.
+
+   È la stessa causa della barra dei preferiti: un riquadro più basso del
+   proprio contenuto. Non si sposta il problema con lo z-index, si dà al
+   riquadro l'altezza che gli spetta.                                         */
+#sidebar-inner > #sidebar-search,
+#sidebar-inner > #core-nav,
+#sidebar-search,
+#core-nav {
+  flex-shrink: 0;
+}
