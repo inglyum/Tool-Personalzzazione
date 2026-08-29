@@ -40,6 +40,9 @@ export const PRODUCT_FILES = [
   'product-builder.js',
   'topbar.js',
   'command-palette.js',
+  /* Il motore di costo prima del quoter 3D, che ne è un profilo: chi legge il
+     bundle incontra la matematica comune prima delle sue applicazioni. */
+  'cost-engine.js',
   'print3d-cost.js',
   'first-run.js',
 ];

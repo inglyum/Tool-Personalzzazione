@@ -23,6 +23,7 @@ import {
 } from '../src/admin/index.mjs';
 import { appShellJs, RETIRED_SIDEBAR_PATCHES, SIDEBAR_HOST } from '../src/app-shell/index.mjs';
 import { storageGuardJs, STORAGE_GUARD_HOST } from '../src/core/storage/index.mjs';
+import { errorLoggerJs } from '../src/core/errors/index.mjs';
 
 const readSrc = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -97,7 +98,10 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
 
   /* Prima di tutto il resto: una scrittura che fallisce per spazio esaurito
      deve farsi sentire, non sparire dentro un `catch` vuoto. */
-  overrides[STORAGE_GUARD_HOST] = storageGuardJs(fs.readFileSync(path.join(srcDir, STORAGE_GUARD_HOST), 'utf8'));
+  /* Registro degli errori davanti alla guardia: la guardia gli riferisce i
+     fallimenti, quindi deve trovarlo già installato. */
+  overrides[STORAGE_GUARD_HOST] = errorLoggerJs() + '\n' +
+    storageGuardJs(fs.readFileSync(path.join(srcDir, STORAGE_GUARD_HOST), 'utf8'));
 
   overrides[SIDEBAR_HOST] = appShellJs();
   overrides[PRODUCT_HOST] = productJs(fs.readFileSync(path.join(srcDir, PRODUCT_HOST), 'utf8'));
