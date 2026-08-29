@@ -1,6 +1,21 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Sette finestre di questo file nascevano con `style="display:none"` in
+     linea. `openModal()` le apre aggiungendo la classe `.open`, che agisce su
+     `opacity` e `pointer-events` — non su `display` — e uno stile in linea
+     batte qualunque regola d'autore: le finestre restavano chiuse per sempre.
+
+     Non era un difetto di logica. «Salva Template» salvava davvero il
+     template, e «Template» costruiva davvero l'elenco: semplicemente nessuno
+     dei due poteva mostrarlo. Sette funzioni irraggiungibili — solleciti,
+     storico cliente, salva template, carica template, firma, timeline
+     cliente, price advisor — per un attributo di troppo.
+
+     `.modal-overlay` di base è già invisibile (`opacity:0; pointer-events:none`):
+     l'attributo non serviva. Presidiato da tests/qa/modali.mjs.
+     ═══════════════════════════════════════════════════════════════════════ -->
 
 <!-- ══ SOLLECITI PANEL MODAL ══ -->
-<div class="modal-overlay" id="modal-solleciti" onclick="if(event.target===this)closeModal('solleciti')" style="display:none">
+<div class="modal-overlay" id="modal-solleciti" onclick="if(event.target===this)closeModal('solleciti')">
   <div class="modal" style="max-width:720px">
     <div class="modal-header">
       <span class="modal-title">📧 Solleciti Pagamento Automatici</span>
@@ -11,7 +26,7 @@
 </div>
 
 <!-- ══ STORICO CLIENTE MODAL ══ -->
-<div class="modal-overlay" id="modal-storico-cliente" onclick="if(event.target===this)closeModal('storico-cliente')" style="display:none">
+<div class="modal-overlay" id="modal-storico-cliente" onclick="if(event.target===this)closeModal('storico-cliente')">
   <div class="modal" style="max-width:720px">
     <div class="modal-header">
       <span class="modal-title" id="storico-title">📋 Storico Ordini</span>
@@ -110,7 +125,7 @@
 <div id="client-pdf-overlay" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center;padding:20px"></div>
 
 <!-- ══ QUOTER TEMPLATES MODAL ══ -->
-<div class="modal-overlay" id="modal-qt-save" onclick="if(event.target===this)closeModal('qt-save')" style="display:none">
+<div class="modal-overlay" id="modal-qt-save" onclick="if(event.target===this)closeModal('qt-save')">
   <div class="modal" style="max-width:480px">
     <div class="modal-header"><span class="modal-title">💾 Salva come Template</span><button class="modal-close" onclick="closeModal('qt-save')">✕</button></div>
     <div class="modal-body">
@@ -122,7 +137,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-qt-load" onclick="if(event.target===this)closeModal('qt-load')" style="display:none">
+<div class="modal-overlay" id="modal-qt-load" onclick="if(event.target===this)closeModal('qt-load')">
   <div class="modal" style="max-width:600px">
     <div class="modal-header"><span class="modal-title">📋 Carica Template</span><button class="modal-close" onclick="closeModal('qt-load')">✕</button></div>
     <div class="modal-body">
@@ -132,7 +147,7 @@
 </div>
 
 <!-- ══ SIGNATURE PAD MODAL ══ -->
-<div class="modal-overlay" id="modal-signature" onclick="if(event.target===this)SignaturePad.close()" style="display:none">
+<div class="modal-overlay" id="modal-signature" onclick="if(event.target===this)SignaturePad.close()">
   <div class="modal" style="max-width:560px">
     <div class="modal-header"><span class="modal-title">✍️ Firma Digitale</span><button class="modal-close" onclick="SignaturePad.close()">✕</button></div>
     <div class="modal-body" style="text-align:center">
@@ -151,7 +166,7 @@
 </div>
 
 <!-- ══ CRM CLIENT TIMELINE MODAL (enhanced) ══ -->
-<div class="modal-overlay" id="modal-client-timeline" onclick="if(event.target===this)closeModal('client-timeline')" style="display:none">
+<div class="modal-overlay" id="modal-client-timeline" onclick="if(event.target===this)closeModal('client-timeline')">
   <div class="modal modal-lg" style="max-width:800px">
     <div class="modal-header">
       <span class="modal-title" id="timeline-title">👤 Timeline Cliente</span>
@@ -163,7 +178,7 @@
 
 
 <!-- ══ AI PRICE ADVISOR MODAL ══ -->
-<div class="modal-overlay" id="modal-price-advisor" onclick="if(event.target===this)closeModal('price-advisor')" style="display:none">
+<div class="modal-overlay" id="modal-price-advisor" onclick="if(event.target===this)closeModal('price-advisor')">
   <div class="modal modal-lg" style="max-width:800px">
     <div class="modal-header">
       <span class="modal-title">🤖 AI Suggerimento Prezzi</span>
