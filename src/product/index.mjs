@@ -52,6 +52,12 @@ export const PRODUCT_FILES = [
   /* La vista dello storico: dopo lo snapshot che legge e dopo `ui.js`, da cui
      prende `esc` e i dialoghi. */
   'order-economics.js',
+  /* Il registro di magazzino: puro, poi la metà che parla con il database.
+     Nessuno dei due dipende dal resto, ma l'ordine fra i due sì. */
+  'inventory-ledger.js',
+  'inventory-store.js',
+  /* La vista del registro: dopo il registro e dopo ui.js. */
+  'inventory-view.js',
   'first-run.js',
 ];
 

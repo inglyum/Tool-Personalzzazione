@@ -46,6 +46,15 @@ const Inventory={
   filter(v){this.filterVal=v.toLowerCase();this.render();},
   async adjust(id,delta){
     const item=await IDB.get('inventory',id);if(!item)return;
+    const Inv = typeof window !== 'undefined' && window.InglyInventory;
+    if (Inv) {
+      const esito = await Inv[delta >= 0 ? 'acquista' : 'consuma']('inventory', id, Math.abs(delta), {
+        itemName: item.name || null, unit: item.unit || null,
+        unitCost: item.costPrice != null ? +item.costPrice : null,
+        referenceType: 'MANUAL', note: 'rettifica manuale dall\'elenco articoli',
+      });
+      if (esito && esito.ok) { await this.render(); return; }
+    }
     item.stock=Math.max(0,(+item.stock||0)+delta);
     await IDB.put('inventory',item);
     await logAction('inventory',id,'stock_adjusted',{delta,stock:item.stock});
@@ -1024,6 +1033,7 @@ const ItemsModule = {
       else banner.style.display = 'none';
     }
     this._renderTable(pageItems, totalFiltered, totalPages);
+    await this._montaRegistro();
   },
 
   _renderTable(items, totalFiltered, totalPages) {
@@ -1110,9 +1120,36 @@ const ItemsModule = {
     }
   },
 
+  /* Il registro sotto la tabella delle giacenze: due cose separate, una sotto
+     l'altra, non due pannelli che si contendono lo stesso spazio. */
+  async _montaRegistro() {
+    const V = typeof window !== 'undefined' && window.InglyInventoryView;
+    if (!V || !document.getElementById('im-ledger')) return;
+    try { await V.monta('im-ledger'); } catch (e) { /* il registro non deve poter rompere il magazzino */ }
+  },
+
   async adjustQty(id, delta) {
     const item = await IDB.get('items', +id).catch(() => null);
     if (!item) return;
+
+    /* La giacenza non si scrive più: si **registra un movimento**, e la
+       giacenza è ciò che ne risulta. La differenza si vede quando due
+       operazioni si accavallano: leggi-modifica-scrivi ne perde una in
+       silenzio, il registro le tiene entrambe. */
+    const Inv = typeof window !== 'undefined' && window.InglyInventory;
+    if (Inv) {
+      const tipo = delta >= 0 ? 'acquista' : 'consuma';
+      const esito = await Inv[tipo]('items', item.id, Math.abs(delta), {
+        itemName: item.name || null, unit: item.unit || null,
+        unitCost: item.costPrice != null ? +item.costPrice : null,
+        referenceType: 'MANUAL',
+        note: delta >= 0 ? 'carico manuale dal magazzino' : 'scarico manuale dal magazzino',
+      });
+      if (esito && esito.ok) { await this.render(); return; }
+      /* Se il registro non è disponibile non si blocca il magazzino: si
+         scrive come prima, e la riconciliazione se ne accorgerà. */
+    }
+
     item.quantity = Math.max(0, +(item.quantity??item.qty??item.stock??0) + delta);
     item.updatedAt = new Date().toISOString();
     await IDB.put('items', item);

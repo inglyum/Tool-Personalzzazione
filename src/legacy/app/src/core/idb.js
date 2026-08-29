@@ -2,7 +2,7 @@
 // === /src/core/idb.js ===
 const IDB = (function(){
   let db=null;
-  const DB='InglyMasterDB',VER=30; // v30: v10 archive+lab+workflow // v28: laser_resources store // v26: always ≥ browser version // v23: re-added legacy stores (ai_log,kpi_snap,kpi_cache,scanner_history,versions) // v22: legacy stores removed (kpi_cache,versions,scanner_history,ai_log,kpi_snap) // v21: stores 'orders','quotes','sales' deprecated (kept read-only, pipeline is now source of truth) // v20: store pipeline unificata store
+  const DB='InglyMasterDB',VER=31; // v31: inventory_ledger — registro append-only dei movimenti di magazzino (migrazione additiva: nuovo store vuoto, nessun dato esistente toccato) // v30: v10 archive+lab+workflow // v28: laser_resources store // v26: always ≥ browser version // v23: re-added legacy stores (ai_log,kpi_snap,kpi_cache,scanner_history,versions) // v22: legacy stores removed (kpi_cache,versions,scanner_history,ai_log,kpi_snap) // v21: stores 'orders','quotes','sales' deprecated (kept read-only, pipeline is now source of truth) // v20: store pipeline unificata store
   const STORES=[
     {n:'clients',k:'id'},{n:'sales',k:'id'},{n:'quotes',k:'id'},
     {n:'inventory',k:'id'},{n:'cashflow',k:'id'},{n:'projects',k:'id'},
@@ -29,6 +29,9 @@ const IDB = (function(){
     {n:'products',k:'id'},         // Prodotti extra
     // ── v56: unified modules ─────────────────────────────
     {n:'items',k:'id'},            // Unified Items (inventory+components+materials+gadgets)
+    /* Il registro dei movimenti di magazzino: append-only. La giacenza dei
+       record resta, ma smette di essere la verità — la scrive questo. */
+    {n:'inventory_ledger',k:'id'},
     {n:'social_accounts',k:'id'}, // Social Studio accounts
     {n:'competitors',k:'id'},      // Market Intel competitor CRM
     {n:'paints',k:'id'},           // Vernici & Bombolette

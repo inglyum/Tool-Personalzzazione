@@ -7121,17 +7121,41 @@ const BarcodeScanner = {
     let prodName = code;
     try {
       const items = await IDB.getAll('inventory');
-      const match = items.find(i=>i.barcode===code||i.sku===code||i.name?.toLowerCase()===code.toLowerCase());
+      let match = items.find(i=>i.barcode===code||i.sku===code||i.name?.toLowerCase()===code.toLowerCase());
       if(match){
         prodName = match.name;
-        if(action==='scarico'&&match.quantity!==undefined){
-          match.quantity = Math.max(0,(match.quantity||0)-qty);
-          await IDB.put('inventory',match);
-          toast(`📦 Scaricato: ${match.name} (×${qty}) → rimane ${match.quantity}`);
-        } else if(action==='carico'){
-          match.quantity = (match.quantity||0)+qty;
-          await IDB.put('inventory',match);
-          toast(`📥 Caricato: ${match.name} (×${qty}) → totale ${match.quantity}`);
+        /* Il lettore scriveva `match.quantity` sullo store `inventory`, che il
+           magazzino legge come `match.stock`. Due nomi per la stessa giacenza:
+           lo scarico non partiva mai — il ramo era protetto da
+           `quantity!==undefined`, e `quantity` non esisteva — e il carico
+           creava un campo che nessuno rilegge. Un carico da lettore risultava
+           quindi in una scansione riuscita e in nessun pezzo in più.
+           Ora il movimento passa dal registro, che è l'unico posto in cui la
+           giacenza si scrive, e allinea entrambi i nomi. */
+        const Inv = typeof window !== 'undefined' && window.InglyInventory;
+        const giacenza = () => (match.stock!=null?+match.stock:(match.quantity!=null?+match.quantity:0));
+        if(action==='scarico'||action==='carico'){
+          const carico = action==='carico';
+          let fatto = false;
+          if(Inv){
+            const esito = await Inv[carico?'acquista':'consuma']('inventory', match.id, qty, {
+              itemName: match.name||null, unit: match.unit||null,
+              unitCost: match.costPrice!=null?+match.costPrice:null,
+              referenceType:'MANUAL', note:'lettore di codici a barre · '+code,
+            });
+            fatto = !!(esito&&esito.ok);
+          }
+          if(!fatto){
+            const campo = match.stock!=null?'stock':'quantity';
+            match[campo] = Math.max(0, giacenza() + (carico?qty:-qty));
+            await IDB.put('inventory',match);
+          } else {
+            const rilettura = await IDB.get('inventory', match.id).catch(()=>match);
+            if(rilettura) match = rilettura;
+          }
+          toast(carico
+            ? `📥 Caricato: ${match.name} (×${qty}) → totale ${giacenza()}`
+            : `📦 Scaricato: ${match.name} (×${qty}) → rimane ${giacenza()}`);
         }
       } else {
         prodName = 'Prodotto sconosciuto';

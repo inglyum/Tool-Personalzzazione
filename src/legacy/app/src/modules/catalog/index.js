@@ -2585,6 +2585,16 @@ const Components={
     const qty=+await askPrompt(`Disponibili: ${i.stock} ${i.unit||'pz'}`,1,{title:`Quante unità di "${i.name}" hai usato?`,type:'number'});
     if(!qty||qty<=0)return;
     if((+i.stock||0)<qty){toast('Quantità superiore allo stock disponibile!','error');return;}
+    /* Un consumo è un movimento del registro, non una sottrazione. */
+    const Inv = typeof window !== 'undefined' && window.InglyInventory;
+    if(Inv){
+      const esito = await Inv.consuma('components', id, qty, {
+        itemName: i.name||null, unit: i.unit||null,
+        unitCost: i.cost!=null?+i.cost:(i.costPrice!=null?+i.costPrice:null),
+        referenceType:'MANUAL', note:'consumo dichiarato dal catalogo componenti',
+      });
+      if(esito&&esito.ok){ toast(`−${qty} ${i.unit||'pz'} di ${i.name}`,'info'); await this.render(); return; }
+    }
     i.stock=Math.max(0,(+i.stock||0)-qty);
     await IDB.put('components',i);
     toast(`−${qty} ${i.unit||'pz'} di ${i.name}`,'info');
@@ -2594,6 +2604,15 @@ const Components={
     const i=await IDB.get('components',id);if(!i)return;
     const qty=+await askPrompt(`Quante unità aggiungere a "${i.name}"?`,10,{type:'number'});
     if(!qty||qty<=0)return;
+    const Inv2 = typeof window !== 'undefined' && window.InglyInventory;
+    if(Inv2){
+      const esito = await Inv2.acquista('components', id, qty, {
+        itemName: i.name||null, unit: i.unit||null,
+        unitCost: i.cost!=null?+i.cost:(i.costPrice!=null?+i.costPrice:null),
+        referenceType:'MANUAL', note:'riassortimento dal catalogo componenti',
+      });
+      if(esito&&esito.ok){ toast(`+${qty} ${i.unit||'pz'} di ${i.name} aggiunto! ✅`,'success'); await this.render(); return; }
+    }
     i.stock=(+i.stock||0)+qty;
     await IDB.put('components',i);
     toast(`+${qty} ${i.unit||'pz'} di ${i.name} aggiunto! ✅`,'success');
