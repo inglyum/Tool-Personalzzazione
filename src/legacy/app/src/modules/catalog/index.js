@@ -2407,16 +2407,64 @@ if(typeof Catalog!=="undefined")window.Catalog=Catalog; // immediate window expo
 
 // ===== CLIENTS - need populateSelect for projects  =====
 // ===== MARKETING =====
+/* PricingEngine non calcola più: traduce. La matematica sta in
+   `InglyCostEngine`, profilo generico — lo stesso motore del quoter 3D, del
+   laser e del tessile. Qui restano gli ingressi e la forma del risultato, che
+   il Catalogo e il Product Builder si aspettano invariata.
+
+   I numeri non cambiano: `suggest` chiedeva un prezzo da **ricarico** e
+   continua a chiederlo. Cambia che il ricarico e il margine ora hanno un solo
+   posto dove sono definiti, e che le voci aggiuntive (profitto, scaglioni di
+   quantità, avviamento ammortizzato) arrivano gratis dallo stesso conto. */
 const PricingEngine={
-  async suggest({materialCost=0,machineMin=0,laborMin=0,category=''}={}){
+  async suggest({materialCost=0,machineMin=0,laborMin=0,category='',qty=1,setupCost=0,extras=[]}={}){
     const cfg=await IDB.get('settings','main')||{};
     const mcost=+cfg.machineCost||0.35,lcost=+cfg.laborCost||0.50;
     const markup=+cfg.markup||40,vat=+cfg.vat||22;
-    const totalCost=+materialCost+(+machineMin*mcost)+(+laborMin*lcost);
-    const net=totalCost*(1+markup/100);
-    const gross=net*(1+vat/100);
-    const margin=net>0?(1-totalCost/net)*100:0;
-    return{totalCost:+totalCost.toFixed(2),net:+net.toFixed(2),gross:+gross.toFixed(2),margin:+margin.toFixed(1),markup};
+    const motore=(typeof window!=='undefined')&&window.InglyCostEngine;
+
+    if(!motore){
+      /* Senza il motore non si indovina un prezzo: si dice che manca. */
+      return{empty:true,reason:'Motore di costo non disponibile',totalCost:0,net:0,gross:0,margin:0,markup};
+    }
+
+    const ingresso={
+      tecnologia:'generico',
+      qty:Math.max(1,+qty||1),
+      costiUnaTantum:+setupCost>0?[{id:'avviamento',label:'Avviamento',value:+setupCost}]:[],
+      costiPerPezzo:[
+        {id:'materiale',label:'Materiale',value:+materialCost||0},
+        {id:'macchina', label:'Macchina', value:(+machineMin||0)*mcost,detail:(+machineMin||0)+' min'},
+        {id:'manodopera',label:'Manodopera',value:(+laborMin||0)*lcost,detail:(+laborMin||0)+' min',perdibile:false},
+      ],
+      extras:extras,
+    };
+    const opzioni={strategia:'ricarico',ricarico:1+markup/100,ivaPct:vat};
+
+    const c=motore.calcola(ingresso);
+    const p=motore.prezzo(c.costoPezzo,opzioni);
+
+    return{
+      /* Forma storica, invariata per chi la legge già. */
+      totalCost:+c.costoPezzo.toFixed(2),
+      net:+p.netto.toFixed(2),
+      gross:+p.lordo.toFixed(2),
+      margin:+p.marginePct.toFixed(1),
+      markup,
+      /* Voci nuove: additive, nessun chiamante esistente le vede sparire. */
+      realCost:c.costoPezzo,
+      costPerUnit:c.costoPezzo,
+      priceNet:p.netto,
+      vat:p.iva,
+      priceGross:p.lordo,
+      profit:p.profittoLordo,
+      profitOperating:p.profittoOperativo,
+      markupPct:p.ricaricoPct,
+      setupPerUnit:c.unaTantum.perPezzo,
+      quantityTiers:motore.scaglioni(ingresso,null,opzioni),
+      breakdown:c.perPezzo.voci,
+      category,
+    };
   }
 };
 

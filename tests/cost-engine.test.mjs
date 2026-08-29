@@ -246,7 +246,42 @@ test('scaglioni', async (t) => {
 
 test('profili di tecnologia', async (t) => {
   await t.test('le cinque tecnologie richieste esistono', () => {
-    assert.equal([...E.tecnologie()].sort().join(','), 'dtf,laser,print3d,sublimation,uv');
+    const presenti = [...E.tecnologie()];
+    for (const t of ['print3d', 'laser', 'uv', 'dtf', 'sublimation']) {
+      assert.ok(presenti.includes(t), 'manca il profilo ' + t);
+    }
+  });
+
+  await t.test('il profilo generico esiste come via di migrazione', () => {
+    /* Serve alle lavorazioni i cui costi il chiamante ha già in mano —
+       serigrafia, ricamo, transfer — e a chi migra da un calcolatore storico.
+       Non è una scorciatoia: applica lo stesso modello a costi dichiarati. */
+    assert.ok([...E.tecnologie()].includes('generico'));
+    const c = E.calcola({
+      tecnologia: 'generico', qty: 10,
+      costiUnaTantum: [{ id: 'telaio', label: 'Telai serigrafici', value: 40 }],
+      costiPerPezzo: [{ id: 'capo', label: 'Capo', value: 3.2 }, { id: 'stampa', label: 'Stampa', value: 0.35 }],
+    });
+    assert.ok(Math.abs(c.unaTantum.perPezzo - 4) < 0.0001, 'i 40 € di telai su 10 pezzi fanno 4 € a capo');
+    assert.ok(Math.abs(c.costoPezzo - (3.2 + 0.35 + 4)) < 0.0001);
+  });
+
+  await t.test('generico: a 200 pezzi il telaio pesa 20 centesimi, non 4 euro', () => {
+    const base = {
+      tecnologia: 'generico',
+      costiUnaTantum: [{ id: 'telaio', value: 40 }],
+      costiPerPezzo: [{ id: 'capo', value: 3.2 }, { id: 'stampa', value: 0.35 }],
+    };
+    assert.ok(Math.abs(E.calcola({ ...base, qty: 200 }).unaTantum.perPezzo - 0.2) < 0.0001);
+  });
+
+  await t.test('generico: una voce dichiarata non perdibile resta fuori dallo scarto', () => {
+    const c = E.calcola({
+      tecnologia: 'generico', qty: 1, failureRate: 50,
+      costiPerPezzo: [{ id: 'capo', value: 10 }, { id: 'consegna', value: 5, perdibile: false }],
+    });
+    const scarto = c.perPezzo.voci.find((v) => v.id === 'scarto').value;
+    assert.ok(Math.abs(scarto - 10) < 0.0001, 'al 50% si raddoppia il capo, non la consegna');
   });
 
   await t.test('laser: la resa del foglio decide il costo del materiale', () => {
@@ -337,4 +372,304 @@ test('preventiva — costo, prezzo e scaglioni in un colpo', () => {
   assert.ok(Math.abs(r.prezzo.marginePct - 45) < 0.001);
   assert.equal(r.scaglioni.length, E.SCAGLIONI.length);
   for (const s of r.scaglioni) assert.ok(s.marginePct >= 19.99, 'qty ' + s.qty);
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Un motore condiviso da sei moduli deve reggere garanzie che un calcolatore
+   isolato non ha bisogno di dare: non toccare ciò che riceve, rispondere
+   sempre allo stesso modo, e non produrre mai un numero che non ha senso —
+   qualunque combinazione di ingressi arrivi da qualunque schermata.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+test('immutabilità — il motore non tocca ciò che riceve', async (t) => {
+  await t.test('l\'input non viene modificato', () => {
+    const input = { ...LASER, qty: 10, extras: [{ cost: 5 }] };
+    const copia = JSON.parse(JSON.stringify(input));
+    E.calcola(input);
+    E.prezzo(10, { strategia: 'margine', marginePct: 40 });
+    E.scaglioni(input, [1, 10], {});
+    E.explain(input, {});
+    assert.equal(JSON.stringify(input), JSON.stringify(copia), 'l\'input è stato modificato');
+  });
+
+  await t.test('un risultato non cambia se l\'input cambia dopo', () => {
+    /* Il caso vero: una schermata calcola, poi l'utente digita in un campo e
+       l'oggetto di stato viene aggiornato. Il preventivo già mostrato non deve
+       cambiare da solo sotto gli occhi di chi lo sta leggendo. */
+    const input = { ...TREDI, qty: 10 };
+    const primo = E.calcola(input);
+    const costoPrimo = primo.costoPezzo;
+    const vociPrimo = primo.perPezzo.voci.length;
+
+    input.grams = 5000;
+    input.qty = 1;
+    const secondo = E.calcola(input);
+
+    assert.equal(primo.costoPezzo, costoPrimo, 'il primo risultato è cambiato');
+    assert.equal(primo.perPezzo.voci.length, vociPrimo);
+    assert.ok(secondo.costoPezzo !== costoPrimo, 'il secondo deve invece riflettere il nuovo input');
+  });
+
+  await t.test('modificare il risultato non altera i calcoli successivi', () => {
+    const r = E.calcola({ ...TREDI, qty: 5 });
+    r.perPezzo.voci.push({ id: 'inventata', value: 999 });
+    r.costoPezzo = -1;
+    const dopo = E.calcola({ ...TREDI, qty: 5 });
+    assert.ok(dopo.costoPezzo > 0);
+    assert.ok(!dopo.perPezzo.voci.some((v) => v.id === 'inventata'));
+  });
+});
+
+test('determinismo — nessun orologio, nessun caso, nessuno stato', async (t) => {
+  await t.test('cento chiamate identiche danno cento risultati identici', () => {
+    const atteso = JSON.stringify(E.calcola({ ...LASER, qty: 7 }));
+    for (let n = 0; n < 100; n += 1) {
+      assert.equal(JSON.stringify(E.calcola({ ...LASER, qty: 7 })), atteso, 'variazione alla chiamata ' + n);
+    }
+  });
+
+  await t.test('l\'ordine delle chiamate non cambia i risultati', () => {
+    const a1 = E.calcola({ ...TREDI, qty: 1 }).costoPezzo;
+    E.calcola({ ...LASER, qty: 500 });
+    E.scaglioni(LASER, null, {});
+    const a2 = E.calcola({ ...TREDI, qty: 1 }).costoPezzo;
+    assert.equal(a1, a2);
+  });
+
+  await t.test('il sorgente non contiene sorgenti di non determinismo', () => {
+    /* Non basta che i risultati coincidano oggi: il motore non deve poter
+       leggere l'orologio, il caso, l'archivio o la pagina — nemmeno domani. */
+    const sorgente = fs.readFileSync('src/product/cost-engine.js', 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .split('\n').map((r) => (/^\s*\/\//.test(r) ? '' : r)).join('\n');
+    for (const vietato of ['Math.random', 'new Date', 'Date.now', 'localStorage', 'document.', 'window.', 'fetch(', 'IDB']) {
+      assert.ok(!sorgente.includes(vietato), 'il motore usa ' + vietato);
+    }
+  });
+});
+
+test('invarianti — nessuna combinazione produce un numero senza senso', async (t) => {
+  /* Griglia deterministica su tutte le tecnologie: 5 profili × 8 quantità ×
+     5 tassi di scarto × 4 tariffe. Non è casualità — è esaustività su una
+     griglia scelta, che si può ripetere identica. */
+  const BASI = {
+    print3d: TREDI,
+    laser: LASER,
+    uv: { tecnologia: 'uv', printAreaMm2: 10000, inkMlPerM2: 12, inkPricePerMl: 0.35, blankPrice: 4, speedM2Hour: 3, handlingMin: 2 },
+    dtf: { tecnologia: 'dtf', printAreaMm2: 40000, filmWidthMm: 600, graphicWidthMm: 200, graphicHeightMm: 250, filmPricePerM2: 8, inkMlPerM2: 14, inkPricePerMl: 0.3, powderGPerM2: 60, powderPricePerKg: 25, blankPrice: 3.2, pressSec: 25, handlingMin: 1 },
+    sublimation: { tecnologia: 'sublimation', blankPrice: 5, sheets: 1, sheetPrice: 0.4, printAreaMm2: 60000, inkMlPerM2: 10, inkPricePerMl: 0.5, pressSec: 45, handlingMin: 1 },
+    generico: { tecnologia: 'generico', costiPerPezzo: [{ id: 'capo', value: 3.2 }], costiUnaTantum: [{ id: 'telaio', value: 40 }] },
+  };
+
+  await t.test('costo mai negativo, mai NaN, mai infinito', () => {
+    const rotti = [];
+    for (const [tec, base] of Object.entries(BASI)) {
+      for (const qty of [1, 2, 5, 10, 100, 1000]) {
+        for (const failureRate of [0, 5, 10, 20, 50]) {
+          for (const laborPerHour of [0, 18, 120]) {
+            const c = E.calcola({ ...base, qty, failureRate, laborPerHour });
+            if (!isFinite(c.costoPezzo) || c.costoPezzo < 0) rotti.push({ tec, qty, failureRate, laborPerHour, costo: c.costoPezzo });
+            if (!isFinite(c.costoTotale) || c.costoTotale < 0) rotti.push({ tec, qty, nota: 'totale', costo: c.costoTotale });
+          }
+        }
+      }
+    }
+    assert.equal(rotti.length, 0, JSON.stringify(rotti.slice(0, 3)));
+  });
+
+  await t.test('il costo unitario non risale mai al crescere della quantità', () => {
+    const rotti = [];
+    for (const [tec, base] of Object.entries(BASI)) {
+      let prec = Infinity;
+      for (const qty of [1, 2, 5, 10, 20, 50, 100, 250, 500, 1000]) {
+        const c = E.calcola({ ...base, qty, setupMin: 30 }).costoPezzo;
+        if (c > prec + 1e-9) rotti.push({ tec, qty, prec, c });
+        prec = c;
+      }
+    }
+    assert.equal(rotti.length, 0, JSON.stringify(rotti.slice(0, 3)));
+  });
+
+  await t.test('più scarto non può costare meno', () => {
+    const rotti = [];
+    for (const [tec, base] of Object.entries(BASI)) {
+      let prec = -1;
+      for (const failureRate of [0, 1, 5, 10, 20, 40, 60, 80]) {
+        const c = E.calcola({ ...base, qty: 10, failureRate }).costoPezzo;
+        if (c < prec - 1e-9) rotti.push({ tec, failureRate, prec, c });
+        prec = c;
+      }
+    }
+    assert.equal(rotti.length, 0, JSON.stringify(rotti.slice(0, 3)));
+  });
+
+  await t.test('una macchina più cara non può costare meno', () => {
+    const rotti = [];
+    for (const [tec, base] of Object.entries(BASI)) {
+      let prec = -1;
+      for (const machinePrice of [0, 500, 1200, 3000, 9000]) {
+        const c = E.calcola({ ...base, qty: 10, machinePrice, machineLifeHours: 5000, hours: 2 }).costoPezzo;
+        if (c < prec - 1e-9) rotti.push({ tec, machinePrice, prec, c });
+        prec = c;
+      }
+    }
+    assert.equal(rotti.length, 0, JSON.stringify(rotti.slice(0, 3)));
+  });
+
+  await t.test('una manodopera più cara non può costare meno', () => {
+    const rotti = [];
+    for (const [tec, base] of Object.entries(BASI)) {
+      let prec = -1;
+      for (const laborPerHour of [0, 10, 18, 35, 80]) {
+        const c = E.calcola({ ...base, qty: 10, laborPerHour, setupMin: 20, finishMin: 5, handlingMin: 5 }).costoPezzo;
+        if (c < prec - 1e-9) rotti.push({ tec, laborPerHour, prec, c });
+        prec = c;
+      }
+    }
+    assert.equal(rotti.length, 0, JSON.stringify(rotti.slice(0, 3)));
+  });
+
+  await t.test('margine sempre sotto il 100, ricarico mai sotto il −100', () => {
+    const rotti = [];
+    for (const costo of [0, 0.01, 1, 100, 10000]) {
+      for (const strategia of ['margine', 'ricarico', 'fisso']) {
+        for (const scontoPct of [0, 25, 50, 99]) {
+          const p = E.prezzo(costo, { strategia, marginePct: 40, ricarico: 1.4, prezzoFisso: 50, scontoPct });
+          if (p.marginePct > 100 + 1e-9) rotti.push({ costo, strategia, scontoPct, margine: p.marginePct });
+          if (p.ricaricoPct < -100 - 1e-9) rotti.push({ costo, strategia, scontoPct, ricarico: p.ricaricoPct });
+          if (!isFinite(p.netto) || !isFinite(p.profittoOperativo)) rotti.push({ costo, strategia, scontoPct, nota: 'non finito' });
+        }
+      }
+    }
+    assert.equal(rotti.length, 0, JSON.stringify(rotti.slice(0, 3)));
+  });
+});
+
+test('profitto reale — l\'IVA non è mai profitto', async (t) => {
+  await t.test('quattro livelli, ognuno più basso del precedente', () => {
+    const p = E.prezzo(100, {
+      strategia: 'margine', marginePct: 50, ivaPct: 22,
+      commissionePct: 10, commissioneFissa: 0.35, spedizione: 6, altriCostiVariabili: 2,
+    });
+    assert.ok(p.profittoLordo > p.profittoDopoCommissioni);
+    assert.ok(p.profittoDopoCommissioni > p.profittoDopoSpedizione);
+    assert.ok(p.profittoDopoSpedizione > p.profittoOperativo);
+    assert.equal(+(p.profittoLordo).toFixed(6), 100);
+  });
+
+  await t.test('la spedizione entra nel conto, non solo nella vista', () => {
+    const senza = E.prezzo(100, { strategia: 'fisso', prezzoFisso: 200 });
+    const con = E.prezzo(100, { strategia: 'fisso', prezzoFisso: 200, spedizione: 8 });
+    assert.equal(con.profittoOperativo, senza.profittoOperativo - 8);
+  });
+
+  await t.test('la spedizione addebitata al cliente non è un costo', () => {
+    const p = E.prezzo(100, { strategia: 'fisso', prezzoFisso: 200, spedizione: 8, spedizioneAddebitata: true });
+    assert.equal(p.spedizione, 0);
+    assert.equal(p.profittoOperativo, 100);
+  });
+
+  await t.test('l\'IVA non compare in nessuna riga di profitto', () => {
+    const senzaIva = E.prezzo(100, { strategia: 'fisso', prezzoFisso: 200, ivaPct: 0 });
+    const conIva = E.prezzo(100, { strategia: 'fisso', prezzoFisso: 200, ivaPct: 22 });
+    assert.equal(senzaIva.profittoLordo, conIva.profittoLordo);
+    assert.equal(senzaIva.profittoOperativo, conIva.profittoOperativo);
+  });
+});
+
+test('validateInput — dice cosa manca prima di calcolare', async (t) => {
+  await t.test('distingue un problema da un\'incompletezza', () => {
+    const v = E.validateInput({ tecnologia: 'print3d', grams: 50 });
+    assert.equal(v.ok, true, 'un input incompleto non è un errore');
+    assert.ok(v.avvisi.some((a) => /materialPricePerKg/.test(a)));
+  });
+
+  await t.test('uno scarto impossibile è un problema, non un avviso', () => {
+    const v = E.validateInput({ tecnologia: 'print3d', failureRate: 95 });
+    assert.equal(v.ok, false);
+    assert.ok(v.problemi.some((p) => /failureRate/.test(p)));
+  });
+
+  await t.test('un campo che nessun profilo legge viene segnalato', () => {
+    /* Un numero scritto in un campo dal nome sbagliato non protesta da solo:
+       resta lì, e il preventivo esce più basso senza che nessuno capisca. */
+    const v = E.validateInput({ tecnologia: 'laser', costoMateriale: 12 });
+    assert.ok(v.avvisi.some((a) => /costoMateriale.*ignorato/.test(a)));
+  });
+
+  await t.test('un valore negativo viene detto, non taciuto', () => {
+    const v = E.validateInput({ tecnologia: 'print3d', grams: -50 });
+    assert.ok(v.avvisi.some((a) => /negativo/.test(a)));
+  });
+
+  await t.test('una tecnologia sconosciuta è un problema', () => {
+    assert.equal(E.validateInput({ tecnologia: 'magia' }).ok, false);
+  });
+});
+
+test('explain — da dove arriva il prezzo', async (t) => {
+  const spiegazione = E.explain({ ...TREDI, qty: 10, failureRate: 8, packagingPerUnit: 0.5, overheadPct: 10 },
+    { strategia: 'margine', marginePct: 45, ivaPct: 22, commissionePct: 8, spedizione: 4 });
+
+  await t.test('ogni riga porta etichetta, formula, ingressi e risultato', () => {
+    assert.ok(spiegazione.voci.length > 8);
+    for (const r of spiegazione.voci) {
+      assert.ok(r.label, 'riga senza etichetta');
+      assert.ok(r.formula, 'riga senza formula: ' + r.label);
+      assert.ok(typeof r.result === 'number' && isFinite(r.result), 'risultato non numerico: ' + r.label);
+      assert.ok(r.fonte, 'riga senza provenienza: ' + r.label);
+    }
+  });
+
+  await t.test('copre tutto il tragitto: costo, prezzo, IVA, profitto', () => {
+    const gruppi = new Set(spiegazione.voci.map((r) => r.gruppo));
+    for (const g of ['una tantum', 'per pezzo', 'costo', 'prezzo', 'profitto']) {
+      assert.ok(gruppi.has(g), 'manca il gruppo ' + g);
+    }
+    const ids = spiegazione.voci.map((r) => r.id);
+    for (const id of ['costoPezzo', 'netto', 'iva', 'lordo', 'profittoLordo', 'operativo']) {
+      assert.ok(ids.includes(id), 'manca la riga ' + id);
+    }
+  });
+
+  await t.test('le somme del dettaglio tornano con il totale', () => {
+    const costo = spiegazione.voci.find((r) => r.id === 'costoPezzo').result;
+    assert.ok(Math.abs(costo - spiegazione.costo.costoPezzo) < 1e-9);
+    const netto = spiegazione.voci.find((r) => r.id === 'netto').result;
+    const iva = spiegazione.voci.find((r) => r.id === 'iva').result;
+    const lordo = spiegazione.voci.find((r) => r.id === 'lordo').result;
+    assert.ok(Math.abs(netto + iva - lordo) < 1e-9);
+  });
+
+  await t.test('la provenienza di un numero configurato viene riportata', () => {
+    /* Il motore non può sapere da dove arriva un numero: lo dichiara chi lo
+       chiama. Quello che sa dire da sé è se il campo c'era o no. */
+    const s = E.explain({ ...TREDI, qty: 1, fonti: { kwhPrice: 'configurato', materialPricePerKg: 'magazzino' } }, {});
+    assert.equal(s.voci.find((r) => r.id === 'energia').fonte, 'configurato');
+    assert.equal(s.voci.find((r) => r.id === 'materiale').fonte, 'magazzino');
+  });
+
+  await t.test('un dato mancante si dichiara mancante, non si finge', () => {
+    const s = E.explain({ tecnologia: 'print3d', grams: 10, materialPricePerKg: 20, failureRate: 5 }, {});
+    assert.equal(s.voci.find((r) => r.id === 'scarto').fonte, 'inserito');
+    const s2 = E.explain({ tecnologia: 'print3d', grams: 10, materialPricePerKg: 20 }, {});
+    assert.ok(!s2.voci.some((r) => r.id === 'scarto'), 'senza tasso non si inventa uno scarto');
+  });
+
+  await t.test('quando il pavimento scatta, lo dice', () => {
+    const s = E.explain({ ...TREDI, qty: 1 }, { strategia: 'ricarico', ricarico: 1.4, scontoPct: 35, marginePavimentoPct: 20 });
+    assert.ok(s.voci.some((r) => r.id === 'pavimento'));
+  });
+
+  await t.test('porta con sé la validazione dell\'input', () => {
+    assert.ok(spiegazione.validazione);
+    assert.equal(typeof spiegazione.validazione.ok, 'boolean');
+  });
+});
+
+test('API stabile', () => {
+  for (const nome of ['version', 'calcola', 'prezzo', 'scaglioni', 'preventiva', 'validateInput', 'explain', 'tecnologie']) {
+    assert.ok(E[nome] !== undefined, 'manca ' + nome);
+  }
+  assert.match(E.version, /^\d+\.\d+\.\d+$/);
 });

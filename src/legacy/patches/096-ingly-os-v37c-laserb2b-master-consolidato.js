@@ -104,26 +104,82 @@
     }
 
     // ── CALCOLO PRINCIPALE ─────────────────────────────────────────
+    /* Politiche di prezzo, non formule: erano scritte nel codice e ora hanno un
+       nome e un posto. `cfg` può sovrascriverle — è ciò che le rende
+       configurabili invece che sepolte. */
+    var POLITICHE = {
+      prezzoMinimo:      15,    // € — sotto questa cifra un lavoro non si apre
+      maggiorazioneExpress: 25, // % — urgenza sotto le 48 ore
+      quotaRivenditore:  65,    // % del prezzo di listino riconosciuta al rivenditore
+      marginePavimento:  15,    // % — nessuno sconto può scendere sotto
+    };
+
+    /* Il conto passa da `InglyCostEngine`. Restano qui i driver che sono
+       davvero del laser B2B — lo sconto sul materiale a volume, il tempo
+       macchina che cala con il lotto, il doppio lato — perché sono conoscenza
+       di mestiere, non matematica di prezzo.
+       Quello che se ne va è la matematica: ricarico, margine, profitto e
+       pavimento adesso sono definiti in un posto solo per tutto INGLY OS. */
     LaserB2B._calcV32 = function(){
       var p = this._selProduct; if(!p) return null;
       var m = machines[cfg.machine]; if(!m) return null;
+      var motore = (typeof window!=='undefined') && window.InglyCostEngine;
       var qty = this._selQty||1;
       var sidesMult = cfg.sides==='both'?2.0:1.0;
       var sidesSetup = cfg.sides==='both'?0.5:0;
+      /* Comprare di più costa meno al pezzo: è uno sconto sul **costo**, non
+         sul prezzo, e per questo può convivere con il pavimento di margine. */
       var sd = qty>=50?.20:qty>=25?.15:qty>=10?.10:0;
       var mc = (p.costSup||p.cost||0)*(1-sd);
       var tm = ((p.timeMin||1.5)*sidesMult+sidesSetup)*(qty>=100?.85:qty>=50?.92:qty>=20?.96:1);
       var mhc = (m.hourly+(m.energyH||0))/60*tm;
       var lc  = cfg.labor/60*tm;
-      var cp  = mc+mhc+lc+cfg.pack;
-      var expressMult = cfg.express?1.25:1; // urgenza <48h = +25% servizio express (SALES_PLAYBOOK.md)
-      var fp  = Math.max(15,cp*cfg.markup*expressMult);
-      var profit = fp-cp;
-      var mg  = fp>0?Math.round(profit/fp*100):0;
-      var md  = Math.max(0,Math.round((1-cp/(0.65*(fp||1)))*100));
+
+      var pol = Object.assign({}, POLITICHE, cfg.politiche||{});
+      var expressMult = cfg.express ? 1 + pol.maggiorazioneExpress/100 : 1;
+
+      if(!motore){
+        /* Nessun prezzo indovinato: si dichiara che il motore manca. */
+        return { p,m,qty,sides:cfg.sides,sidesMult,sidesSetup,sd,mc,tm,mhc,lc,express:cfg.express,
+                 cp:0,fp:0,profit:0,mg:0,md:0,total:0,costTotal:0,profitTotal:0,
+                 matCost:p.costSup||p.cost||0, indisponibile:true };
+      }
+
+      var c = motore.calcola({
+        tecnologia:'generico',
+        qty:qty,
+        costiPerPezzo:[
+          {id:'materiale', label:'Materiale', value:mc, detail:(sd?Math.round(sd*100)+'% di sconto a volume':'prezzo pieno')},
+          {id:'macchina',  label:'Macchina ed energia', value:mhc, detail:tm.toFixed(2)+' min'},
+          {id:'manodopera',label:'Manodopera', value:lc, detail:tm.toFixed(2)+' min', perdibile:false},
+          {id:'packaging', label:'Confezione', value:cfg.pack, perdibile:false},
+        ],
+        failureRate: cfg.failureRate || 0,
+      });
+      var cp = c.costoPezzo;
+
+      var pr = motore.prezzo(cp, {
+        strategia:'ricarico',
+        ricarico: cfg.markup * expressMult,
+        marginePavimentoPct: pol.marginePavimento,
+        ivaPct: 0,
+      });
+      /* Il prezzo minimo del lavoro resta l'ultima parola: è una politica
+         commerciale, non un margine. */
+      var fp = Math.max(pol.prezzoMinimo, pr.netto);
+      var profit = fp - cp;
+      var mg = fp>0 ? Math.round(profit/fp*100) : 0;
+      /* Margine del rivenditore: quanto resta a chi rivende alla propria quota. */
+      var md = Math.max(0, Math.round((1 - cp/((pol.quotaRivenditore/100)*(fp||1)))*100));
+
       return { p,m,qty,sides:cfg.sides,sidesMult,sidesSetup,sd,mc,tm,mhc,lc,express:cfg.express,
                cp,fp,profit,mg,md,total:fp*qty,costTotal:cp*qty,profitTotal:profit*qty,
-               matCost:p.costSup||p.cost||0 };
+               matCost:p.costSup||p.cost||0,
+               /* Nuovi, additivi: nessuna schermata esistente li perde. */
+               markupPct:pr.ricaricoPct, marginePct:pr.marginePct,
+               pavimentoScattato:pr.pavimentoScattato, politiche:pol,
+               scaglioni:motore.scaglioni({tecnologia:'generico',costiPerPezzo:c.perPezzo.voci.map(function(v){return {id:v.id,value:v.value,perdibile:v.perdibile};})},
+                 [1,10,25,50,100,250,500], {strategia:'ricarico',ricarico:cfg.markup*expressMult,marginePavimentoPct:pol.marginePavimento,ivaPct:0}) };
     };
 
     // ── RENDER PRINCIPALE ──────────────────────────────────────────

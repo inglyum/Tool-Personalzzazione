@@ -58,85 +58,77 @@
    * minuti come indicato. Nessun campo è obbligatorio: quello che manca vale
    * zero e la voce corrispondente non compare.
    */
+  /* ── Adapter, non motore ──────────────────────────────────────────────────
+     Questa funzione non calcola più: traduce. Prende l'input storico del
+     calcolatore 3D, lo passa a `InglyCostEngine` con il profilo `print3d`, e
+     riporta il risultato nella forma che il quoter e le sue schermate si
+     aspettano da sempre.
+
+     La differenza è invisibile dall'esterno e sostanziale dentro: la matematica
+     dei prezzi vive in un posto solo. Se domani la formula dell'ammortamento
+     cambia, cambia per il 3D, per il laser e per il tessile insieme — invece
+     di cambiare in uno dei tre e restare vecchia negli altri, che è
+     esattamente come sono nati i difetti che questo progetto ha misurato.
+
+     Due nomi cambiano nel tragitto e vanno ritradotti indietro:
+       · il motore chiama `macchina` ciò che qui si chiama `ammortamento`;
+       · il motore tiene l'avviamento fra i costi una tantum e la finitura fra
+         quelli per pezzo, mentre qui erano sommati in `manodopera`.
+     La somma è identica: il test di equivalenza lo verifica su 200 casi. */
   function cost(input) {
     var i = input || {};
-    var qty = Math.max(1, num(i.qty, 1));
-    var ore = pos(i.hours);
-
-    /* ── Materiale ────────────────────────────────────────────────────────
-       Si accettano i grammi diretti oppure il volume dello slicer con la
-       densità del materiale — che è il dato che si ha davvero sott'occhio. */
-    var grammi = pos(i.grams);
-    if (!grammi && i.volumeCm3) {
-      var d = num(i.density) || DENSITA[String(i.material || '').toLowerCase()] || 1.24;
-      grammi = pos(i.volumeCm3) * Math.max(0.01, d);
+    var motore = global.InglyCostEngine;
+    if (!motore) {
+      /* Senza il motore non si indovina un prezzo: si dice che non c'è. Un
+         preventivo sbagliato è peggio di un preventivo mancante. */
+      return { empty: true, motivo: 'InglyCostEngine non disponibile', voci: [], costo: 0,
+        strategie: [], grammi: 0, quantita: 1, costoOrarioMacchina: 0,
+        prezzoDaMargine: function () { return 0; },
+        prezzoDaRicarico: function () { return 0; },
+        margineDi: function () { return 0; } };
     }
-    var supporti = pos(i.supportGrams);
-    var prezzoKg = pos(i.materialPricePerKg);
-    if (!prezzoKg && i.spoolPrice && i.spoolGrams) prezzoKg = (pos(i.spoolPrice) / pos(i.spoolGrams)) * 1000;
-    var materiale = ((grammi + supporti) / 1000) * prezzoKg;
 
-    /* ── Energia ──────────────────────────────────────────────────────────
-       La potenza di targa non è quella assorbita: una stampante da 350 W ne
-       consuma in media una frazione, perché il riscaldatore lavora a
-       intermittenza. `dutyCycle` lo rappresenta, e vale 1 se non lo si dichiara. */
-    var energia = (pos(i.watt) / 1000) * ore * pos(i.kwhPrice) * Math.max(0, Math.min(1, num(i.dutyCycle, 1) || 1));
+    var qty = Math.max(1, num(i.qty, 1));
+    var c = motore.calcola({
+      tecnologia: 'print3d',
+      qty: qty,
+      grams: i.grams, volumeCm3: i.volumeCm3, density: i.density, material: i.material,
+      supportGrams: i.supportGrams, purgeGrams: i.purgeGrams,
+      materialPricePerKg: i.materialPricePerKg, spoolPrice: i.spoolPrice, spoolGrams: i.spoolGrams,
+      hours: i.hours, watt: i.watt, kwhPrice: i.kwhPrice, dutyCycle: i.dutyCycle,
+      machinePrice: i.machinePrice, residualValue: i.residualValue, machineLifeHours: i.machineLifeHours,
+      maintenancePerHour: i.maintenancePerHour,
+      washCureMin: i.washCureMin, consumablesPerPrint: i.consumablesPerPrint,
+      setupMin: i.setupMin, finishMin: i.finishMin, laborPerHour: i.laborPerHour,
+      packagingPerUnit: i.packagingPerUnit, failureRate: i.failureRate,
+      extras: i.extras,
+    });
 
-    /* ── Ammortamento ─────────────────────────────────────────────────────
-       Costo della macchina spalmato sulle ore di vita utile. */
-    var vita = pos(i.machineLifeHours);
-    /* Una macchina a fine vita non vale zero: si rivende. Si ammortizza la
-       differenza, non il prezzo pieno. */
-    var daAmmortizzare = Math.max(0, pos(i.machinePrice) - pos(i.residualValue));
-    var costoOrarioMacchina = vita > 0 ? daAmmortizzare / vita : 0;
-    var ammortamento = costoOrarioMacchina * ore;
+    var totale = c.costoPezzo;
+    var trova = function (id) {
+      var v = c.perPezzo.voci.filter(function (x) { return x.id === id; })[0];
+      return v ? v.value : 0;
+    };
+    var dettaglio = function (id) {
+      var v = c.perPezzo.voci.filter(function (x) { return x.id === id; })[0];
+      return v ? v.detail : '';
+    };
 
-    /* ── Manutenzione e consumabili ───────────────────────────────────────
-       Ugelli, piatti, film FEP, alcool, guanti. Si consumano a ore di lavoro,
-       non con l'invecchiamento della macchina: sono una voce a sé. */
-    var manutenzione = pos(i.maintenancePerHour) * ore;
-
-    /* ── Post-processo ────────────────────────────────────────────────────
-       Per la resina è obbligatorio: lavaggio e polimerizzazione. Per FDM è la
-       rimozione dei supporti e la carteggiatura. */
-    var oreLavoro = pos(i.washCureMin) / 60;
-    var postProcesso = oreLavoro * pos(i.laborPerHour) + pos(i.consumablesPerPrint);
-
-    /* ── Manodopera ───────────────────────────────────────────────────────
-       Il setup si paga una volta per lavoro, la finitura una volta per pezzo. */
-    var setupPerPezzo = (pos(i.setupMin) / 60) * pos(i.laborPerHour) / qty;
-    var finitura = (pos(i.finishMin) / 60) * pos(i.laborPerHour);
-    var manodopera = setupPerPezzo + finitura;
-
-    /* Scatola, pluriball, etichetta: si pagano per pezzo e finiscono nel
-       prezzo di chi compra, non nella spesa generale del laboratorio. */
-    var packaging = pos(i.packagingPerUnit);
-
-    var extra = (i.extras || []).reduce(function (a, e) { return a + pos(e && e.cost); }, 0);
-
-    /* ── Scarto ───────────────────────────────────────────────────────────
-       Una stampa fallita consuma materiale, corrente, ore macchina e
-       manutenzione — non la manodopera di finitura, che non è ancora stata
-       fatta. Si applica solo a ciò che si perde davvero. */
-    var perdibile = materiale + energia + ammortamento + manutenzione;
-    var tasso = Math.max(0, Math.min(90, pos(i.failureRate))) / 100;
-    var scarto = perdibile * (tasso / (1 - tasso || 1));
+    /* Manodopera storica = avviamento diviso per la quantità + finitura. */
+    var manodopera = c.unaTantum.perPezzo + trova('finitura');
 
     var voci = [
-      { id: 'materiale', label: 'Materiale', value: materiale,
-        detail: Math.round(grammi + supporti) + ' g' + (supporti ? ' (di cui ' + Math.round(supporti) + ' g di supporti)' : '') },
-      { id: 'energia', label: 'Energia', value: energia, detail: num(i.watt) + ' W × ' + ore.toFixed(2) + ' h' },
-      { id: 'ammortamento', label: 'Ammortamento macchina', value: ammortamento, detail: vita ? vita + ' h di vita utile' : 'vita utile non indicata' },
-      { id: 'manutenzione', label: 'Manutenzione e consumabili', value: manutenzione, detail: ore.toFixed(2) + ' h di lavoro' },
-      { id: 'postProcesso', label: 'Post-processo', value: postProcesso, detail: num(i.washCureMin) + ' min' },
+      { id: 'materiale', label: 'Materiale', value: trova('materiale'), detail: dettaglio('materiale') },
+      { id: 'energia', label: 'Energia', value: trova('energia'), detail: dettaglio('energia') },
+      { id: 'ammortamento', label: 'Ammortamento macchina', value: trova('macchina'), detail: dettaglio('macchina') },
+      { id: 'manutenzione', label: 'Manutenzione e consumabili', value: trova('manutenzione'), detail: dettaglio('manutenzione') },
+      { id: 'postProcesso', label: 'Post-processo', value: trova('postProcesso'), detail: dettaglio('postProcesso') },
       { id: 'manodopera', label: 'Manodopera', value: manodopera,
         detail: qty > 1 ? 'setup ' + num(i.setupMin) + ' min diviso per ' + qty + ' pezzi' : num(i.setupMin) + ' min di setup' },
-      { id: 'scarto', label: 'Scarto previsto', value: scarto, detail: (tasso * 100).toFixed(0) + '% di stampe fallite' },
-      { id: 'packaging', label: 'Packaging', value: packaging, detail: 'per pezzo' },
-      { id: 'extra', label: 'Extra', value: extra, detail: (i.extras || []).length + ' voci' },
+      { id: 'scarto', label: 'Scarto previsto', value: trova('scarto'), detail: dettaglio('scarto') },
+      { id: 'packaging', label: 'Packaging', value: trova('packaging'), detail: 'per pezzo' },
+      { id: 'extra', label: 'Extra', value: trova('extra'), detail: (i.extras || []).length + ' voci' },
     ].filter(function (v) { return v.value > 0.0000001; });
-
-    var totale = voci.reduce(function (a, v) { return a + v.value; }, 0);
 
     var iva = Math.max(0, num(i.vatRate, 22)) / 100;
 
@@ -149,36 +141,48 @@
       { id: 'luxury',      label: 'Luxury',      margine: num(i.marginLuxury, 70) },
     ];
 
+    /* Anche il prezzo passa dal motore: il pavimento di margine e la
+       distinzione fra margine e ricarico stanno scritti una volta sola. */
     function daMargine(m) {
-      var f = Math.max(0, Math.min(95, num(m))) / 100;
-      return totale / (1 - f);
+      return motore.prezzo(totale, { strategia: 'margine', marginePct: Math.max(0, Math.min(95, num(m))), ivaPct: num(i.vatRate, 22) }).netto;
     }
+
+    var grammiTotali = 0;
+    (function () {
+      var g = pos(i.grams);
+      if (!g && i.volumeCm3) {
+        var d = num(i.density) || DENSITA[String(i.material || '').toLowerCase()] || 1.24;
+        g = pos(i.volumeCm3) * Math.max(0.01, d);
+      }
+      grammiTotali = g + pos(i.supportGrams);
+    })();
 
     return {
       empty: totale <= 0,
       voci: voci,
       costo: totale,
-      costoOrarioMacchina: costoOrarioMacchina,
-      grammi: grammi + supporti,
+      costoOrarioMacchina: c.costoOrarioMacchina,
+      grammi: grammiTotali,
       quantita: qty,
 
       /** Il prezzo secondo ognuna delle quattro strategie, con IVA e profitto
           già sviluppati: sono i numeri che servono per decidere, non per
           ricalcolare a mano. */
       strategie: STRATEGIE.map(function (st) {
-        var netto = daMargine(st.margine);
-        var ivaImporto = netto * iva;
+        var p = motore.prezzo(totale, {
+          strategia: 'margine', marginePct: Math.max(0, Math.min(95, num(st.margine))), ivaPct: num(i.vatRate, 22),
+        });
         return {
           id: st.id, label: st.label,
           margine: st.margine,
           costo: totale,
-          netto: netto,
-          iva: ivaImporto,
-          lordo: netto + ivaImporto,
-          profitto: netto - totale,
-          markup: totale > 0 ? ((netto / totale) - 1) * 100 : 0,
-          nettoTotale: netto * qty,
-          profittoTotale: (netto - totale) * qty,
+          netto: p.netto,
+          iva: p.iva,
+          lordo: p.lordo,
+          profitto: p.profittoLordo,
+          markup: p.ricaricoPct,
+          nettoTotale: p.netto * qty,
+          profittoTotale: p.profittoLordo * qty,
         };
       }),
 
@@ -187,11 +191,13 @@
           prezzo = costo / (1 − 0,40). Confondere i due è il modo più comune
           per credere di guadagnare il 40 % e guadagnare il 28,6 %. */
       prezzoDaMargine: function (marginePct) {
-        var m = Math.max(0, Math.min(95, num(marginePct))) / 100;
-        return m >= 1 ? Infinity : totale / (1 - m);
+        var m = Math.max(0, Math.min(95, num(marginePct)));
+        return m >= 100 ? Infinity : daMargine(m);
       },
       /** Prezzo da un ricarico moltiplicativo, come lo usa il calcolatore storico. */
-      prezzoDaRicarico: function (moltiplicatore) { return totale * num(moltiplicatore, 1); },
+      prezzoDaRicarico: function (moltiplicatore) {
+        return motore.prezzo(totale, { strategia: 'ricarico', ricarico: num(moltiplicatore, 1) }).netto;
+      },
       /** Il margine effettivo di un prezzo, in percentuale. */
       margineDi: function (prezzo) {
         var p = num(prezzo);

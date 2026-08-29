@@ -23,8 +23,12 @@ var ApparelQuoter = (function () {
     pressa:    { label:'Pressa a caldo',      icon:'🔥', color:'#f59e0b', baseCost:1.50, timeMin:2 },
     transfer:  { label:'Transfer',            icon:'📋', color:'#8b5cf6', baseCost:2.20, timeMin:2 },
     vinile:    { label:'Vinile Termoadesivo', icon:'✂️', color:'#10b981', baseCost:3.50, timeMin:5 },
-    ricamo:    { label:'Ricamo',              icon:'🧵', color:'#ec4899', baseCost:5.00, timeMin:8 },
-    serigrafia:{ label:'Serigrafia',          icon:'🖼️', color:'#ef4444', baseCost:3.20, timeMin:6 },
+    ricamo:    { label:'Ricamo',              icon:'🧵', color:'#ec4899', baseCost:5.00, timeMin:8, setupCost:0 },
+    /* Serigrafia e ricamo hanno un avviamento vero — telaio ed emulsione la
+       prima, digitalizzazione del file il secondo — che prima veniva
+       addebitato per ogni pezzo. `setupCost` parte da zero: chi lo conosce lo
+       inserisce, e nessuno si ritrova un numero inventato nel preventivo. */
+    serigrafia:{ label:'Serigrafia',          icon:'🖼️', color:'#ef4444', baseCost:3.20, timeMin:6, setupCost:0 },
     laser_f2:  { label:'Laser xTool F2',     icon:'⚡', color:'#fbbf24', baseCost:1.80, timeMin:2 },
     laser_fibra:{label:'Laser Fibra/MOPA',   icon:'💎', color:'#a78bfa', baseCost:2.50, timeMin:3 },
   };
@@ -101,66 +105,176 @@ var ApparelQuoter = (function () {
   }
 
   // ── Calculations ─────────────────────────────────────────────────────────
+  /* Il conto non vive più qui: vive in `InglyCostEngine`, profilo generico.
+     Questa funzione raccoglie le voci e le porta al motore.
+
+     Tre difetti misurati sono spariti nel passaggio, e vale la pena dirli
+     perché i prezzi cambiano — in meglio, ma cambiano:
+
+     1. Lo sconto quantità era applicato a un prezzo da ricarico:
+        `costo × (1 + margine) × (1 − sconto)`. A 200 pezzi diventava
+        `costo × 1,40 × 0,68 = costo × 0,952`, cioè **sotto costo**, a margine
+        −5,0%. Ora lo sconto passa dal motore, che ha un pavimento di margine e
+        rifiuta di scendere sotto la soglia.
+
+     2. Il campo «margine» era un ricarico: chi impostava 40 otteneva 28,6.
+        Ora si chiede un margine e si ottiene un margine.
+
+     3. I costi di avviamento non esistevano. La serigrafia costava 3,20 €/pz
+        sia per un pezzo sia per duecento, mentre è quasi tutta una tantum —
+        telaio, emulsione, messa a registro. Ora `setupCost` per tecnica si
+        divide per la quantità, e il prezzo scende con il lotto perché scende
+        il costo, non perché una tabella dice di scontare.
+
+     Le impostazioni storiche restano valide: chi non ha mai toccato
+     `setupCost` non vede cambiare l'avviamento (resta zero), e il difetto 1
+     resta comunque corretto. */
   function calcLine(line, s) {
+    var motore = (typeof window !== 'undefined') && window.InglyCostEngine;
     var techKey = line.tech || 'dtf';
-    var techBase = (s.techCosts[techKey]||{});
-    var tDef = TECHS[techKey]||TECHS.dtf;
-    var timeMin   = parseFloat((techBase.timeMin!=null?techBase.timeMin:tDef.timeMin)  ?? 3);
-    var timeHrs   = timeMin / 60;
+    var techBase = (s.techCosts[techKey] || {});
+    var tDef = TECHS[techKey] || TECHS.dtf;
+    var timeMin = parseFloat((techBase.timeMin != null ? techBase.timeMin : tDef.timeMin) ?? 3);
+    var timeHrs = timeMin / 60;
 
-    var buyPrice    = parseFloat((line.buyPrice!=null?line.buyPrice:0));
-    var qty         = Math.max(1, parseInt((line.qty!=null?line.qty:1)));
+    var buyPrice = parseFloat((line.buyPrice != null ? line.buyPrice : 0)) || 0;
+    var qty = Math.max(1, parseInt((line.qty != null ? line.qty : 1)) || 1);
 
-    // Costs — user can override each individually
-    var printCost   = parseFloat((line.printCost!=null?line.printCost:techBase.baseCost) ?? (tDef.baseCost!=null?tDef.baseCost:0));
-    var energyCost  = parseFloat(line.energyCost ?? ((s.energyKwh * s.energyWatts / 1000) * timeHrs));
-    var laborCost   = parseFloat((line.laborCost!=null?line.laborCost:s.laborHourly)  * timeHrs);
-    var machCost    = parseFloat((line.machCost!=null?line.machCost:s.machineHourly) * timeHrs);
-    var packCost    = parseFloat((line.packCost!=null?line.packCost:s.packPerPiece));
-    var shipUnit    = parseFloat((line.shipCost!=null?line.shipCost:0)) / qty;
+    var printCost  = parseFloat((line.printCost != null ? line.printCost : techBase.baseCost) ?? (tDef.baseCost != null ? tDef.baseCost : 0)) || 0;
+    var energyCost = parseFloat(line.energyCost ?? ((s.energyKwh * s.energyWatts / 1000) * timeHrs)) || 0;
+    var laborCost  = (parseFloat((line.laborCost != null ? line.laborCost : s.laborHourly) || 0)) * timeHrs;
+    var machCost   = (parseFloat((line.machCost != null ? line.machCost : s.machineHourly) || 0)) * timeHrs;
+    var packCost   = parseFloat((line.packCost != null ? line.packCost : s.packPerPiece)) || 0;
+    var shipTot    = parseFloat((line.shipCost != null ? line.shipCost : 0)) || 0;
 
-    var costPerPiece = buyPrice + printCost + energyCost + laborCost + machCost + packCost + shipUnit;
+    /* L'avviamento del lavoro: telaio serigrafico, digitalizzazione del ricamo,
+       impaginazione del foglio DTF. Si paga una volta, non per pezzo. */
+    var setupCost = parseFloat((line.setupCost != null ? line.setupCost : techBase.setupCost) ?? (tDef.setupCost || 0)) || 0;
 
-    // Qty auto-discount
+    var margine = parseFloat((line.margin != null ? line.margin : 40)) || 0;
+
+    /* Lo sconto quantità resta come **scelta commerciale**, non come
+       meccanismo di prezzo: il costo scende già da solo. */
     var autoDiscPct = 0;
-    var breaks = Object.keys(s.qtyDiscounts).map(Number).sort(function(a,b){return b-a;});
-    for(var i=0;i<breaks.length;i++){
-      if(qty>=breaks[i]){ autoDiscPct=s.qtyDiscounts[breaks[i]]||0; break; }
+    var breaks = Object.keys(s.qtyDiscounts).map(Number).sort(function (a, b) { return b - a; });
+    for (var i = 0; i < breaks.length; i++) {
+      if (qty >= breaks[i]) { autoDiscPct = s.qtyDiscounts[breaks[i]] || 0; break; }
+    }
+    var lineDiscPct = parseFloat((line.discount != null ? line.discount : 0)) || 0;
+    var appliedDisc = Math.max(lineDiscPct, autoDiscPct);
+
+    var breakdown = {
+      buyPrice: buyPrice, printCost: printCost, energyCost: energyCost,
+      laborCost: laborCost, machCost: machCost, packCost: packCost, shipUnit: shipTot / qty,
+      setupPerPiece: setupCost / qty,
+    };
+
+    if (!motore) {
+      /* Senza il motore non si indovina un prezzo: si dichiara che manca.
+         Un preventivo sbagliato è peggio di un preventivo mancante. */
+      return {
+        costPerPiece: 0, priceUnit: 0, subtotal: 0, totalCost: 0, profit: 0, profitPct: 0,
+        autoDiscPct: autoDiscPct, appliedDiscPct: appliedDisc, breakdown: breakdown,
+        indisponibile: true, motivo: 'motore di costo non disponibile',
+      };
     }
 
-    var margin      = parseFloat((line.margin!=null?line.margin:40)) / 100;
-    var lineDiscPct = parseFloat((line.discount!=null?line.discount:0)) / 100;
-    var appliedDisc = Math.max(lineDiscPct, autoDiscPct/100);
+    var c = motore.calcola({
+      tecnologia: 'generico',
+      qty: qty,
+      costiUnaTantum: setupCost > 0 ? [{ id: 'avviamento', label: 'Avviamento del lavoro', value: setupCost }] : [],
+      costiPerPezzo: [
+        { id: 'capo',      label: 'Capo',        value: buyPrice },
+        { id: 'stampa',    label: 'Lavorazione', value: printCost },
+        { id: 'energia',   label: 'Energia',     value: energyCost },
+        { id: 'manodopera',label: 'Manodopera',  value: laborCost, perdibile: false },
+        { id: 'macchina',  label: 'Macchina',    value: machCost },
+        { id: 'packaging', label: 'Confezione',  value: packCost, perdibile: false },
+        { id: 'spedizione',label: 'Spedizione',  value: shipTot / qty, perdibile: false },
+      ],
+      failureRate: parseFloat(s.failureRate || 0) || 0,
+    });
 
-    var priceBase  = costPerPiece * (1 + margin);
-    var priceUnit  = priceBase * (1 - appliedDisc);
-    var subtotal   = priceUnit * qty;
-    var totalCost  = costPerPiece * qty;
-    var profit     = subtotal - totalCost;
-    var profitPct  = priceUnit > 0 ? (profit / subtotal * 100) : 0;
+    var p = motore.prezzo(c.costoPezzo, {
+      strategia: 'margine',
+      marginePct: margine,
+      scontoPct: appliedDisc,
+      /* Il pavimento è la difesa che mancava. Configurabile, ma mai assente:
+         senza, uno sconto del 32% su un margine del 40% vende in perdita. */
+      marginePavimentoPct: parseFloat(s.marginePavimentoPct != null ? s.marginePavimentoPct : 10) || 0,
+      ivaPct: 0,
+    });
 
     return {
-      costPerPiece, priceUnit, subtotal, totalCost, profit, profitPct,
+      costPerPiece: c.costoPezzo,
+      priceUnit: p.netto,
+      subtotal: p.netto * qty,
+      totalCost: c.costoPezzo * qty,
+      profit: p.profittoLordo * qty,
+      profitPct: p.marginePct,
+      markupPct: p.ricaricoPct,
       autoDiscPct: autoDiscPct,
-      appliedDiscPct: appliedDisc * 100,
-      breakdown: { buyPrice, printCost, energyCost, laborCost, machCost, packCost, shipUnit },
+      appliedDiscPct: appliedDisc,
+      pavimentoScattato: p.pavimentoScattato,
+      inPerdita: p.inPerdita,
+      breakdown: breakdown,
+      _motore: c,
+      _prezzo: p,
     };
   }
 
+  /* Lo sconto globale del preventivo scavalcava il pavimento di margine: le
+     righe erano protette una per una, poi una percentuale sul totale le
+     riportava sotto costo. Era la stessa falla dello sconto quantità, un piano
+     più in alto.
+
+     Ora anche lo sconto di testata passa dal motore, che lo applica al totale
+     con il pavimento davanti. Se lo sconto chiesto porterebbe sotto la soglia,
+     viene ridotto a quanto è concedibile e il preventivo lo dichiara, invece
+     di uscire in perdita senza che nessuno se ne accorga. */
   function calcQuote(q, s) {
+    var motore = (typeof window !== 'undefined') && window.InglyCostEngine;
     var lines = q.lines || [];
     var calc = lines.map(function(l){ return Object.assign({},l,{_c:calcLine(l,s)}); });
-    var totSub=0, totCost=0, totProfit=0;
-    calc.forEach(function(l){ totSub+=l._c.subtotal; totCost+=l._c.totalCost; totProfit+=l._c.profit; });
-    var gDisc    = parseFloat(q.globalDiscount||0)/100;
-    var afterDisc= totSub*(1-gDisc);
+    var totSub=0, totCost=0;
+    calc.forEach(function(l){ totSub+=l._c.subtotal; totCost+=l._c.totalCost; });
+
+    var gDiscChiesto = parseFloat(q.globalDiscount||0)||0;
+
+    if (!motore) {
+      /* Nessun prezzo calcolato senza il motore. Applicare lo sconto qui
+         significherebbe farlo senza il pavimento di margine — cioè rifare
+         esattamente il difetto che la migrazione ha appena chiuso. */
+      return { lines:calc, subtotal:totSub, gDiscAmt:0, afterDisc:0, vatAmt:0, grand:0,
+               totalCost:totCost, profit:0, profitPct:0,
+               scontoChiestoPct:gDiscChiesto, scontoApplicatoPct:0,
+               pavimentoScattato:false, inPerdita:false,
+               indisponibile:true, motivo:'motore di costo non disponibile' };
+    }
+
+    var p = motore.prezzo(totCost, {
+      strategia: 'fisso', prezzoFisso: totSub, scontoPct: gDiscChiesto,
+      marginePavimentoPct: parseFloat(s.marginePavimentoPct != null ? s.marginePavimentoPct : 10) || 0,
+      ivaPct: 0,
+    });
+    var afterDisc = totSub > 0 ? p.netto : 0;
+    var pavimentoScattato = p.pavimentoScattato;
+    /* Quanto sconto è stato davvero concesso: il numero che va scritto sul
+       preventivo, non quello che era stato digitato. */
+    var gDiscApplicato = totSub > 0 ? (1 - afterDisc / totSub) * 100 : 0;
+
+    var totProfit = afterDisc - totCost;
     var vatPct   = parseFloat(q.vatPct!=null?q.vatPct:s.vatPct);
     var vatAmt   = q.vatMode==='included'?0: afterDisc*vatPct/100;
     var grand    = afterDisc+vatAmt;
     return {
-      lines:calc, subtotal:totSub, gDiscAmt:totSub*gDisc, afterDisc,
+      lines:calc, subtotal:totSub, gDiscAmt:totSub-afterDisc, afterDisc,
       vatAmt, grand, totalCost:totCost, profit:totProfit,
       profitPct: afterDisc>0? totProfit/afterDisc*100:0,
+      scontoChiestoPct: gDiscChiesto,
+      scontoApplicatoPct: gDiscApplicato,
+      pavimentoScattato: pavimentoScattato,
+      inPerdita: totProfit < 0,
     };
   }
 

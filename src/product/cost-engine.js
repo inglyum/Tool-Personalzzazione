@@ -30,6 +30,8 @@
 (function (global) {
   'use strict';
 
+  var VERSIONE = '1.1.0';
+
   var num = function (v, d) {
     var n = parseFloat(v);
     return isFinite(n) ? n : (d || 0);
@@ -263,6 +265,51 @@
       perdibili: ['capo', 'film', 'inchiostro', 'polvere', 'energia', 'macchina'],
     },
 
+    /* ── GENERICO ───────────────────────────────────────────────────────────
+       Per le lavorazioni i cui costi chi chiama ha già in mano — serigrafia,
+       ricamo, transfer, vinile, pressa — e per chi migra da un calcolatore
+       storico senza voler ancora spacchettare i driver.
+
+       Non è una scorciatoia per saltare il modello: è il modello applicato a
+       costi dichiarati invece che derivati. Il chiamante porta le voci, il
+       motore fa quello che fa sempre — divide l'una tantum per la quantità,
+       aggiunge lo scarto sul perdibile, applica le spese generali e prezza con
+       il pavimento. Sono proprio le quattro cose che i calcolatori storici non
+       facevano, ed è per questo che uscivano preventivi sotto costo. */
+    generico: {
+      id: 'generico',
+      label: 'Generico',
+      ore: function (i) { return pos(i.hours); },
+      unaTantum: function (i) {
+        var voci = (i.costiUnaTantum || []).map(function (v, n) {
+          return { id: v.id || ('unaTantum' + n), label: v.label || 'Costo di avviamento',
+            value: pos(v.value != null ? v.value : v.cost), detail: v.detail || 'una volta per lavoro' };
+        });
+        if (pos(i.setupMin) > 0) {
+          voci.push({ id: 'setup', label: 'Avviamento', value: (pos(i.setupMin) / 60) * oraLavoro(i),
+            detail: num(i.setupMin) + ' min' });
+        }
+        return voci;
+      },
+      perPezzo: function (i, ore) {
+        var voci = (i.costiPerPezzo || []).map(function (v, n) {
+          return { id: v.id || ('voce' + n), label: v.label || 'Costo',
+            value: pos(v.value != null ? v.value : v.cost), detail: v.detail || '',
+            perdibile: v.perdibile };
+        });
+        if (ore > 0) {
+          voci.push({ id: 'energia', label: 'Energia', value: energia(i, ore), detail: num(i.watt) + ' W × ' + ore.toFixed(2) + ' h' });
+          voci.push({ id: 'macchina', label: 'Ammortamento macchina', value: oraMacchina(i) * ore, detail: ore.toFixed(2) + ' h' });
+          voci.push({ id: 'manutenzione', label: 'Manutenzione', value: pos(i.maintenancePerHour) * ore, detail: ore.toFixed(2) + ' h' });
+        }
+        return voci;
+      },
+      /* Chi dichiara le voci dichiara anche quali si buttano con un pezzo
+         fallito. Senza indicazione si assume che si perda tutto ciò che è
+         materiale: è l'ipotesi prudente, e viene detta invece che nascosta. */
+      perdibili: null,
+    },
+
     /* ── SUBLIMAZIONE ───────────────────────────────────────────────────── */
     sublimation: {
       id: 'sublimation',
@@ -323,8 +370,15 @@
        non la finitura che non è ancora stata fatta. Il fattore tasso/(1−tasso)
        dice quanto materiale in più serve per **consegnare** i pezzi buoni: al
        10% di scarto non serve il 10% in più, serve l'11,1%. */
+    /* Un profilo può dichiarare quali voci si buttano con un pezzo fallito.
+       Se non lo fa — il profilo generico — decide chi porta le voci, con
+       `perdibile: false` su quelle che sopravvivono al fallimento. */
+    var elencoPerdibili = profilo.perdibili;
     var perdibile = vociPerPezzo
-      .filter(function (v) { return profilo.perdibili.indexOf(v.id) >= 0; })
+      .filter(function (v) {
+        if (elencoPerdibili) return elencoPerdibili.indexOf(v.id) >= 0;
+        return v.perdibile !== false && v.id !== 'packaging' && v.id !== 'extra';
+      })
       .reduce(function (a, v) { return a + v.value; }, 0);
     var tasso = Math.max(0, Math.min(90, pos(i.failureRate))) / 100;
     var scarto = perdibile * (tasso / (1 - tasso || 1));
@@ -407,10 +461,17 @@
     var lordo = netto + iva;
 
     var commissioni = lordo * (Math.max(0, pos(o.commissionePct)) / 100) + pos(o.commissioneFissa);
-    var spedizione = pos(o.spedizione);
+    /* La spedizione pesa solo se la paga il laboratorio. Se è addebitata al
+       cliente non è un costo: è un ricavo che entra e esce. */
+    var spedizione = o.spedizioneAddebitata ? 0 : pos(o.spedizione);
+    var altriVariabili = pos(o.altriCostiVariabili);
 
-    var profitto = netto - c;
-    var profittoNetto = profitto - commissioni;
+    /* L'IVA non è mai profitto: è denaro dello Stato che transita. Nessuna
+       delle righe qui sotto la tocca. */
+    var profittoLordo = netto - c;
+    var dopoCommissioni = profittoLordo - commissioni;
+    var dopoSpedizione = dopoCommissioni - spedizione;
+    var profittoOperativo = dopoSpedizione - altriVariabili;
 
     return {
       costo: c,
@@ -421,15 +482,31 @@
       lordo: lordo,
       commissioni: commissioni,
       spedizione: spedizione,
-      profitto: profitto,
-      profittoNetto: profittoNetto,
+      spedizioneAddebitata: !!o.spedizioneAddebitata,
+      altriCostiVariabili: altriVariabili,
+
+      /* Quattro livelli, perché «profitto» da solo non vuol dire niente:
+         chi vende su un canale con il 12% di commissione e spedizione a proprio
+         carico guadagna molto meno di quanto il primo numero suggerisca. */
+      profittoLordo: profittoLordo,
+      profittoDopoCommissioni: dopoCommissioni,
+      profittoDopoSpedizione: dopoSpedizione,
+      profittoOperativo: profittoOperativo,
+
       /* Margine sul ricavo, ricarico sul costo: entrambi mostrati, mai confusi. */
-      marginePct: netto > 0 ? (profitto / netto) * 100 : 0,
-      ricaricoPct: c > 0 ? (profitto / c) * 100 : 0,
-      margineNettoPct: netto > 0 ? (profittoNetto / netto) * 100 : 0,
+      marginePct: netto > 0 ? (profittoLordo / netto) * 100 : 0,
+      ricaricoPct: c > 0 ? (profittoLordo / c) * 100 : 0,
+      margineOperativoPct: netto > 0 ? (profittoOperativo / netto) * 100 : 0,
+
       pavimentoScattato: scattato,
       pavimento: pavimento,
-      inPerdita: profittoNetto < 0,
+      margineProtetto: pavimentoPct != null && profittoOperativo >= 0,
+      inPerdita: profittoOperativo < 0,
+
+      /* Nomi conservati per chi legge ancora i vecchi: stesso significato. */
+      profitto: profittoLordo,
+      profittoNetto: profittoOperativo,
+      margineNettoPct: netto > 0 ? (profittoOperativo / netto) * 100 : 0,
     };
   }
 
@@ -472,7 +549,215 @@
     };
   }
 
+  /* ── Campi che ogni profilo legge davvero ─────────────────────────────────
+     Servono a due cose che il motore da solo non potrebbe fare: dire a chi
+     compila quali numeri mancano, e dire a chi legge il prezzo da dove viene
+     ognuno. Sono dichiarati, non dedotti: un elenco sbagliato si vede subito
+     nei test, una deduzione sbagliata no. */
+  var CAMPI = {
+    comuni: ['qty', 'machinePrice', 'residualValue', 'machineLifeHours', 'watt', 'kwhPrice',
+      'dutyCycle', 'maintenancePerHour', 'laborPerHour', 'setupMin', 'failureRate',
+      'packagingPerUnit', 'overheadPct'],
+    print3d: ['grams', 'volumeCm3', 'density', 'material', 'supportGrams', 'purgeGrams',
+      'materialPricePerKg', 'spoolPrice', 'spoolGrams', 'hours', 'washCureMin',
+      'consumablesPerPrint', 'finishMin', 'testPrintCost'],
+    laser: ['cutLengthMm', 'cutSpeedMmMin', 'engraveAreaMm2', 'engraveSpeedMm2Min', 'passes',
+      'sheetPrice', 'sheetAreaMm2', 'pieceAreaMm2', 'sheetUtilization', 'piecesPerSheet',
+      'materialPerPiece', 'extractionPerHour', 'airAssistPerHour', 'maskingPerPiece',
+      'finishMin', 'qcMin', 'testCutCost', 'jigCost'],
+    uv: ['printAreaMm2', 'passes', 'speedM2Hour', 'blankPrice', 'inkMlPerM2', 'inkPricePerMl',
+      'whiteMlPerM2', 'whitePricePerMl', 'varnishMlPerM2', 'varnishPricePerMl',
+      'primerPerPiece', 'handlingMin', 'curingMin', 'profilingCost'],
+    dtf: ['printAreaMm2', 'speedM2Hour', 'blankPrice', 'filmWidthMm', 'graphicWidthMm',
+      'graphicHeightMm', 'gapMm', 'filmPricePerM2', 'inkMlPerM2', 'inkPricePerMl',
+      'whiteMlPerM2', 'whitePricePerMl', 'powderGPerM2', 'powderPricePerKg',
+      'pressSec', 'handlingMin'],
+    generico: ['costiPerPezzo', 'costiUnaTantum', 'hours'],
+    sublimation: ['printAreaMm2', 'printMin', 'pressSec', 'blankPrice', 'sheets', 'sheetPrice',
+      'inkMlPerM2', 'inkPricePerMl', 'handlingMin', 'testPrintCost'],
+  };
+
+  /* I campi senza i quali il conto è una finzione: non un errore, ma un costo
+     che uscirà troppo basso e che chi preventiva deve sapere che manca. */
+  var ESSENZIALI = {
+    generico: ['costiPerPezzo'],
+    print3d: ['materialPricePerKg', 'hours', 'laborPerHour'],
+    laser: ['laborPerHour'],
+    uv: ['printAreaMm2', 'laborPerHour'],
+    dtf: ['printAreaMm2', 'laborPerHour'],
+    sublimation: ['blankPrice', 'laborPerHour'],
+  };
+
+  function presente(i, campo) {
+    var v = i[campo];
+    if (v === undefined || v === null || v === '') return false;
+    if (typeof v === 'number') return isFinite(v);
+    if (typeof v === 'string') return isFinite(parseFloat(v)) || campo === 'material';
+    return true;
+  }
+
+  /**
+   * Dice se l'input regge, prima di calcolare. Distingue **problemi** (il conto
+   * sarebbe sbagliato) da **avvisi** (il conto è giusto ma incompleto).
+   */
+  function validateInput(input) {
+    var i = input || {};
+    var tec = String(i.tecnologia || i.technology || '');
+    var problemi = [];
+    var avvisi = [];
+
+    if (!PROFILI[tec]) {
+      return { ok: false, problemi: ['tecnologia sconosciuta: «' + (tec || '(nessuna)') + '»'], avvisi: [], mancanti: [] };
+    }
+
+    var noti = CAMPI.comuni.concat(CAMPI[tec] || []);
+    var mancanti = noti.filter(function (c) { return !presente(i, c); });
+
+    (ESSENZIALI[tec] || []).forEach(function (c) {
+      if (!presente(i, c)) avvisi.push('manca «' + c + '»: il costo uscirà più basso del reale');
+    });
+
+    /* Un valore negativo non fa sbagliare il conto — il motore lo azzera — ma
+       quasi sempre è una battitura, e tacerla non aiuta nessuno. */
+    noti.forEach(function (c) {
+      if (presente(i, c) && typeof i[c] !== 'string' && num(i[c]) < 0) {
+        avvisi.push('«' + c + '» è negativo (' + i[c] + '): trattato come zero');
+      }
+    });
+
+    if (presente(i, 'failureRate') && num(i.failureRate) >= 90) {
+      problemi.push('failureRate ' + num(i.failureRate) + '%: oltre il 90% il conto non ha più senso');
+    }
+    if (presente(i, 'qty') && num(i.qty) < 1) {
+      avvisi.push('quantità ' + i.qty + ': trattata come 1');
+    }
+    /* Campi che nessun profilo legge: quasi sempre un nome sbagliato, e un
+       numero scritto in un campo che nessuno guarda non protesta da solo. */
+    var conosciuti = {};
+    noti.concat(['tecnologia', 'technology', 'extras', 'scaglioni', 'fonti']).forEach(function (c) { conosciuti[c] = 1; });
+    Object.keys(i).forEach(function (k) {
+      if (k.charAt(0) !== '_' && !conosciuti[k]) avvisi.push('campo «' + k + '» ignorato: nessun profilo lo legge');
+    });
+
+    return { ok: problemi.length === 0, problemi: problemi, avvisi: avvisi, mancanti: mancanti };
+  }
+
+  /* ── Provenienza dei numeri ───────────────────────────────────────────────
+     La modalità «audit costo» deve poter dire se un numero viene dal magazzino,
+     dalle impostazioni, da un valore di ripiego o da nessuna parte. Il motore
+     non può saperlo da solo: lo dichiara chi lo chiama, in `fonti`. Quello che
+     il motore sa dire da sé è se il campo c'era o no — e non finge il resto. */
+  var FONTI_NOTE = ['reale', 'magazzino', 'configurato', 'default', 'stima'];
+
+  function fonteDi(i, campo) {
+    var f = (i.fonti || {})[campo];
+    if (f && FONTI_NOTE.indexOf(f) >= 0) return f;
+    return presente(i, campo) ? 'inserito' : 'mancante';
+  }
+
+  /**
+   * Da dove arriva il prezzo, riga per riga. Ogni voce porta la formula in
+   * chiaro, i valori che ci sono entrati e il risultato — così chi preventiva
+   * può difendere il numero davanti al cliente invece di fidarsi.
+   */
+  function explain(input, opzioniPrezzo) {
+    var i = input || {};
+    var c = calcola(i);
+    if (c.vuoto) return { vuoto: true, motivo: c.motivo, voci: [] };
+
+    var tec = c.tecnologia;
+    var p = prezzo(c.costoPezzo, opzioniPrezzo);
+    var righe = [];
+
+    c.unaTantum.voci.forEach(function (v) {
+      righe.push({
+        gruppo: 'una tantum', id: v.id, label: v.label,
+        formula: v.id === 'setup' ? 'minuti ÷ 60 × tariffa oraria' : 'valore dichiarato',
+        input: v.detail, result: v.value,
+        fonte: fonteDi(i, v.id === 'setup' ? 'setupMin' : v.id),
+      });
+    });
+
+    if (c.unaTantum.totale > 0) {
+      righe.push({
+        gruppo: 'una tantum', id: 'unaTantumPerPezzo', label: 'Una tantum per pezzo',
+        formula: 'totale una tantum ÷ quantità',
+        input: c.unaTantum.totale.toFixed(2) + ' € ÷ ' + c.qty,
+        result: c.unaTantum.perPezzo, fonte: 'calcolato',
+      });
+    }
+
+    c.perPezzo.voci.forEach(function (v) {
+      var formula = 'valore dichiarato';
+      var fonte = 'inserito';
+      if (v.id === 'energia') { formula = 'W ÷ 1000 × ore × €/kWh × ciclo di lavoro'; fonte = fonteDi(i, 'kwhPrice'); }
+      else if (v.id === 'macchina') { formula = '(prezzo − residuo) ÷ vita utile × ore'; fonte = fonteDi(i, 'machinePrice'); }
+      else if (v.id === 'manutenzione') { formula = '€/h di manutenzione × ore'; fonte = fonteDi(i, 'maintenancePerHour'); }
+      else if (v.id === 'scarto') { formula = 'perdibile × tasso ÷ (1 − tasso)'; fonte = fonteDi(i, 'failureRate'); }
+      else if (v.id === 'materiale' && tec === 'print3d') { formula = '(grammi + supporti + spurgo) ÷ 1000 × €/kg'; fonte = fonteDi(i, 'materialPricePerKg'); }
+      else if (v.id === 'materiale' && tec === 'laser') { formula = 'prezzo foglio ÷ pezzi per foglio'; fonte = fonteDi(i, 'sheetPrice'); }
+      else if (v.id === 'film') { formula = 'm² di film consumati × €/m²'; fonte = fonteDi(i, 'filmPricePerM2'); }
+      else if (v.id === 'inchiostro') { formula = 'm² × ml/m² × €/ml'; fonte = fonteDi(i, 'inkPricePerMl'); }
+      righe.push({ gruppo: 'per pezzo', id: v.id, label: v.label, formula: formula, input: v.detail, result: v.value, fonte: fonte });
+    });
+
+    if (c.overhead > 0) {
+      righe.push({ gruppo: 'per pezzo', id: 'overhead', label: 'Spese generali',
+        formula: 'costo diretto × percentuale', input: num(i.overheadPct) + '%', result: c.overhead, fonte: fonteDi(i, 'overheadPct') });
+    }
+
+    righe.push({ gruppo: 'costo', id: 'costoPezzo', label: 'Costo reale per pezzo',
+      formula: 'per pezzo + una tantum ÷ quantità + spese generali',
+      input: c.qty + ' pezzi', result: c.costoPezzo, fonte: 'calcolato' });
+
+    var formulaPrezzo = {
+      margine: 'costo ÷ (1 − margine)',
+      ricarico: 'costo × ricarico',
+      fisso: 'prezzo dichiarato',
+      competitivo: 'prezzo di mercato × (1 − scarto sotto mercato)',
+      premium: 'prezzo di mercato × (1 + sovrapprezzo)',
+    }[p.strategia];
+
+    righe.push({ gruppo: 'prezzo', id: 'netto', label: 'Prezzo netto', formula: formulaPrezzo,
+      input: 'strategia «' + p.strategia + '»', result: p.netto, fonte: 'scelta commerciale' });
+    if (p.pavimentoScattato) {
+      righe.push({ gruppo: 'prezzo', id: 'pavimento', label: 'Pavimento di margine applicato',
+        formula: 'costo ÷ (1 − margine minimo)', input: 'lo sconto avrebbe portato sotto la soglia',
+        result: p.pavimento, fonte: 'protezione' });
+    }
+    righe.push({ gruppo: 'prezzo', id: 'iva', label: 'IVA', formula: 'netto × aliquota',
+      input: p.ivaPct + '%', result: p.iva, fonte: 'normativa' });
+    righe.push({ gruppo: 'prezzo', id: 'lordo', label: 'Prezzo al cliente', formula: 'netto + IVA',
+      input: '', result: p.lordo, fonte: 'calcolato' });
+
+    righe.push({ gruppo: 'profitto', id: 'profittoLordo', label: 'Profitto lordo',
+      formula: 'prezzo netto − costo', input: '', result: p.profittoLordo, fonte: 'calcolato' });
+    if (p.commissioni > 0) {
+      righe.push({ gruppo: 'profitto', id: 'dopoCommissioni', label: 'Dopo le commissioni',
+        formula: 'profitto lordo − commissioni di canale', input: p.commissioni.toFixed(2) + ' €',
+        result: p.profittoDopoCommissioni, fonte: 'calcolato' });
+    }
+    if (p.spedizione > 0) {
+      righe.push({ gruppo: 'profitto', id: 'dopoSpedizione', label: 'Dopo la spedizione',
+        formula: 'profitto − spedizione a carico del laboratorio', input: p.spedizione.toFixed(2) + ' €',
+        result: p.profittoDopoSpedizione, fonte: 'calcolato' });
+    }
+    righe.push({ gruppo: 'profitto', id: 'operativo', label: 'Profitto operativo',
+      formula: 'netto − costo − commissioni − spedizione − altri variabili',
+      input: 'l\'IVA non entra mai in questo conto', result: p.profittoOperativo, fonte: 'calcolato' });
+
+    return {
+      vuoto: false, versione: VERSIONE, tecnologia: tec,
+      voci: righe, costo: c, prezzo: p,
+      validazione: validateInput(i),
+    };
+  }
+
   global.InglyCostEngine = {
+    version: VERSIONE,
+    CAMPI: CAMPI,
+    validateInput: validateInput,
+    explain: explain,
     PROFILI: PROFILI,
     STRATEGIE: STRATEGIE,
     SCAGLIONI: SCAGLIONI,

@@ -2,9 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-/* Il motore è una funzione pura proprio per poter essere provata così: senza
-   browser, senza DOM, con numeri che si possono verificare a mano. */
+/* `InglyPrint3D` non è più un motore: è l'adapter che porta l'input storico
+   del calcolatore 3D a `InglyCostEngine`. Va quindi caricato dopo di lui —
+   nello stesso ordine in cui il bundle li compone, cosa che
+   tests/architecture-cost-engine.mjs verifica sul file consegnato.
+
+   I numeri di questi test non sono cambiati di un centesimo nel passaggio:
+   sono stati confrontati su 200 casi generati prima e dopo la migrazione. */
 const finestra = {};
+new Function('window', fs.readFileSync('src/product/cost-engine.js', 'utf8'))(finestra);
 new Function('window', fs.readFileSync('src/product/print3d-cost.js', 'utf8'))(finestra);
 const { cost } = finestra.InglyPrint3D;
 
