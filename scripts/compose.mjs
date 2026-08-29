@@ -24,6 +24,7 @@ import {
 import { appShellJs, RETIRED_SIDEBAR_PATCHES, SIDEBAR_HOST } from '../src/app-shell/index.mjs';
 import { storageGuardJs, STORAGE_GUARD_HOST } from '../src/core/storage/index.mjs';
 import { errorLoggerJs } from '../src/core/errors/index.mjs';
+import { migrazioniJs, MIGRAZIONI_HOST } from '../src/core/migrations/index.mjs';
 
 const readSrc = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -105,6 +106,8 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
 
   overrides[SIDEBAR_HOST] = appShellJs();
   overrides[PRODUCT_HOST] = productJs(fs.readFileSync(path.join(srcDir, PRODUCT_HOST), 'utf8'));
+  /* Migrazioni versionate: si accodano al core che definisce IDB. */
+  overrides[MIGRAZIONI_HOST] = migrazioniJs(fs.readFileSync(path.join(srcDir, MIGRAZIONI_HOST), 'utf8'));
 
   /* L'unico script ancora caricato da un CDN. Sostituito da un adattatore su
      simple-statistics, che è già vendorizzata e contiene lo stesso algoritmo. */

@@ -684,20 +684,14 @@ window.DigitalSignature = {
   }
   setTimeout(_p,1100);
 
-  // Add Pipeline + ABC nav items
-  function _addNav(){
-    if(!document.getElementById('html-root')){setTimeout(_addNav,600);return;}
-    var clientiNav=document.querySelector('[data-section="clienti"],[data-section="crm"]');
-    if(clientiNav&&!document.querySelector('[data-section="crm_pipeline"]')){
-      var pNav=document.createElement('div'); pNav.className='nav-item';
-      pNav.setAttribute('data-section','crm_pipeline');
-      pNav.setAttribute('onclick',"App.navigate('crm_pipeline')");
-      pNav.style.cssText='color:#3b82f6;font-weight:700';
-      pNav.innerHTML='<i class="nav-icon fas fa-columns"></i> 🗂️ Pipeline';
-      clientiNav.insertAdjacentElement('afterend',pNav);
-    }
-  }
-  setTimeout(_addNav,2200);
+  /* La voce «Pipeline» non viene più iniettata nella sidebar. Lo store
+     `pipeline` era un mirror di `orders` — PipelineOS scriveva l'ordine e ne
+     duplicava una copia — quindi la sezione mostrava una seconda verità sugli
+     stessi lavori. Ora la verità è una sola: Ordini.
+     La gerarchia del menu sta in src/app-shell/nav-map.js, che instrada
+     `crm_pipeline` su `clienti` per non rompere i collegamenti storici.
+     I record senza corrispondente in orders vengono migrati da
+     src/core/migrations/pipeline-to-orders.js, che non cancella nulla. */
 })();
 
 // ─── CommHistory auto-inject into CRM ────────────────────────────

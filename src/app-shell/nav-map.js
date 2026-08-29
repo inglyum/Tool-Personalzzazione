@@ -200,7 +200,9 @@ export const NAV_GROUPS = [
 export const NAV_ALIASES = {
   clients: 'clienti',
   crm: 'clienti',
-  crm_pipeline: 'clienti',
+  /* Lo store pipeline era un mirror di orders: la destinazione è Gestione
+     Ordini, non il CRM. Allineato al _redirectMap del router. */
+  crm_pipeline: 'gestione_ordini',
   magazzino: 'items',
   market_intel: 'marketintel',
 };

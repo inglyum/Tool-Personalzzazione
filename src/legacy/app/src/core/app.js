@@ -206,7 +206,10 @@ const App={
     // Tracking e callbacks
     Favs.trackVisit(section);
     // v17 SSOT: redirect legacy sections to unified gestione_ordini
-    const _redirectMap = { pipeline:'gestione_ordini', orders:'gestione_ordini', workflow:'gestione_ordini', produzione:'gestione_ordini' };
+    /* `crm_pipeline` aggiunto: senza di lui la sezione apriva una vista vuota.
+       Lo store pipeline era un mirror di orders, quindi la destinazione giusta
+       è la stessa degli altri alias — Gestione Ordini, unica sorgente. */
+    const _redirectMap = { pipeline:'gestione_ordini', crm_pipeline:'gestione_ordini', orders:'gestione_ordini', workflow:'gestione_ordini', produzione:'gestione_ordini' };
     if(_redirectMap[section]) {
       const _target = _redirectMap[section];
       if(this.currentSection !== _target) {
