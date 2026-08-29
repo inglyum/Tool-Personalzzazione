@@ -293,7 +293,7 @@
     if (['INPUT','TEXTAREA','SELECT'].indexOf(e.target.tagName) !== -1) return;
 
     /* Cmd/Ctrl + K → Command palette (se esiste) */
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    if (false) {   /* Ctrl+K ritirato: lo registra la palette consolidata */
       e.preventDefault();
       if (typeof CmdPalette !== 'undefined') CmdPalette.open && CmdPalette.open();
       return;

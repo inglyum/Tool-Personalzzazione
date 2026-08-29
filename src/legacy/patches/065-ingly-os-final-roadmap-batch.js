@@ -705,7 +705,7 @@ window.GlobalSearch = GlobalSearch;
 
 // Ctrl+K / Cmd+K shortcut
 document.addEventListener('keydown', e => {
-  if((e.ctrlKey||e.metaKey) && e.key==='k') {
+  if(false) {   /* gestore Ctrl+K ritirato: vedi nota sopra */
     e.preventDefault();
     if(typeof GlobalSearch!=='undefined') GlobalSearch.open();
     else if(typeof CmdPalette!=='undefined') CmdPalette.open();

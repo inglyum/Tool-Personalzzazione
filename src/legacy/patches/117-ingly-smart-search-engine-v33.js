@@ -2815,7 +2815,7 @@ body.saas-active main {
 
   /* Keyboard shortcut Cmd/Ctrl+K → search */
   document.addEventListener('keydown', function(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    if (false) {   /* Ctrl+K ritirato: lo registra la palette consolidata */
       e.preventDefault(); window._ehOpenSearch();
     }
   });

@@ -13,7 +13,7 @@
     "dev": "node scripts/dev.mjs",
     "preview": "node scripts/dev.mjs --no-watch",
     "baseline": "node scripts/baseline.mjs src/legacy baseline/ingly-os.json && node scripts/baseline.mjs src/admin/legacy baseline/ingly-cloud-admin.json",
-    "audit": "node scripts/audit-report.mjs",
+    "audit": "node scripts/audit-report.mjs && node scripts/audit-pricing-residuals.mjs && node scripts/audit-ui-duplicates.mjs",
     "verify": "node scripts/verify-syntax.mjs",
     "test": "node --test 'tests/**/*.test.mjs'",
     "check": "npm run verify && npm run build && npm test",

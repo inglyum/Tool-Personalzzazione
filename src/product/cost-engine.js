@@ -816,6 +816,23 @@
     return lista;
   }
 
+  /* ── Leggere un margine da numeri già noti ───────────────────────────────
+     Non è impostare un prezzo: è dire che margine ha un prezzo che esiste già.
+     Serviva comunque un posto solo, perché l'audit ha trovato venti punti che
+     lo calcolano e non tutti allo stesso modo — alcuni dividono per il ricavo
+     (margine), altri per il costo (ricarico), ed entrambi finiscono a schermo
+     con lo stesso simbolo di percentuale. È la stessa confusione che faceva
+     credere di guadagnare il 40% guadagnando il 28,6%. */
+  function margineDi(prezzo, costo) {
+    var p = pos(prezzo);
+    return p > 0 ? ((p - pos(costo)) / p) * 100 : null;
+  }
+
+  function ricaricoDi(prezzo, costo) {
+    var c = pos(costo);
+    return c > 0 ? ((pos(prezzo) - c) / c) * 100 : null;
+  }
+
   /** Il prezzo secondo ognuna delle politiche, per confrontarli a colpo d'occhio. */
   function consigli(costo, opzioni) {
     var o = opzioni || {};
@@ -966,6 +983,8 @@
     MARGINE_MINIMO: MARGINE_MINIMO,
     avvisi: avvisi,
     consigli: consigli,
+    margineDi: margineDi,
+    ricaricoDi: ricaricoDi,
     CAMPI: CAMPI,
     validateInput: validateInput,
     explain: explain,

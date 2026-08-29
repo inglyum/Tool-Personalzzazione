@@ -2452,8 +2452,13 @@ Quoter._pdfRenderStep = function(step){
   // ── STEP 2 ─────────────────────────────────────────────────────
   if(step===2){
     const lines = Quoter.lines;
-    const markup  = parseFloat(eid('qr-markup')?.value||100)/100;
-    const discount= parseFloat(eid('qr-discount')?.value||0)/100;
+    /* I prezzi di riga arrivano dal motore, non da una formula ricopiata qui.
+       Il commento storico prometteva «allineati 1:1 allo Smart Quoter»: era
+       l'aspirazione, e niente la garantiva — è esattamente così che due copie
+       della stessa riga cominciano a divergere. */
+    const _pdfCalc = (typeof Quoter._calcola === 'function') ? Quoter._calcola({ setupCost: 0 }) : null;
+    const _pdfPrezzi = {};
+    if (_pdfCalc && !_pdfCalc.indisponibile) _pdfCalc.lines.forEach(r => { _pdfPrezzi[r.id] = r; });
     const TNAME   = {professional:'🏢 Professionale',friendly:'😊 Amichevole',minimal:'◻️ Minimalista',premium:'✨ Premium'};
 
     overlay.innerHTML = `
@@ -2483,8 +2488,7 @@ Quoter._pdfRenderStep = function(step){
           </div>
         </div>
         ${lines.map((l,i)=>{
-          const lineBase = l.subtotal*(1+markup);
-          const lineFin  = lineBase*(1-discount);
+          const lineFin = (_pdfPrezzi[l.id] || { price: 0 }).price;
           const ac = s.color;
           return `<label style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#0f172a;border:1.5px solid #1e293b;border-radius:10px;margin-bottom:7px;cursor:pointer;transition:border .15s" onmouseover="this.style.borderColor='#334155'" onmouseout="this.style.borderColor='#1e293b'">
             <input type="checkbox" class="pdf-line-chk" id="pdfln-${l.id}" checked data-id="${l.id}" style="width:16px;height:16px;accent-color:${ac};cursor:pointer;flex-shrink:0">
@@ -2560,14 +2564,26 @@ Quoter._pdfGenerate = function(){
       const closing   = s.closing||'Cordiali saluti,';
 
       // Totals — allineati 1:1 allo Smart Quoter (INCLUDONO i Costi Aggiuntivi)
+      /* Totali dal motore. Erano ricopiati qui «allineati 1:1 allo Smart
+         Quoter» — una promessa che nessun test manteneva. Il documento che
+         arriva al cliente e la schermata che il laboratorio guarda ora
+         nascono dallo stesso conto, e non possono più raccontare due cifre. */
       const _extraCost = (typeof Quoter._getExtraCosts==='function' ? (Quoter._getExtraCosts()||0) : 0);
       const _linesCost = lines.reduce((a,l)=>a+l.subtotal,0);
-      const subBase  = (_linesCost + _extraCost)*(1+markup);
-      const subFinal = subBase*(1-discount);
-      const vatAmt   = withIVA ? subFinal*0.22 : 0;
-      const grand    = subFinal+vatAmt;
-      const saved    = subBase-subFinal;
-      const _extraMarked = _extraCost*(1+markup)*(1-discount);
+      const _tot = (typeof Quoter._calcola === 'function') ? Quoter._calcola({ lines, setupCost: 0 }) : null;
+      if (!_tot || _tot.indisponibile) {
+        toast('Motore di costo non disponibile: PDF non generato','error');
+        try { _win.close(); } catch(e) {}
+        return;
+      }
+      const _prezzoRiga = {}; _tot.lines.forEach(r => { _prezzoRiga[r.id] = r; });
+      const subBase  = _tot.subtotalNet;
+      const subFinal = _tot.subtotalNet;
+      const vatAmt   = withIVA ? _tot.vat : 0;
+      const grand    = subFinal + vatAmt;
+      const saved    = _tot.totalCost > 0 ? Math.max(0, subFinal - _tot.totalCost) : 0;
+      /* Il costo dei materiali aggiuntivi, ricaricato in proporzione. */
+      const _extraMarked = _tot.totalCost > 0 ? subFinal * (_extraCost / _tot.totalCost) : 0;
 
       // Template themes
       const T = {
@@ -2579,11 +2595,16 @@ Quoter._pdfGenerate = function(){
       const th = T[s.tpl]||T.professional;
 
       const rowsHTML = lines.map((l,i)=>{
-        const lb = l.subtotal*(1+markup);
-        const lf = lb*(1-discount);
-        const up = lf/(l.qty||1);
-        const upOrig = up / (1-discount);
-        const lfOrig = lf / (1-discount);
+        /* Prezzo di riga e prezzo unitario dal motore, che li ha già ripartiti
+           in proporzione al costo. Il prezzo «prima dello sconto» serve solo a
+           mostrare il risparmio, e si ricava dallo sconto applicato — non da
+           quello richiesto, che il pavimento di margine può aver ridotto. */
+        const _r = _prezzoRiga[l.id] || { price: 0, unitPrice: 0 };
+        const lf = _r.price;
+        const up = _r.unitPrice;
+        const _fattore = 1 - Math.min(0.99, (_tot.discountAppliedPct || 0) / 100);
+        const upOrig = _fattore > 0 ? up / _fattore : up;
+        const lfOrig = _fattore > 0 ? lf / _fattore : lf;
         const discBadge3 = discount>0 ? `<span style="font-size:9px;background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-weight:700;margin-left:5px">-${discountPct}%</span>` : '';
         const origStruck3 = discount>0 ? `<div style="font-size:10px;color:#94a3b8;text-decoration:line-through">${fmtCur(lfOrig)}</div>` : '';
         return `<tr>

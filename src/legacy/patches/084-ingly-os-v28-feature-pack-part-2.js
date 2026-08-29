@@ -222,7 +222,7 @@ window.QuoteGenerator = {
 
   // Keyboard shortcut
   document.addEventListener('keydown',function(e){
-    if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();open();}
+    /* Ctrl+K ritirato: lo possiede la palette dei comandi consolidata. */
   });
   // Add search button to header if it exists
   setTimeout(function(){
