@@ -193,48 +193,21 @@ window.PrimaNota = {
     if(typeof CRMSmart==='undefined'||!CRMSmart._v26){setTimeout(_p,700);return;}
     if(CRMSmart._v37perf) return; CRMSmart._v37perf=true;
 
-    // Override _buildHTML to add search debounce + chunked rendering
-    var _origRender=CRMSmart.render.bind(CRMSmart);
-    CRMSmart.render=function(){
-      var el=document.getElementById('view-clienti')||document.getElementById('view-crm');
-      if(!el){_origRender();return;}
-      var data=CRMSmart._load();
-      // If small list, use original render
-      if(data.length<=50){_origRender();return;}
-      // Large list: use virtual/paged render
-      var pageSize=30; var page=CRMSmart._v37page||0;
-      var filtered=data; var q=(CRMSmart._v37q||'').toLowerCase();
-      if(q) filtered=data.filter(function(c){
-        return (c.name||'').toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.email||'').toLowerCase().includes(q)||(c.company||'').toLowerCase().includes(q)||(c.tags||'').toLowerCase().includes(q);
-      });
-      var totalPages=Math.ceil(filtered.length/pageSize);
-      page=Math.min(page,Math.max(0,totalPages-1));
-      var slice=filtered.slice(page*pageSize,(page+1)*pageSize);
-      // Build header + search (reuse original approach)
-      _origRender.call(this); // let original build the structure
-      setTimeout(function(){
-        // After original render, add pagination if needed
-        if(filtered.length<=pageSize) return;
-        var tbody=el.querySelector('tbody');
-        if(!tbody) return;
-        var pagbar=document.createElement('div');
-        pagbar.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;border-top:1px solid var(--border)';
-        pagbar.innerHTML='<span style="font-size:11px;color:var(--text-muted)">'+( page+1)+' / '+totalPages+' pagine · '+filtered.length+' clienti</span>'
-          +'<button onclick="CRMSmart._v37page=Math.max(0,'+(page-1)+');CRMSmart.render()" '+(page===0?'disabled':'')+' style="padding:4px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px">←</button>'
-          +'<button onclick="CRMSmart._v37page=Math.min('+(totalPages-1)+','+(page+1)+');CRMSmart.render()" '+(page>=totalPages-1?'disabled':'')+' style="padding:4px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px">→</button>';
-        var tableWrap=el.querySelector('table')?.parentElement;
-        if(tableWrap) tableWrap.appendChild(pagbar);
-      },200);
-    };
-    // Add search handler with debounce
-    var _origFilterCRM=CRMSmart.filterClients?.bind(CRMSmart);
-    if(_origFilterCRM){
-      CRMSmart.filterClients=function(q){
-        CRMSmart._v37q=q; CRMSmart._v37page=0;
-        clearTimeout(CRMSmart._v37searchTimer);
-        CRMSmart._v37searchTimer=setTimeout(function(){_origFilterCRM(q);},200);
-      };
-    }
+    /* ── RITIRATO ─────────────────────────────────────────────────────────
+       Qui viveva un secondo `CRMSmart.render` che calcolava la pagina e poi
+       chiamava quello originale, il quale ridisegnava l'elenco intero: la
+       variabile `slice` era morta, e la barra appesa 200 ms dopo cambiava solo
+       il numero. Misurato con 137 contatti: l'etichetta passava da «1 / 5» a
+       «2 / 5» e le righe restavano 137, le stesse.
+
+       Non è un difetto di questa patch soltanto: è la conseguenza di due
+       funzioni che possiedono lo stesso disegno. La paginazione, la ricerca e
+       l'ordinamento vivono ora in una pipeline sola dentro la patch 081
+       (`CRMSmart._pipeline`), e la barra delle pagine è costruita dalla stessa
+       chiamata che costruisce le righe. Anche l'antirimbalzo della ricerca è
+       là, per lo stesso motivo.
+
+       Presidiato da tests/qa/crm-paginazione.mjs. */
     console.log('[v37] CRM performance patch applied');
   }
   setTimeout(_p,2000);

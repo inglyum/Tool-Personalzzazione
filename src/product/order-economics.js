@@ -35,6 +35,11 @@
     manutenzione: 'Manutenzione', manodopera: 'Manodopera', setup: 'Avviamento',
     scarto: 'Scarto previsto', overhead: 'Spese generali', packaging: 'Confezione',
     commissioni: 'Commissioni', spedizione: 'Spedizione', extra: 'Extra',
+    /* Le chiavi della scomposizione di riga, che hanno nomi propri. */
+    materialCost: 'Materiale', laborCost: 'Manodopera', energyCost: 'Energia',
+    machineCost: 'Macchina', maintenanceCost: 'Manutenzione', packagingCost: 'Confezione',
+    setupCost: 'Avviamento', wasteCost: 'Scarto', overheadCost: 'Spese generali',
+    directCost: 'Costo diretto',
   };
 
   function riga(etichetta, valore, forte, nota) {
@@ -83,15 +88,41 @@
     var s = letto.snapshot;
     var t = s.totals;
 
+    /* Ogni riga apre il proprio conto. La domanda che si fa davanti a un
+       ordine vecchio non è «quanto», è «perché»: senza la scomposizione, il
+       pannello risponde alla domanda facile. */
     var righeVoci = (s.lines || []).map(function (l) {
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border)">'
+      var voci = l.costBreakdown || {};
+      var dettaglio = Object.keys(voci).map(function (k) {
+        var v = voci[k];
+        return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0 3px 12px">'
+          + '<span style="font-size:11px;color:var(--text-muted)">' + esc(ETICHETTE[k] || k)
+          + ' <small style="color:var(--text-dim);font-size:9px">' + esc(v.source === 'ripartito' ? 'ripartito · ' + (v.basis || '') : 'misurato') + '</small></span>'
+          + '<span style="font-size:11px;white-space:nowrap">' + esc(eu(v.amount)) + '</span></div>';
+      }).join('');
+
+      return '<details style="border-bottom:1px dashed var(--border)">'
+        + '<summary style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;list-style:none">'
         + '<span style="font-size:12px">' + esc(l.itemSnapshot.name)
+        + (l.itemSnapshot.sku ? ' <small style="color:var(--text-dim);font-size:10px">' + esc(l.itemSnapshot.sku) + '</small>' : '')
         + '<br><small style="color:var(--text-dim);font-size:10px">'
-        + esc(l.quantity + ' ' + (l.itemSnapshot.unit || 'pz') + ' × ' + eu(l.unitCostSnapshot) + ' di costo')
+        + esc(l.quantity + ' ' + (l.itemSnapshot.unit || 'pz') + ' × ' + eu(l.unitPriceSnapshot) + ' · costo unitario ' + eu(l.unitCostSnapshot))
         + '</small></span>'
         + '<span style="font-size:12px;text-align:right;white-space:nowrap">' + esc(eu(l.subtotalSnapshot))
         + '<br><small style="color:var(--text-dim);font-size:10px">margine ' + esc(pc(l.marginSnapshot)) + '</small></span>'
-        + '</div>';
+        + '</summary>'
+        + '<div style="padding:4px 0 8px">' + dettaglio
+        + '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0 0 12px;border-top:1px solid var(--border);font-weight:700">'
+        + '<span style="font-size:11px">Costo attribuito</span>'
+        + '<span style="font-size:11px">' + esc(eu(l.costTotal)) + '</span></div>'
+        + (Math.abs(num(l.costBreakdownResidual)) > 0.005
+          ? '<div style="font-size:10px;color:var(--amber,#f59e0b);padding-left:12px">residuo non attribuito ' + esc(eu(l.costBreakdownResidual)) + '</div>'
+          : '')
+        + '<div style="font-size:9px;color:var(--text-dim);padding-left:12px;margin-top:4px">'
+        + esc([l.pricingPolicy ? 'politica ' + l.pricingPolicy : null,
+          l.pricingProfile ? 'profilo ' + l.pricingProfile : null,
+          l.calculationVersion ? 'calcolo ' + l.calculationVersion : null].filter(Boolean).join(' · '))
+        + '</div></div></details>';
     }).join('');
 
     var voci = (s.costBreakdownSnapshot && s.costBreakdownSnapshot.voci) || {};
@@ -111,6 +142,8 @@
       + '<div>' + intestazione('Economia dell\'ordine', badgeStorico(s.capturedAt))
       + '<div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">'
       + 'motore ' + esc(s.costEngineVersion) + ' · schema ' + esc(s.schemaVersion)
+      + (s.pricingProfile ? ' · profilo ' + esc(s.pricingProfile) : '')
+      + (s.pricingStrategy ? ' · strategia ' + esc(s.pricingStrategy) : '')
       + (s.pricingPolicySnapshot ? ' · politica ' + esc(s.pricingPolicySnapshot.label || s.pricingPolicySnapshot.id) : '')
       + '</div>'
       + riga('Costo reale', eu(t.totalCost))

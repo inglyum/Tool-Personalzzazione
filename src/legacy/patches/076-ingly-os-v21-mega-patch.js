@@ -138,7 +138,30 @@ window.WAQuick = {
 window.CRMSmart = {
   _SK: 'ingly_crm_v1',
   _clients: [],
-  _load(){ try{ return JSON.parse(localStorage.getItem(this._SK)||'[]'); }catch(e){ return []; } },
+  /* I contatti nascono senza `id` e si identificano per **posizione**
+     nell'array. Finché la vista disegnava l'elenco intero in ordine di
+     inserimento la cosa reggeva; con una paginazione che funziona, un
+     ordinamento o un filtro, la posizione punta a un altro contatto e
+     «modifica» modifica il cliente sbagliato.
+
+     `_load` assegna un id a chi non ce l'ha e lo salva una volta sola. La
+     chiave di memoria non cambia, nessun record si perde, e i contatti già
+     salvati continuano a leggersi. */
+  _load(){
+    try{
+      var d = JSON.parse(localStorage.getItem(this._SK)||'[]');
+      if(!Array.isArray(d)) return [];
+      var mancanti = 0;
+      for(var i=0;i<d.length;i++){
+        if(d[i] && d[i].id == null){
+          d[i].id = 'c' + Date.now().toString(36) + i.toString(36) + Math.floor(Math.random()*1e6).toString(36);
+          mancanti++;
+        }
+      }
+      if(mancanti) this._save(d);
+      return d;
+    }catch(e){ return []; }
+  },
   _save(d){ try{ localStorage.setItem(this._SK,JSON.stringify(d)); }catch(e){} },
 
   render(){

@@ -50,6 +50,24 @@
     return Math.max(0, netto / f - netto);
   }
 
+  /**
+   * Una copia che non condivide un solo riferimento con l'originale.
+   *
+   * Serve nel passaggio preventivo → ordine. Congelare entrambi impedisce la
+   * mutazione, ma lasciarli puntare allo stesso oggetto resta sbagliato: sono
+   * due documenti con due vite, e il giorno in cui qualcuno scongela o
+   * sostituisce il ramo di uno se lo ritrova nell'altro. Il costo di una copia
+   * è trascurabile accanto a un ordine che cambia perché è stato modificato il
+   * preventivo da cui era nato.
+   */
+  function copiaProfonda(o) {
+    if (o === null || typeof o !== 'object') return o;
+    if (Array.isArray(o)) return o.map(copiaProfonda);
+    var fuori = {};
+    Object.keys(o).forEach(function (k) { fuori[k] = copiaProfonda(o[k]); });
+    return fuori;
+  }
+
   /* Congelare in superficie non basta: `snapshot.costBreakdown.materiale = 0`
      passerebbe senza rumore. Si scende in profondità. */
   function congela(o) {
@@ -80,6 +98,100 @@
     };
   }
 
+  /* ── La scomposizione del costo di una riga ────────────────────────────────
+     Qui si dice la verità sul modello, che non è quella che ci si aspetta.
+
+     Una riga di preventivo **è già una voce sola**: «Manodopera 40 min»,
+     «MDF 3 mm 30×20», «Laser 12 min». Non contiene dentro di sé materiale,
+     energia, macchina e lavoro da separare — è uno dei quattro. Riempire
+     `materialCost`, `laborCost`, `energyCost` e `machineCost` su ogni riga
+     significherebbe scrivere tre zeri e un numero, e i tre zeri direbbero
+     «questa riga non consuma energia» quando la verità è «di questa riga non
+     è mai stata dichiarata l'energia». Sono due informazioni diverse, e il
+     progetto ha già deciso da che parte stare: le voci non pertinenti restano
+     assenti.
+
+     Quello che si può dire con precisione è:
+
+     · la **natura** del costo diretto della riga, dichiarata da chi l'ha
+       inserita (materiale / laser / manodopera / verniciatura / …);
+     · lo **scarto**, che è esatto per riga — il motore sa quali voci si
+       buttano con un pezzo fallito e quali no;
+     · l'**avviamento** e le **spese generali**, che sono costi del lavoro e
+       non della riga: si ripartiscono sulla quota di costo, ed è marcato
+       `ripartito` perché una ripartizione non è una misura.
+
+     Quando la riga arriva da un profilo tecnologico — Smart Quoter 3D, laser,
+     Product Builder — la scomposizione vera esiste e viene conservata così
+     com'è, senza ricalcolarla. */
+
+  var NATURE = {
+    materiale: 'materialCost', material: 'materialCost',
+    manodopera: 'laborCost', labor: 'laborCost',
+    laser: 'machineCost', macchina: 'machineCost', machine: 'machineCost',
+    energia: 'energyCost', energy: 'energyCost',
+    manutenzione: 'maintenanceCost', maintenance: 'maintenanceCost',
+    verniciatura: 'materialCost',
+    packaging: 'packagingCost', imballo: 'packagingCost',
+  };
+
+  function scomposizioneRiga(riga, costo, contesto) {
+    var r = riga || {};
+    var c = costo || {};
+    var voci = {};
+    var diretto = num(r.cost);
+
+    /* 1. Il costo diretto, con il nome che gli spetta quando la natura è
+          dichiarata. Se non lo è, resta `directCost`: meglio un nome onesto
+          che un'attribuzione inventata. */
+    var chiave = NATURE[String(r.natura || '').toLowerCase()] || 'directCost';
+    voci[chiave] = {
+      amount: diretto,
+      source: 'misurato',
+      basis: 'costo dichiarato della riga',
+      nature: r.natura || null,
+      natureLabel: r.naturaLabel || null,
+    };
+
+    /* 2. Lo scarto: la quota di riga di un totale che il motore ha già
+          misurato. Non si riscrive qui la formula `tasso/(1−tasso)` — sarebbe
+          una seconda copia della matematica, che è il difetto contro cui
+          questo progetto ha già speso tre fasi. */
+    if (num(r.wasteCost) > 0) {
+      voci.wasteCost = {
+        amount: num(r.wasteCost),
+        source: 'misurato',
+        basis: 'quota della riga sullo scarto misurato dal motore',
+        nature: null, natureLabel: null,
+      };
+    }
+
+    /* 3. Avviamento e spese generali: costi del **lavoro**, non della riga.
+          Si ripartiscono, e lo dicono. */
+    var quota = num(r.quotaCosto);
+    if (quota > 0 && num(c.setupTotale) > 0) {
+      voci.setupCost = {
+        amount: num(c.setupTotale) * quota, source: 'ripartito',
+        basis: 'quota di costo della riga: ' + (quota * 100).toFixed(1) + '%',
+        nature: null, natureLabel: null,
+      };
+    }
+    if (quota > 0 && num(c.overhead) > 0) {
+      voci.overheadCost = {
+        amount: num(c.overhead) * quota, source: 'ripartito',
+        basis: 'quota di costo della riga: ' + (quota * 100).toFixed(1) + '%',
+        nature: null, natureLabel: null,
+      };
+    }
+
+    /* Il totale è quello che l'adapter ha attribuito alla riga: si verifica
+       che le parti lo compongano, invece di sommarle e sperare. Una differenza
+       oltre il centesimo significa che qualcuno ha aggiunto una voce a metà. */
+    var somma = Object.keys(voci).reduce(function (a, k) { return a + voci[k].amount; }, 0);
+    var attribuito = r.costAllocated != null ? num(r.costAllocated) : somma;
+    return { voci: voci, costTotal: attribuito, quadratura: attribuito - somma };
+  }
+
   /**
    * Una riga d'ordine congelata.
    *
@@ -89,11 +201,11 @@
    */
   function rigaSnapshot(riga, prezzo, contesto) {
     var r = riga || {};
-    var p = prezzo || {};
     var c = contesto || {};
     var qty = Math.max(1, num(r.qty, 1));
     var costoUnitario = num(r.unitCost, num(r.cost) / qty);
     var prezzoUnitario = num(r.unitPrice, num(r.price) / qty);
+    var scomposizione = scomposizioneRiga(r, c.costoContesto, c);
 
     return {
       itemSnapshot: itemSnapshot(r, c.extra),
@@ -104,10 +216,37 @@
       subtotalSnapshot: num(r.price, prezzoUnitario * qty),
       totalCostSnapshot: num(r.cost, costoUnitario * qty),
 
+      /* Il costo della riga, scomposto per quanto il modello lo consente e
+         non oltre. `costTotal` comprende l'avviamento e le spese generali
+         ripartiti, quindi è **maggiore** di `totalCostSnapshot`, che è il solo
+         costo diretto: due numeri diversi che rispondono a due domande
+         diverse, e confonderli è il modo classico di perdere il margine. */
+      costBreakdown: scomposizione.voci,
+      costTotal: scomposizione.costTotal,
+      /* Lo scarto di quadratura fra le voci e il totale attribuito: zero se il
+         conto torna. Congelarlo è più utile che nasconderlo — chi rilegge un
+         ordine con un residuo sa che quel giorno mancava una voce. */
+      costBreakdownResidual: scomposizione.quadratura,
+
+      /* Sconto e prezzo finale di riga: il netto dell'adapter è già al netto
+         dello sconto, quindi il lordo di riga si ricava da quello applicato. */
+      discountPct: num(c.scontoApplicatoPct),
+      lineSubtotal: num(r.price, prezzoUnitario * qty),
+      finalPrice: num(r.price, prezzoUnitario * qty),
+      marginValue: num(r.price) - num(r.cost),
+
       /* Il margine si congela come **numero**, non come regola: ricostruirlo
          domani dalle formule di domani darebbe un altro risultato. */
       marginSnapshot: r.marginPct != null ? num(r.marginPct) : null,
+      marginPercent: r.marginPct != null ? num(r.marginPct) : null,
       markupSnapshot: costoUnitario > 0 ? ((prezzoUnitario - costoUnitario) / costoUnitario) * 100 : null,
+
+      /* La politica e la versione stanno anche sulla riga, non solo
+         sull'intestazione: una riga estratta da un report deve poter dire da
+         sola con quale matematica è nata. */
+      pricingPolicy: c.policyId || null,
+      pricingProfile: c.profilo || null,
+      calculationVersion: c.versione || null,
 
       capturedAt: c.quando || ora(),
     };
@@ -177,8 +316,29 @@
     var p = calcolo._prezzo || {};
     var motore = global.InglyCostEngine;
 
+    var politica = o.policy && typeof o.policy === 'object' ? o.policy : null;
+    var politicaId = politica ? (politica.id || null) : (o.policy || null);
+    var versione = (motore && motore.version) || calcolo.versione || 'sconosciuta';
+    var profilo = (calcolo._ingresso && calcolo._ingresso.tecnologia) || c.tecnologia || null;
+
+    var contestoRiga = {
+      quando: quando,
+      versione: versione,
+      policyId: politicaId,
+      profilo: profilo,
+      scontoApplicatoPct: num(calcolo.discountAppliedPct),
+      /* Ciò che serve per ripartire onestamente: il totale dell'avviamento,
+         le spese generali e il tasso di scarto, presi dal calcolo e non
+         riletti da nessuna configurazione. */
+      costoContesto: {
+        setupTotale: num(calcolo.setupCost),
+        overhead: num(calcolo.overhead),
+        failureRate: (calcolo._ingresso && num(calcolo._ingresso.failureRate)) || 0,
+      },
+    };
+
     var righe = (calcolo.lines || []).map(function (r) {
-      return rigaSnapshot(r, p, { quando: quando, extra: (o.extra || {})[r.id] });
+      return rigaSnapshot(r, p, Object.assign({ extra: (o.extra || {})[r.id] }, contestoRiga));
     });
 
     return congela({
@@ -187,11 +347,23 @@
 
       /* Le versioni: uno storico va potuto rileggere anche dopo che la
          matematica è cambiata, e sapere con quale matematica è nato. */
-      costEngineVersion: (motore && motore.version) || calcolo.versione || 'sconosciuta',
+      costEngineVersion: versione,
+      calculationVersion: versione,
+      pricingProfile: profilo,
       pricingPolicyVersion: o.policyVersion || SCHEMA,
       pricingPolicySnapshot: o.policy
-        ? { id: o.policy.id || o.policy, label: o.policy.label || null, marginTarget: o.policy.marginTarget != null ? o.policy.marginTarget : null }
+        ? {
+          id: politicaId,
+          label: politica ? (politica.label || null) : null,
+          marginTarget: politica && politica.marginTarget != null ? politica.marginTarget : null,
+          maxDiscount: politica && politica.maxDiscount != null ? politica.maxDiscount : null,
+          floorMargin: politica && politica.floorMargin != null ? politica.floorMargin : null,
+        }
         : null,
+      /* La strategia con cui il prezzo è stato deciso — ricarico, margine,
+         prezzo fisso — è parte della politica quanto il numero: due ordini con
+         lo stesso margine target e strategie diverse non sono lo stesso caso. */
+      pricingStrategy: (calcolo._opzioni && calcolo._opzioni.strategia) || null,
 
       lines: righe,
 
@@ -386,8 +558,18 @@
     };
   }
 
+  /**
+   * Lo snapshot da attaccare a un documento diverso da quello che l'ha creato.
+   * Copia e ricongela: il nuovo proprietario non condivide niente.
+   */
+  function clona(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return snapshot;
+    return congela(copiaProfonda(snapshot));
+  }
+
   global.InglyOrderSnapshot = {
     SCHEMA: SCHEMA,
+    clona: clona,
     EVENTI: EVENTI,
     VOCI: VOCI,
     costruisci: costruisci,

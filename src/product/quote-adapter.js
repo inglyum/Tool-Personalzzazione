@@ -52,6 +52,16 @@
         value: costoRiga,
         unitCost: num(l.unitCost, costoRiga / Math.max(1, num(l.qty, 1))),
         unit: l.unit || 'pz',
+        /* La **natura** del costo, non una sua scomposizione: una riga di
+           preventivo è già una voce sola — «Manodopera 40 min» — e non
+           contiene dentro di sé materiale, energia e macchina da separare.
+           Chi congela lo storico deve poterlo dire con precisione invece di
+           inventare una ripartizione che nessuno ha dichiarato. */
+        natura: l.cat || l.category || null,
+        naturaLabel: l.catLabel || null,
+        sku: l.sku || null,
+        itemId: l.itemId != null ? l.itemId : (l.productId != null ? l.productId : null),
+        descrizione: l.detail || l.desc || '',
         /* Confezione e spedizione non si buttano con un pezzo fallito. */
         perdibile: !/spediz|imball|packag/i.test(String(l.name || l.desc || '')),
       };
@@ -149,19 +159,57 @@
     var c = M.calcola(ingresso);
     var p = M.prezzo(c.costoPezzo, opzioni);
 
-    /* Il prezzo di ogni riga in proporzione al suo costo: è come il modulo
-       storico ripartiva il totale, e resta l'unico modo onesto di farlo
-       senza inventare un margine diverso per riga. */
+    /* ── Il prezzo di ogni riga ─────────────────────────────────────────────
+       La quota si prende sul **costo diretto delle righe**, non sul costo del
+       pezzo. Sembra un dettaglio e non lo è: il costo del pezzo comprende
+       avviamento, spese generali e scarto, che non appartengono a nessuna riga
+       in particolare, e dividere per un denominatore più grande dei numeratori
+       fa somme che non tornano.
+
+       Misurato prima della correzione, su un lavoro con 40 € di avviamento e
+       32 € di spese generali: il preventivo diceva 170,93 € e le righe ne
+       sommavano 50,16. Il 70,7% del preventivo non compariva in nessuna riga —
+       e la schermata non aveva modo di accorgersene, perché il totale veniva
+       da un'altra strada.
+
+       Ora le quote sommano a uno per costruzione, quindi i prezzi di riga
+       sommano al netto e i costi attribuiti sommano al costo. */
+    var costoDiretto = ingresso._righe.reduce(function (a, r) { return a + r.value; }, 0);
+
+    /* Lo scarto si **ripartisce**, non si ricalcola: il motore l'ha già
+       misurato, qui se ne divide il totale fra le righe che lo generano. Una
+       seconda formula dello scarto in questo file sarebbe un secondo motore. */
+    var vociScarto = (c.perPezzo.voci || []).filter(function (v) { return v.id === 'scarto'; });
+    var scartoTotale = vociScarto.reduce(function (a, v) { return a + v.value; }, 0);
+    var perdibileTotale = ingresso._righe.reduce(function (a, r) { return a + (r.perdibile !== false ? r.value : 0); }, 0);
+
     var righe = ingresso._righe.map(function (r) {
-      var quota = c.costoPezzo > 0 ? r.value / c.costoPezzo : 0;
+      var quota = costoDiretto > 0 ? r.value / costoDiretto : 0;
       var prezzoRiga = p.netto * quota;
+      var scartoRiga = (perdibileTotale > 0 && r.perdibile !== false)
+        ? scartoTotale * (r.value / perdibileTotale) : 0;
+      /* Il costo che la riga si porta davvero addosso: il suo diretto, il suo
+         scarto, e la sua parte di avviamento e spese generali. È il numero con
+         cui si giudica il margine di riga — il solo costo diretto lo
+         gonfierebbe, ed è il modo classico di credere di guadagnare. */
+      var costoAttribuito = r.value + scartoRiga + (c.unaTantum.totale + c.overhead) * quota;
       return {
         id: r.id, label: r.label, qty: r.qty, unit: r.unit,
-        unitCost: r.unitCost, cost: r.value,
+        natura: r.natura, naturaLabel: r.naturaLabel,
+        sku: r.sku, itemId: r.itemId, descrizione: r.descrizione,
+        perdibile: r.perdibile,
+        /* Quota del costo diretto: la base con cui l'avviamento e le spese
+           generali si ripartiscono. Dichiararla serve a non far passare una
+           ripartizione per una misura. */
+        quotaCosto: quota,
+        unitCost: r.unitCost,
+        cost: r.value,
+        wasteCost: scartoRiga,
+        costAllocated: costoAttribuito,
         price: prezzoRiga,
         unitPrice: r.qty > 0 ? prezzoRiga / r.qty : prezzoRiga,
-        profit: prezzoRiga - r.value,
-        marginPct: prezzoRiga > 0 ? ((prezzoRiga - r.value) / prezzoRiga) * 100 : 0,
+        profit: prezzoRiga - costoAttribuito,
+        marginPct: prezzoRiga > 0 ? ((prezzoRiga - costoAttribuito) / prezzoRiga) * 100 : 0,
       };
     });
 

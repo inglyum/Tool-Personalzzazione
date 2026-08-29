@@ -111,6 +111,23 @@ const esito = await page.evaluate(async () => {
   dico('il pannello dichiara che è uno storico', html.includes('Aperto come storico'));
   dico('il pannello offre il ricalcolo esplicito', html.includes('chiediRicalcolo'));
 
+  /* ── 5b. La scomposizione di riga arriva a schermo ────────────────────── */
+  dico('il pannello apre il conto di ogni riga', /Costo attribuito/.test(html));
+  dico('e dice quali voci sono ripartite', /ripartito/.test(html));
+  dico('ogni riga porta politica e versione di calcolo',
+    letto.snapshot.lines.every((l) => l.calculationVersion && l.pricingProfile));
+  dico('le somme di riga tornano al totale', Math.abs(
+    letto.snapshot.lines.reduce((a, l) => a + l.costTotal, 0) - letto.snapshot.totals.totalCost) < 0.01);
+  dico('i prezzi di riga sommano al netto', Math.abs(
+    letto.snapshot.lines.reduce((a, l) => a + l.subtotalSnapshot, 0) - letto.snapshot.totals.subtotalNet) < 0.01);
+
+  /* ── 5c. Preventivo e ordine non condividono riferimenti ─────────────── */
+  const qRiletto = await IDB.get('quotes', 900001);
+  dico('preventivo e ordine hanno due snapshot distinti',
+    qRiletto && qRiletto.economicSnapshot !== riletto.economicSnapshot);
+  dico('con lo stesso contenuto',
+    qRiletto && JSON.stringify(qRiletto.economicSnapshot) === JSON.stringify(riletto.economicSnapshot));
+
   /* ── 6. Un ordine anteriore alla fase ─────────────────────────────────── */
   const vecchio = { id: 900002, name: 'Ordine storico', value: 340, status: 'done' };
   const lettoVecchio = S.leggi(vecchio);

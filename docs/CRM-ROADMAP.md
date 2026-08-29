@@ -19,8 +19,8 @@ scrive la ricerca prima degli id stabili la riscrive due volte.
 | # | Cosa | Perché adesso |
 | - | ---- | ------------- |
 | **CRM-01** | Audit misurato delle quattro liste | ✅ fatto — `docs/CRM-AUDIT-BEFORE.md` |
-| **CRM-02** | **Paginazione: togliere la causa** | riprodotto: `slice` calcolata e mai usata (patch 092). Una sola funzione costruisce le righe, e le costruisce dalla pagina. Presidio già scritto: `tests/qa/crm-paginazione.mjs`, da mettere in `npm run qa` **nello stesso commit** che lo corregge |
-| **CRM-03** | Id stabile per ogni cliente, con migrazione | oggi le righe si identificano per **posizione**: `_editClient(i)`, `_deleteClient(i)`. Correggere CRM-02 senza questo significa modificare il cliente sbagliato |
+| **CRM-02** | **Paginazione: togliere la causa** | ✅ fatto — pipeline unica `CRMSmart._pipeline()` in ordine SOURCE → SEARCH → FILTER → SORT → PAGINATION; ritirato il secondo render della patch 092. `tests/qa/crm-paginazione.mjs` è in `npm run qa`: 152 controlli su nove dimensioni di rubrica, controllo negativo rosso |
+| **CRM-03** | Id stabile per ogni cliente, con migrazione | ✅ fatto — `_load` assegna un id a chi non ce l'ha e lo salva una volta; righe, selezione, modifica, eliminazione ed esportazione passano dall'id. La selezione sopravvive al cambio pagina |
 | **CRM-04** | Una sorgente sola | `ingly_crm_v1` è dove stanno i clienti veri. L'archivio `clients` di IndexedDB e `BDW.segments` diventano viste, non copie. Migrazione conservativa: nessun record si perde, chi è solo da una parte sopravvive |
 | **CRM-05** | Una funzione che disegna la riga | oggi ce ne sono quattro; è il motivo per cui una correzione ne aggiusta una e lascia le altre |
 
@@ -28,9 +28,9 @@ scrive la ricerca prima degli id stabili la riscrive due volte.
 
 | # | Cosa |
 | - | ---- |
-| CRM-06 | Ricerca con indice, non `filter` su tutto a ogni battuta |
-| CRM-07 | Ordinamento server-side rispetto alla pagina (oggi ordina l'array e poi lo ridisegna intero) |
-| CRM-08 | Filtri combinabili (tipo, segmento, tag) che sopravvivono al cambio pagina |
+| CRM-06 | Ricerca con indice, non `filter` su tutto a ogni battuta (oggi: antirimbalzo 200 ms nella pipeline, 5.000 contatti in meno di 1,5 s misurati) |
+| CRM-07 | Ordinamento su indice invece che su copia dell'array (oggi: `slice()` prima di `sort`, corretto ma O(n log n) a ogni render) |
+| CRM-08 | Filtri combinabili (segmento, tag) oltre ai quattro già nella pipeline: B2B, privato, con telefono, con email |
 | CRM-09 | Rendering a blocchi oltre i 500 clienti |
 | CRM-10 | Conteggi che non richiedono di caricare tutti i record |
 
@@ -73,10 +73,15 @@ esattamente il posto dove sono state violate.
 
 ## Come si saprà che è finito
 
-- `tests/qa/crm-paginazione.mjs` verde e nella suite.
-- Con 137 clienti: la prima pagina disegna 30 righe, la seconda ne disegna 30
-  **diverse**.
-- Con 5.000 clienti la vista si apre senza bloccare la pagina.
-- Modificare il cliente in fondo alla pagina 4 modifica quel cliente.
-- Un cliente con ordini non è cancellabile, ed è archiviabile.
-- `scripts/audit-ui-duplicates.mjs` non trova più liste clienti concorrenti.
+| | esito |
+| - | ----- |
+| `tests/qa/crm-paginazione.mjs` verde e nella suite | ✅ |
+| con 137 clienti la seconda pagina disegna 30 righe **diverse** | ✅ misurato |
+| nessun contatto in due pagine, nessuno perso, su 9 dimensioni di rubrica | ✅ misurato |
+| primo / precedente / successivo / ultimo / dimensione pagina | ✅ misurato |
+| filtro e ricerca **prima** della paginazione | ✅ misurato, con controllo negativo |
+| modificare il cliente in fondo a pagina 4 modifica quel cliente | ✅ misurato |
+| la selezione sopravvive al cambio pagina | ✅ misurato |
+| con 5.000 clienti la vista si apre senza bloccare la pagina | ✅ 30 righe disegnate, render sotto 1,5 s |
+| un cliente con ordini non è cancellabile, ed è archiviabile | ⬜ CRM-11 |
+| `scripts/audit-ui-duplicates.mjs` non trova più liste clienti concorrenti | ⬜ CRM-04: restano quattro liste su due memorie |

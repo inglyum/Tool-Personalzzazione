@@ -1066,7 +1066,12 @@ const Pipeline = {
     const S = typeof window !== 'undefined' && window.InglyOrderSnapshot;
     if (!S) return null;
     const s = q && q.economicSnapshot;
-    if (s && s.stato === 'SNAPSHOT') return s;
+    /* Copia, non riferimento: preventivo e ordine sono due documenti con due
+       vite. Congelarli entrambi impedisce la mutazione, ma finché puntano allo
+       stesso oggetto restano legati — e un ordine che cambia perché è stato
+       riaperto il preventivo da cui è nato è esattamente ciò che questa fase
+       esiste per rendere impossibile. */
+    if (s && s.stato === 'SNAPSHOT') return S.clona(s);
     return S.costruisci(null, {
       motivo: s ? (s.motivo || 'snapshot non acquisito alla quotazione')
                 : 'preventivo salvato prima dello snapshot economico',
