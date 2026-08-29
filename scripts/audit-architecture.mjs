@@ -25,6 +25,22 @@ const sorgenti = [];
 })(RADICE);
 
 const leggi = (p) => fs.readFileSync(p, 'utf8');
+
+/* I conteggi di pattern vanno fatti sul codice, non sui commenti che lo
+   descrivono. Senza questo passaggio lo strumento contava fra i difetti anche
+   la propria documentazione: due `catch {}` citati per spiegare perché non si
+   devono scrivere. Uno strumento di misura che misura sé stesso non serve.
+
+   Non è un parser: le sequenze dentro le stringhe restano, e va bene così —
+   il costo di sbagliare in eccesso è un numero leggermente alto, quello di
+   usare un parser è una dipendenza per contare le graffe. */
+function soloCodice(testo) {
+  return testo
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n')
+    .map((r) => (/^\s*(\/\/|\*)/.test(r) ? '' : r))
+    .join('\n');
+}
 const js = sorgenti.filter((p) => /\.(js|mjs)$/.test(p));
 const css = sorgenti.filter((p) => /\.css$/.test(p));
 
@@ -76,8 +92,9 @@ const conteggi = {
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
 
 for (const file of js) {
-  const testo = leggi(file);
-  const righe = testo.split('\n');
+  const grezzo = leggi(file);
+  const testo = soloCodice(grezzo);
+  const righe = grezzo.split('\n');
 
   // ── API globali dichiarate ──────────────────────────────────────────────
   for (const m of testo.matchAll(/^(?:\s*)(?:window|global)\.([A-Z][\w$]*)\s*=/gm)) R.globali.aggiungi(m[1], file);
@@ -116,9 +133,16 @@ for (const file of js) {
   conteggi.listener += (testo.match(/addEventListener\s*\(/g) || []).length;
   conteggi.onclickInline += (testo.match(/onclick\s*=\s*["'\\]/g) || []).length;
 
-  // ── catch vuoti ─────────────────────────────────────────────────────────
-  const nCatch = (testo.match(/catch\s*(?:\([\w$]*\))?\s*\{\s*\}/g) || []).length;
-  if (nCatch) conteggi.catchVuoti.push({ file, n: nCatch });
+  /* ── catch che non gestiscono ────────────────────────────────────────────
+     Un commento non gestisce un errore, quindi `catch(e){ /* nota *\/ }`
+     inghiotte quanto `catch(e){}`. Ma non sono la stessa cosa da correggere:
+     il primo è una scelta spiegata, il secondo una distrazione. Si contano
+     separati — nel totale che conta per l'utente finiscono entrambi. */
+  const senzaIstruzioni = (testo.match(/catch\s*(?:\([\w$]*\))?\s*\{\s*\}/g) || []).length;
+  const nudi = (grezzo.match(/catch\s*(?:\([\w$]*\))?\s*\{\s*\}/g) || []).length;
+  if (senzaIstruzioni) {
+    conteggi.catchVuoti.push({ file, n: senzaIstruzioni, nudi: nudi, documentati: Math.max(0, senzaIstruzioni - nudi) });
+  }
 
   // ── Emoji nelle stringhe ────────────────────────────────────────────────
   let nEmoji = 0;
@@ -143,7 +167,7 @@ for (const file of css) {
 /* I file js portano CSS dentro le stringhe: è la fonte di conflitto più
    difficile da vedere, quindi si conta anche quello. */
 for (const file of js) {
-  const testo = leggi(file);
+  const testo = soloCodice(leggi(file));
   const nImp = (testo.match(/!important/g) || []).length;
   if (nImp) conteggi.important.push({ file, n: nImp, inStringa: true });
 }
@@ -165,7 +189,12 @@ const esito = {
   listener: conteggi.listener,
   onclickInline: conteggi.onclickInline,
   emoji: { file: conteggi.emoji.length, totali: somma(conteggi.emoji) },
-  catchVuoti: { file: conteggi.catchVuoti.length, totali: somma(conteggi.catchVuoti) },
+  catchVuoti: {
+    file: conteggi.catchVuoti.length,
+    totali: somma(conteggi.catchVuoti),
+    nudi: conteggi.catchVuoti.reduce(function (t, x) { return t + (x.nudi || 0); }, 0),
+    documentati: conteggi.catchVuoti.reduce(function (t, x) { return t + (x.documentati || 0); }, 0),
+  },
   important: { file: conteggi.important.length, totali: somma(conteggi.important) },
   calcoliDalDom: { file: conteggi.dalDom.length, totali: somma(conteggi.dalDom) },
   dettaglio: {
@@ -204,7 +233,8 @@ if (process.argv.includes('--json')) {
   riga('sezioni (view-*)', esito.sezioni);
   riga('chiavi localStorage', esito.storeLocal.chiavi, esito.storeLocal.scritteDaPiuFile + ' scritte da più file');
   riga('store IndexedDB', esito.storeIDB.store, esito.storeIDB.scrittiDaPiuFile + ' scritti da più file');
-  riga('catch vuoti', esito.catchVuoti.totali, 'in ' + esito.catchVuoti.file + ' file');
+  riga('catch che non gestiscono', esito.catchVuoti.totali,
+    esito.catchVuoti.nudi + ' nudi · ' + esito.catchVuoti.documentati + ' con spiegazione · in ' + esito.catchVuoti.file + ' file');
   riga('calcoli letti dal DOM', esito.calcoliDalDom.totali, 'in ' + esito.calcoliDalDom.file + ' file');
 
   console.log('\nPRESENTAZIONE');
