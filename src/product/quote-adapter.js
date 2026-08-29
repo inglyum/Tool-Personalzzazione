@@ -81,6 +81,27 @@
     };
   }
 
+  /**
+   * Il ricarico di un preventivo salvato, in percentuale.
+   *
+   * Serve un solo posto che sappia leggerlo, perché il campo storico è una
+   * trappola misurata: `saveQuote` scrive `markup = percentuale / 100` (100
+   * diventa 1), e le tre funzioni che ricaricano un preventivo rimettevano
+   * quel numero dentro il campo che si aspetta una percentuale. Un preventivo
+   * salvato al 100% si riapriva all'1%: su un costo di 100 €, 200 € diventano
+   * 101 € — quasi metà del prezzo, senza un avviso.
+   *
+   * `markupPct` è il campo nuovo e dice quel che significa. Quando manca —
+   * ogni preventivo salvato finora — il vecchio si converte, ed è una
+   * conversione esatta, non una stima.
+   */
+  function markupPctDi(q) {
+    var o = q || {};
+    if (o.markupPct != null && isFinite(parseFloat(o.markupPct))) return num(o.markupPct);
+    if (o.markup != null && isFinite(parseFloat(o.markup))) return num(o.markup) * 100;
+    return 100;
+  }
+
   /** Le opzioni di prezzo, nella forma del motore. */
   function buildPricingOptions(q) {
     var stato = q || {};
@@ -270,6 +291,7 @@
   }
 
   global.InglyQuoteAdapter = {
+    markupPctDi: markupPctDi,
     buildQuoteInput: buildQuoteInput,
     buildPricingOptions: buildPricingOptions,
     calculateQuote: calculateQuote,

@@ -168,8 +168,8 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
   /* Misurati oggi. Ogni riduzione va accompagnata dall'abbassamento del tetto:
      è il modo per accorgersi se un numero risale in silenzio. */
   const TETTI = {
-    motoriDuplicati: 13,      // categoria D — un secondo conto del prezzo
-    regoleDaEstrarre: 7,      // categoria E — politiche commerciali nel codice
+    motoriDuplicati: 11,      // categoria D — un secondo conto del prezzo
+    regoleDaEstrarre: 8,      // categoria E — politiche commerciali nel codice
   };
 
   for (const [chiave, tetto] of Object.entries(TETTI)) {
@@ -183,6 +183,18 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
       );
     });
   }
+
+  /* I due tetti separati hanno un buco che si è visto all'opera: la categoria
+     di un file dipende anche dal fatto che quel file *nomini* il motore, e un
+     file che comincia a usarlo per una cosa passa da D a E portandosi dietro
+     le formule che aveva già. D scende di uno, E sale di uno, nessuna riga di
+     prezzo è nata o morta — e con i soli tetti per categoria il test griderebbe
+     a una regressione che non c'è, o coprirebbe una crescita vera dietro uno
+     spostamento. La somma non si sposta per un cambio di casella. */
+  await t.test('D + E ≤ 19 — la somma non cresce, comunque si spostino', () => {
+    const somma = dati.riassunto.motoriDuplicati + dati.riassunto.regoleDaEstrarre;
+    assert.ok(somma <= 19, 'prezzo fuori dal motore salito a ' + somma + ' (tetto 19)');
+  });
 
   await t.test('il motore resta uno solo', () => {
     assert.equal(dati.riassunto.perCategoria.A, 1, 'esiste più di un motore di costo');
@@ -279,4 +291,54 @@ test('i residui non crescono', () => {
     'i file con matematica di prezzo propria sono saliti a ' + residui.length +
     ' (tetto ' + TETTO + '). Chi ha aggiunto una formula la sposti nel motore.',
   );
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Il motore non entra dove si legge il passato.
+
+   È il cricchetto della Fase 30, e presidia un difetto che non somiglia a un
+   errore: un calcolo giusto fatto nel momento sbagliato. Una vista che
+   rilegge il listino corrente per disegnare un ordine di marzo scrive un
+   margine che sembra storico e non lo è.
+   ═══════════════════════════════════════════════════════════════════════════ */
+test('nessuna vista storica chiama un motore di prezzo', async (t) => {
+  const { execFileSync } = await import('node:child_process');
+  const dati = JSON.parse(execFileSync('node', ['scripts/audit-historical-pricing.mjs', '--json'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }));
+
+  await t.test('zero violazioni', () => {
+    assert.equal(dati.violazioni.length, 0,
+      dati.violazioni.map((v) => v.file + ':' + v.riga + ' ' + v.funzione + '() — ' + v.cosa).join('\n'));
+  });
+
+  await t.test('le viste presidiate non diminuiscono', () => {
+    /* Un presidio si aggira anche cancellando ciò che presidia: se il numero
+       di viste riconosciute cala, o qualcuno le ha rinominate o il
+       rilevatore ha smesso di vederle, e in entrambi i casi va guardato. */
+    assert.ok(dati.vistePresidiate >= 12,
+      'le viste storiche riconosciute sono scese a ' + dati.vistePresidiate + ' (erano 12)');
+  });
+});
+
+/* Lo snapshot dev'essere nel file consegnato, non solo nei sorgenti. */
+test('lo storico economico è nel file consegnato', async (t) => {
+  await t.test('il modulo c\'è', () => {
+    assert.ok(dist.includes('InglyOrderSnapshot'), 'InglyOrderSnapshot assente dal bundle');
+    assert.ok(dist.includes('InglyOrderEconomics'), 'InglyOrderEconomics assente dal bundle');
+  });
+
+  await t.test('la conferma del preventivo lo scrive', () => {
+    assert.ok(/economicSnapshot:\s*economicSnapshot/.test(dist),
+      'l\'ordine creato dalla conferma non porta lo snapshot');
+    assert.ok(dist.includes('ORDER_CONFIRMED'), 'nessun evento di conferma nel registro economico');
+  });
+
+  await t.test('il messaggio per gli ordini senza storico è quello dichiarato', () => {
+    assert.ok(dist.includes('Dati economici storici non disponibili'),
+      'il testo per gli ordini legacy non è nel file consegnato');
+  });
+
+  await t.test('il dettaglio ordine monta il pannello', () => {
+    const usi = (dist.match(/InglyOrderEconomics\.pannello\(/g) || []).length;
+    assert.ok(usi >= 2, 'il pannello è montato in ' + usi + ' viste, attese almeno 2 (modale e drawer)');
+  });
 });

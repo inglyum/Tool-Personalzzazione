@@ -87,7 +87,7 @@ const Workflow={
     if(q.lines&&q.lines.length){Quoter.lines=[...q.lines];}
     if(eid('q-name'))eid('q-name').value=q.name||'';
     if(eid('q-notes'))eid('q-notes').value=q.notes||'';
-    if(eid('qr-markup'))eid('qr-markup').value=q.markup||100;
+    if(eid('qr-markup'))eid('qr-markup').value=(window.InglyQuoteAdapter ? window.InglyQuoteAdapter.markupPctDi(q) : (q.markup!=null?q.markup*100:100));
     if(eid('qr-discount'))eid('qr-discount').value=q.discount||0;
     await App.populateClientSelects();
     if(eid('q-client')&&q.clientId)eid('q-client').value=q.clientId;
@@ -723,6 +723,7 @@ const Orders={
           <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:8px">🏷️ Stato</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">${statusButtons}</div>
         </div>
+        ${(typeof window!=='undefined'&&window.InglyOrderEconomics)?window.InglyOrderEconomics.pannello(o):''}
       </div>`;
 
     window._odStatus = curStat;
@@ -1051,6 +1052,27 @@ const Pipeline = {
     annullato:  { label: '❌ Annullato',  color: '#ef4444', next: [] },
   },
 
+  /**
+   * Lo storico economico dell'ordine che sta per nascere.
+   *
+   * Non ricalcola: prende quello che il preventivo aveva congelato al momento
+   * del salvataggio. Se non c'è — preventivo anteriore allo snapshot, oppure
+   * salvato senza motore — non se ne inventa uno: si registra che manca, e con
+   * quale motivo. Un margine dedotto oggi dai costi di oggi sembrerebbe un
+   * dato storico e non lo è, ed è peggio di una casella vuota perché una
+   * casella vuota si vede.
+   */
+  _snapshotDaPreventivo(q) {
+    const S = typeof window !== 'undefined' && window.InglyOrderSnapshot;
+    if (!S) return null;
+    const s = q && q.economicSnapshot;
+    if (s && s.stato === 'SNAPSHOT') return s;
+    return S.costruisci(null, {
+      motivo: s ? (s.motivo || 'snapshot non acquisito alla quotazione')
+                : 'preventivo salvato prima dello snapshot economico',
+    });
+  },
+
   // ── Main entry: Workflow preme "Conferma Ordine" ─────────────────────────────
   async confirm(quoteId) {
     const q = await IDB.get('quotes', quoteId);
@@ -1069,14 +1091,23 @@ const Pipeline = {
     const existingOrders = await AppStore.get('orders').catch(() => []);
     const existingOrder = existingOrders.find(o => o.originQuote === quoteId);
 
+    const _S = typeof window !== 'undefined' && window.InglyOrderSnapshot;
+    const economicSnapshot = this._snapshotDaPreventivo(q);
+
     if (existingOrder) {
       existingOrder.status = 'working';
       existingOrder.updatedAt = new Date().toISOString();
+      /* Uno snapshot già acquisito non si sovrascrive: sarebbe la
+         riscrittura di uno storico, che è esattamente ciò che si evita. */
+      if (economicSnapshot && !(existingOrder.economicSnapshot && existingOrder.economicSnapshot.stato === 'SNAPSHOT')) {
+        existingOrder.economicSnapshot = economicSnapshot;
+      }
+      if (_S) _S.registra(existingOrder, 'ORDER_CONFIRMED', { reason: 'conferma del preventivo ' + quoteId });
       await IDB.put('orders', existingOrder);
       orderId = existingOrder.id;
     } else {
       orderId = Date.now();
-      await IDB.put('orders', {
+      const nuovo = {
         id: orderId,
         name: q.name || 'Ordine da preventivo',
         client: q.clientName || '',
@@ -1087,9 +1118,20 @@ const Pipeline = {
         value: q.grossPrice || 0,
         desc: q.notes || '',
         originQuote: quoteId,
+        /* `value` resta un totale; il conto sta qui, riga per riga, con la
+           versione del motore che l'ha prodotto. */
+        economicSnapshot: economicSnapshot,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
+      if (_S) {
+        _S.registra(nuovo, 'ORDER_CREATED', { reason: 'da preventivo ' + quoteId });
+        _S.registra(nuovo, 'ORDER_CONFIRMED', {
+          after: economicSnapshot && economicSnapshot.totals ? economicSnapshot.totals.totalGross : (q.grossPrice || 0),
+          reason: 'conferma del preventivo ' + quoteId,
+        });
+      }
+      await IDB.put('orders', nuovo);
     }
 
     // 3. Crea o aggiorna Sale "da_pagare"
@@ -1845,6 +1887,11 @@ const OrderFlow = {
           <span style="color:#10b981">${fmtCur(o.total||0)}</span>
         </div>
       </div>`:''}
+
+      <!-- Lo storico economico: letto dallo snapshot, mai ricalcolato qui. -->
+      <div style="margin-top:12px">
+        ${(typeof window!=='undefined'&&window.InglyOrderEconomics)?window.InglyOrderEconomics.pannello(o):''}
+      </div>
     `;
   },
 

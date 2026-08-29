@@ -46,6 +46,12 @@ export const PRODUCT_FILES = [
   'print3d-cost.js',
   /* L'adapter del preventivo: dopo il motore, prima di chi lo usa. */
   'quote-adapter.js',
+  /* Lo storico economico: congela ciò che l'adapter ha appena calcolato, e
+     va quindi dopo di lui — ma prima dei moduli storici che lo chiamano. */
+  'order-snapshot.js',
+  /* La vista dello storico: dopo lo snapshot che legge e dopo `ui.js`, da cui
+     prende `esc` e i dialoghi. */
+  'order-economics.js',
   'first-run.js',
 ];
 

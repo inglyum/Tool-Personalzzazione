@@ -946,7 +946,14 @@ const Quoter={
     const totalCost=+_r.totalCost.toFixed(2);
     const net=+_r.subtotalNet.toFixed(2);
     const gross=+_r.totalGross.toFixed(2);
-    const q={name,clientId,clientName,date:today(),deadline:eid('q-deadline')?.value||'',priority:eid('q-priority')?.value||'Media',notes:eid('q-notes')?.value||'',lines:this.lines,totalCost:+totalCost.toFixed(2),netPrice:net,grossPrice:gross,markup:parseFloat(eid('qr-markup')?.value||100)/100,discount:parseFloat(eid('qr-discount')?.value||0),ivaMode:this._ivaMode!==false,status:'in_attesa',category:'Quoter'};
+    const q={name,clientId,clientName,date:today(),deadline:eid('q-deadline')?.value||'',priority:eid('q-priority')?.value||'Media',notes:eid('q-notes')?.value||'',lines:this.lines,totalCost:+totalCost.toFixed(2),netPrice:net,grossPrice:gross,markup:parseFloat(eid('qr-markup')?.value||100)/100,markupPct:parseFloat(eid('qr-markup')?.value||100)||100,discount:parseFloat(eid('qr-discount')?.value||0),ivaMode:this._ivaMode!==false,status:'in_attesa',category:'Quoter'};
+    /* Lo storico economico si congela **qui**, dove il calcolo esiste ancora.
+       Ricostruirlo dopo dai campi salvati non funziona: `q.markup` conserva
+       una semantica diversa da quella che il motore riceve (100 diventa 1,
+       non 2), e un preventivo riletto darebbe un prezzo che nessuno ha mai
+       proposto al cliente. Si conserva il conto, non gli ingredienti. */
+    const _snap = typeof window !== 'undefined' && window.InglyOrderSnapshot;
+    if(_snap) q.economicSnapshot = _snap.costruisci(_r, { spiegazione: this._spiega({setupCost:0}) });
     if(this.editId){q.id=this.editId;await snapshotRecord('quotes',this.editId);}else{q.id=Date.now();}
     const id=await IDB.put('quotes',q);
 
@@ -1648,7 +1655,7 @@ const Quoter={
     const q=snap.data;
     if(q.lines){this.lines=[...q.lines];}
     const sv=function(id,v){const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
-    sv('q-name',q.name); sv('q-notes',q.notes); sv('qr-markup',q.markup); sv('qr-discount',q.discount);
+    sv('q-name',q.name); sv('q-notes',q.notes); sv('qr-markup',(window.InglyQuoteAdapter ? window.InglyQuoteAdapter.markupPctDi(q) : (q.markup!=null?q.markup*100:100))); sv('qr-discount',q.discount);
     this.renderLines(); this.recalcRight();
     document.querySelectorAll('[style*=position\:fixed]')[0]&&document.querySelectorAll('[style*=position\:fixed]')[0].remove();
     toast('Revisione ripristinata', 'success');

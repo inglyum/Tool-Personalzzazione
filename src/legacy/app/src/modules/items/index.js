@@ -2205,7 +2205,7 @@ Quoter._loadForEdit = async function(quoteId) {
   setV('q-notes', q.notes);
   setV('q-deadline', q.deadline);
   setV('q-priority', q.priority||'Media');
-  setV('qr-markup', q.markup||100);
+  setV('qr-markup', (window.InglyQuoteAdapter ? window.InglyQuoteAdapter.markupPctDi(q) : (q.markup!=null?q.markup*100:100)));
   setV('qr-discount', q.discount||0);
   // Restore client
   const clientEl = eid('q-client');
