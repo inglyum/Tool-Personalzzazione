@@ -470,7 +470,9 @@ const Quoter={
 
   addLineFromCalc(d){
     if(!d) return;
-    this.lines.push({id:Date.now(), name:d.name, desc:d.name||'', catLabel:d.category||'', detail:'', unit:d.unit||'pz', qty:d.qty||1, unitCost:d.unitCost||0, markup:1.4, price:+((d.unitCost||0)*1.4).toFixed(2), subtotal:+((d.unitCost||0)*(d.qty||1)).toFixed(2)});
+    this.lines.push({id:Date.now(), name:d.name, desc:d.name||'', catLabel:d.category||'', detail:'', unit:d.unit||'pz', qty:d.qty||1, unitCost:d.unitCost||0, markup:1.4, price:+((d.unitCost||0)*1.4).toFixed(2), subtotal:+((d.unitCost||0)*(d.qty||1)).toFixed(2),
+      itemId: d.itemId ?? null, itemStore: d.itemStore ?? null,
+      itemKey: (d.itemId!=null && d.itemStore) ? (d.itemStore+':'+d.itemId) : (d.itemKey ?? null)});
     this.renderLines();
     this.recalcRight();
     toast(`"${d.name}" aggiunto al preventivo`, 'success');
@@ -516,7 +518,7 @@ const Quoter={
         items.push({
           label: `${avail} [🪵] ${i.name}${dims} — ${fmtCur(i.costPrice||0)}/${i.unit||'mq'}`,
           cost: i.costPrice||0, unit: i.unit||'mq', name: i.name,
-          id: i.id, group: i.category||'Materiale',
+          id: i.id, store: 'items', group: i.category||'Materiale',
           dims: dims.trim(), supplier: i.supplier||''
         });
       });
@@ -524,7 +526,7 @@ const Quoter={
       const old = (await AppStore.get('materials').catch(()=>[])).filter(m=>m.type==='material');
       old.forEach(m => items.push({
         label: `[🔧] ${m.name} — ${fmtCur(m.cost)} ${m.unit}`,
-        cost: m.cost, unit: m.unit, name: m.name, group: 'Materiali (Legacy)'
+        cost: m.cost, unit: m.unit, name: m.name, group: 'Materiali (Legacy)', id: m.id, store: 'materials'
       }));
 
     } else if(cat === 'verniciatura'){
@@ -538,7 +540,7 @@ const Quoter={
         items.push({
           label: `[🎨] ${p.nome||p.name}${ral} (${tipo}) — ${fmtCur(cpm)}/m²`,
           cost: cpm, unit: 'm²', name: p.nome||p.name,
-          group: 'Vernici', paintId: p.id, tipo, coverage: cov,
+          group: 'Vernici', paintId: p.id, id: p.id, store: 'paints', tipo, coverage: cov,
           unitCost: p.costoUnitario||p.cost||0
         });
       });
@@ -549,7 +551,7 @@ const Quoter={
         items.push({
           label: `[🖌️] ${i.name} (Magazzino) — ${fmtCur(cpm)}/m²`,
           cost: cpm, unit: 'm²', name: i.name,
-          group: 'Colori Magazzino', id: i.id
+          group: 'Colori Magazzino', id: i.id, store: 'items'
         });
       });
       if(!paints.length && !colori.length){
@@ -566,7 +568,7 @@ const Quoter={
         items.push({
           label: `[⚡] ${i.name} — ${fmtCur(cpm)}/min`,
           cost: cpm, unit: '€/min', name: i.name,
-          group: 'Macchinari', id: i.id
+          group: 'Macchinari', id: i.id, store: 'items'
         });
       });
       // Fallback macchine vecchio store
@@ -605,14 +607,14 @@ const Quoter={
         items.push({
           label: `${avail} [${i.category==='LED & Illuminazione'?'💡':i.category==='Minuteria'?'🔧':i.category==='Magneti'?'🧲':'🎁'}] ${i.name} — ${fmtCur(i.costPrice||0)}/${i.unit||'pz'}`,
           cost: i.costPrice||0, unit: i.unit||'pz', name: i.name,
-          group: i.category||'Gadget', id: i.id
+          group: i.category||'Gadget', id: i.id, store: 'items'
         });
       });
       // Fallback vecchio store gadgets
       const oldG = await IDB.getAll('gadgets').catch(()=>[]);
       oldG.forEach(g => items.push({
         label:`[🎁] ${g.name} — ${fmtCur(g.cost||0)}/${g.unit||'pz'}`,
-        cost: g.cost||0, unit:g.unit||'pz', name:g.name, group:'Gadget (Legacy)'
+        cost: g.cost||0, unit:g.unit||'pz', name:g.name, group:'Gadget (Legacy)', id: g.id, store: 'gadgets'
       }));
 
     } else if(cat === 'catalogo'){
@@ -620,7 +622,7 @@ const Quoter={
       catalog.forEach(c => items.push({
         label:`[📋] ${c.name} (${c.category||'Catalogo'}) — costo ${fmtCur(c.costPrice)}`,
         cost: c.costPrice, unit:'pz', sale: c.salePrice, name: c.name,
-        group: c.category||'Catalogo'
+        group: c.category||'Catalogo', id: c.id, store: 'catalog'
       }));
     }
 
@@ -632,7 +634,12 @@ const Quoter={
       opt.dataset.unit = item.unit||'pz';
       opt.dataset.name = item.name||'';
       if(item.sale) opt.dataset.sale = item.sale;
-      if(item.id)   opt.dataset.itemId = item.id;
+      /* L'identità dell'articolo, e da quale archivio viene. `itemId` da solo
+         non basta: quattro archivi vivi usano gli stessi numeri per articoli
+         diversi, ed è la ragione per cui il registro di magazzino ha una
+         chiave `store:id`. */
+      if(item.id)    opt.dataset.itemId = item.id;
+      if(item.store) opt.dataset.itemStore = item.store;
       sel.appendChild(opt);
     });
 
@@ -814,7 +821,19 @@ const Quoter={
     const unitFinal=calc>0?calc:unitCost;
     // Get unit from selected resource option
     const resUnit=(resOpt?.dataset?.unit)||'pz';
-    const line={id:Date.now(),cat,catLabel:catLabels[cat],desc,detail,unitCost:+unitFinal.toFixed(4),unit:resUnit,qty,subtotal:+(unitFinal*qty).toFixed(2),color:colorText,colorPick};
+    /* L'identità dell'articolo era già nell'option e si perdeva qui: la riga
+       conservava una descrizione e un costo digitato, e nient'altro. È il
+       motivo per cui un rincaro del materiale non poteva entrare in nessun
+       ricalcolo — nessuno sapeva **quale** materiale fosse.
+
+       `itemKey` è la chiave del registro di magazzino, `store:id`. Le righe
+       che non vengono da un archivio (manodopera, voci scritte a mano) non ne
+       hanno una, e resta null: meglio dichiarare che non c'è che inventarla. */
+    const itemId = resOpt?.dataset?.itemId ?? null;
+    const itemStore = resOpt?.dataset?.itemStore ?? null;
+    const line={id:Date.now(),cat,catLabel:catLabels[cat],desc,detail,unitCost:+unitFinal.toFixed(4),unit:resUnit,qty,subtotal:+(unitFinal*qty).toFixed(2),color:colorText,colorPick,
+      itemId: itemId, itemStore: itemStore,
+      itemKey: (itemId!=null && itemStore) ? (itemStore+':'+itemId) : null};
     this.lines.push(line);
     this.renderLines();
     this.recalcRight();
@@ -841,11 +860,18 @@ const Quoter={
     }
     if(wrap)wrap.style.display='';
     if(empty)empty.style.display='none';
+    /* Il costo reale accanto a quello digitato. Non lo sostituisce: lo affianca,
+       perché la decisione di adottarlo è di chi vende. Le righe non collegate
+       al magazzino — manodopera, voci scritte a mano — non mostrano niente:
+       un'etichetta «non nel registro» su ogni riga di manodopera sarebbe
+       rumore, non informazione. */
+    const _reg = this._costiRegistro || {};
     body.innerHTML=this.lines.map(l=>`
       <tr style="border-top:1px solid var(--border)">
         <td style="padding:10px 6px">
           <div style="font-weight:600;font-size:13px;color:#fff">${l.desc}</div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.catLabel} · ${l.detail}</div>
+          ${_reg[l.id]||''}
           ${l.colorPick&&l.colorPick!='#8B5E3C'?`<span style="display:inline-block;width:10px;height:10px;background:${l.colorPick};border-radius:50%;margin-top:3px;vertical-align:middle"></span>`:''}</td>
         <td style="padding:10px 6px;text-align:center;color:var(--text)">${l.qty}</td>
         <td style="padding:10px 6px;text-align:right;color:var(--text-muted);font-size:12px">${fmtCur(l.unitCost)}</td>
@@ -855,6 +881,9 @@ const Quoter={
     const r=this._calcola({setupCost:0});
     if(r.indisponibile){ this._updateTotals(0,0,0,0); return; }
     this._updateTotals(r.totalCost,r.subtotalNet,r.vat,r.totalGross);
+    /* I costi dal registro arrivano dopo, senza far aspettare la tabella:
+       leggere il magazzino non deve rallentare la digitazione. */
+    this._aggiornaCostiRegistro();
   },
 
   _updateTotals(cost,net,vat,gross){
@@ -929,6 +958,54 @@ const Quoter={
     this._updateTotals(totalCost,net,vat,gross);
   },
 
+  /**
+   * Il costo reale di ogni riga collegata al magazzino, dal registro.
+   *
+   * Non tocca `l.unitCost`: il preventivo resta quello che l'utente ha
+   * costruito. Mostra soltanto quanto quel materiale è costato davvero, e di
+   * quanto si discosta — che è l'informazione che fa alzare la testa a chi
+   * legge un preventivo prima di mandarlo.
+   */
+  async _aggiornaCostiRegistro(){
+    const R = typeof window !== 'undefined' && window.InglyInventoryCostResolver;
+    const Inv = typeof window !== 'undefined' && window.InglyInventory;
+    const V = typeof window !== 'undefined' && window.InglyInventoryView;
+    if(!R || !Inv || !V) return;
+    const collegate = this.lines.filter(l => l.itemKey);
+    if(!collegate.length){ this._costiRegistro = {}; return; }
+    let movimenti = [];
+    try { movimenti = await Inv.tutti(); } catch(e){ return; }
+    const mappa = {};
+    collegate.forEach(l => {
+      const esito = R.risolviRiga(movimenti, l);
+      mappa[l.id] = V.badgeCosto(esito, { silenzioseNonCollegate: true });
+    });
+    const cambiato = JSON.stringify(mappa) !== JSON.stringify(this._costiRegistro||{});
+    this._costiRegistro = mappa;
+    /* Si ridisegna solo se qualcosa è cambiato: altrimenti ogni aggiornamento
+       chiamerebbe se stesso all'infinito. */
+    if(cambiato) this.renderLines();
+  },
+
+  /** Ciò che il registro sa, nella forma che lo snapshot congela. */
+  async _extraDaRegistro(){
+    const R = typeof window !== 'undefined' && window.InglyInventoryCostResolver;
+    const Inv = typeof window !== 'undefined' && window.InglyInventory;
+    if(!R || !Inv) return {};
+    const collegate = this.lines.filter(l => l.itemKey);
+    if(!collegate.length) return {};
+    let movimenti = [];
+    try { movimenti = await Inv.tutti(); } catch(e){ return {}; }
+    const extra = {};
+    collegate.forEach(l => {
+      extra[l.id] = {
+        itemKey: l.itemKey, itemStore: l.itemStore,
+        costSnapshot: R.congelaPerSnapshot(R.risolviRiga(movimenti, l)),
+      };
+    });
+    return extra;
+  },
+
   setDiscount(pct){
     if(eid('qr-discount'))eid('qr-discount').value=pct;
     this.recalcRight();
@@ -953,7 +1030,14 @@ const Quoter={
        non 2), e un preventivo riletto darebbe un prezzo che nessuno ha mai
        proposto al cliente. Si conserva il conto, non gli ingredienti. */
     const _snap = typeof window !== 'undefined' && window.InglyOrderSnapshot;
-    if(_snap) q.economicSnapshot = _snap.costruisci(_r, { spiegazione: this._spiega({setupCost:0}) });
+    if(_snap) q.economicSnapshot = _snap.costruisci(_r, {
+      spiegazione: this._spiega({setupCost:0}),
+      /* Il costo dal registro, congelato riga per riga con la sua provenienza.
+         Non sostituisce il costo del preventivo — quello resta quello che
+         l'utente ha costruito — ma da qui in poi l'ordine sa anche quanto quel
+         materiale era davvero costato, e da quali acquisti. */
+      extra: await this._extraDaRegistro(),
+    });
     if(this.editId){q.id=this.editId;await snapshotRecord('quotes',this.editId);}else{q.id=Date.now();}
     const id=await IDB.put('quotes',q);
 
@@ -1812,7 +1896,7 @@ const Quoter={
       return;
     }
     container.innerHTML=items.map((item,idx)=>`
-      <div class="rp-item" onclick="Quoter._selectRPItem(${idx},'${(item.name||'').replace(/'/g,'&apos;')}',${item.cost},'${item.unit||'pz'}')"
+      <div class="rp-item" onclick="Quoter._selectRPItem(${idx})"
         style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s"
         class="ls-row-hover">
         <div style="width:36px;height:36px;border-radius:10px;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">
@@ -1828,7 +1912,15 @@ const Quoter={
   },
 
   _rpItems:[],
-  _selectRPItem(idx,name,cost,unit){
+  _selectRPItem(idx,nome,costo,unita){
+    /* Si legge la voce dall'elenco invece di riceverne tre pezzi nell'onclick:
+       nome, costo e unità arrivavano interpolati in una stringa e l'identità
+       dell'articolo restava indietro, perché non era fra i tre. I parametri
+       restano accettati per chi chiama la funzione dall'esterno. */
+    const voce = this._rpItems?.[idx] || {};
+    const name = nome != null ? nome : (voce.name || '');
+    const cost = costo != null ? costo : (voce.cost || 0);
+    const unit = unita != null ? unita : (voce.unit || 'pz');
     // Set resource label
     const lbl=eid('ql-resource-label');if(lbl)lbl.textContent=name;
     // Set cost
@@ -1842,6 +1934,8 @@ const Quoter={
     if(sel){
       let opt=[...sel.options].find(o=>o.dataset.name===name);
       if(!opt){opt=document.createElement('option');opt.dataset.name=name;opt.dataset.cost=cost;opt.dataset.unit=unit;opt.textContent=name;sel.appendChild(opt);}
+      if(voce.id!=null)  opt.dataset.itemId = voce.id;
+      if(voce.store)     opt.dataset.itemStore = voce.store;
       sel.value=opt.value;
     }
     // Trigger AnchorAI

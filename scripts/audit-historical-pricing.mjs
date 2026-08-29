@@ -55,6 +55,25 @@ const CONSENTITE = {
   statoDaPreventivo: 'compone gli ingressi per il ricalcolo esplicito',
 };
 
+/* ── Fase 32 · il resolver è l'unico che valorizza ─────────────────────────
+   Un secondo motore di costo non nasce mai dichiarandosi tale: nasce come una
+   funzione che «per adesso» legge il listino, dentro un modulo che aveva
+   un'altra ragione di esistere. Questi due controlli lo intercettano prima. */
+const MOTORI_VIETATI = [
+  /\bInventoryCostEngine\b/, /\bProductCostEngine\b/, /\bMaterialPricingEngine\b/,
+  /\bStockCostEngine\b/, /\bWarehouseCostEngine\b/,
+];
+
+/* Il resolver legge il registro e nient'altro. Se comincia a nominare un
+   listino, ha smesso di essere un resolver ed è diventato un ripiego. */
+const RESOLVER = 'src/product/inventory-cost-resolver.js';
+const VIETATI_NEL_RESOLVER = [
+  { re: /\bcostPrice\b/, cosa: 'legge il costo di anagrafica' },
+  { re: /\bsalePrice\b/, cosa: 'legge un prezzo di vendita' },
+  { re: /\bcatalog\b/i, cosa: 'legge il catalogo' },
+  { re: /\|\|\s*0\b(?!\s*[;,)])/, cosa: 'ripiego a zero su un costo' },
+];
+
 /* Cosa non deve comparire: motori di prezzo e letture di listino corrente. */
 const VIETATI = [
   { re: /InglyCostEngine\s*\.\s*(calcola|prezzo|preventiva|scaglioni)\b/, cosa: 'chiamata al motore di costo' },
@@ -103,7 +122,38 @@ for (const f of file) {
   }
 }
 
-const esito = { fileAnalizzati: file.length, vistePresidiate: trovate.length, violazioni };
+/* ── I due controlli della Fase 32 ─────────────────────────────────────── */
+const motoriParalleli = [];
+for (const f of file) {
+  const testo = soloCodice(fs.readFileSync(f, 'utf8'));
+  for (const re of MOTORI_VIETATI) {
+    const m = testo.match(re);
+    if (m) motoriParalleli.push({ file: f, nome: m[0] });
+  }
+}
+
+const resolverSporco = [];
+if (fs.existsSync(RESOLVER)) {
+  const testo = soloCodice(fs.readFileSync(RESOLVER, 'utf8'));
+  testo.split('\n').forEach((riga, n) => {
+    for (const v of VIETATI_NEL_RESOLVER) {
+      if (v.re.test(riga)) resolverSporco.push({ riga: n + 1, cosa: v.cosa, testo: riga.trim().slice(0, 90) });
+    }
+  });
+}
+
+violazioni.push(...motoriParalleli.map((m) => ({
+  file: m.file, funzione: '(modulo)', riga: 0,
+  cosa: 'secondo motore di costo: ' + m.nome, testo: m.nome,
+})));
+violazioni.push(...resolverSporco.map((r) => ({
+  file: RESOLVER, funzione: 'resolver', riga: r.riga, cosa: r.cosa, testo: r.testo,
+})));
+
+const esito = {
+  fileAnalizzati: file.length, vistePresidiate: trovate.length, violazioni,
+  motoriParalleli: motoriParalleli.length, resolverSporco: resolverSporco.length,
+};
 
 if (process.argv.includes('--json')) {
   console.log(JSON.stringify(esito, null, 2));
@@ -112,6 +162,8 @@ if (process.argv.includes('--json')) {
   console.log('\nIL MOTORE NON ENTRA DOVE SI LEGGE IL PASSATO — ' + file.length + ' file\n');
   console.log('  viste storiche presidiate : ' + trovate.length);
   trovate.forEach((t) => console.log('      ' + breve(t.file) + ' · ' + t.nome + '()  ' + t.righe + ' righe'));
+  console.log('\n  motori di costo paralleli : ' + motoriParalleli.length + (motoriParalleli.length ? '' : ' ✔'));
+  console.log('  ripieghi nel resolver     : ' + resolverSporco.length + (resolverSporco.length ? '' : ' ✔'));
   console.log('\n  eccezioni dichiarate      : ' + Object.keys(CONSENTITE).length);
   Object.entries(CONSENTITE).forEach(([k, v]) => console.log('      ' + k + '() — ' + v));
 

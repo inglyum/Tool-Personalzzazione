@@ -85,6 +85,12 @@
     var e = extra || {};
     return {
       itemId: r.itemId != null ? r.itemId : (r.id != null ? r.id : null),
+      itemStore: r.itemStore || e.itemStore || null,
+      /* Il collegamento all'articolo di magazzino, congelato come tutto il
+         resto. Da qui in poi un ordine storico sa **quale** materiale ha
+         consumato, non soltanto quanto è costato. Resta `null` per le righe
+         che non vengono da un archivio: dichiararlo è meglio che dedurlo. */
+      itemKey: r.itemKey || e.itemKey || null,
       sku: e.sku || r.sku || null,
       name: r.label || r.name || r.desc || 'Voce',
       description: r.detail || e.description || '',
@@ -240,6 +246,14 @@
       marginSnapshot: r.marginPct != null ? num(r.marginPct) : null,
       marginPercent: r.marginPct != null ? num(r.marginPct) : null,
       markupSnapshot: costoUnitario > 0 ? ((prezzoUnitario - costoUnitario) / costoUnitario) * 100 : null,
+
+      /* Da dove viene il costo di questa riga: politica di valorizzazione,
+         base, movimenti di magazzino usati, versione del resolver. Congelato
+         come tutto il resto — un costo risolto oggi e riletto fra due anni
+         senza la sua provenienza è indistinguibile da un costo sbagliato.
+         Assente quando la riga non è collegata al magazzino: dichiararlo è
+         meglio che riempirlo. */
+      costSnapshot: (c.extra && c.extra.costSnapshot) || null,
 
       /* La politica e la versione stanno anche sulla riga, non solo
          sull'intestazione: una riga estratta da un report deve poter dire da

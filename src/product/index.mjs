@@ -56,6 +56,9 @@ export const PRODUCT_FILES = [
      Nessuno dei due dipende dal resto, ma l'ordine fra i due sì. */
   'inventory-ledger.js',
   'inventory-store.js',
+  /* Il resolver: legge il registro, non il listino. Dopo il registro e prima
+     di chiunque chieda un costo. */
+  'inventory-cost-resolver.js',
   /* La vista del registro: dopo il registro e dopo ui.js. */
   'inventory-view.js',
   'first-run.js',

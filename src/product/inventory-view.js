@@ -153,8 +153,86 @@
       + corpo + '</div>';
   }
 
+  /* ── Il costo, come lo vede chi vende ──────────────────────────────────────
+     Tre informazioni e non una: quanto, con quale metodo, e da dove. Il
+     «quanto» da solo è il numero che il sistema mostrava prima — e nessuno
+     poteva sapere se veniva da un acquisto vero o da un campo digitato tre
+     anni fa. Il metodo e la fonte sono ciò che lo rende difendibile davanti a
+     un cliente.
+
+     Niente tecnicismi: «Media ponderata · Inventario · 29/08/2026», non
+     l'elenco degli id delle transazioni. Quelli stanno nel dettaglio, che si
+     apre solo se qualcuno lo chiede. */
+  function badgeCosto(esito, opzioni) {
+    var o = opzioni || {};
+    var R = global.InglyInventoryCostResolver;
+    if (!R || !esito) return '';
+
+    if (!esito.disponibile) {
+      /* Un costo che non c'è si dice, non si nasconde e non diventa zero. La
+         riga continua a usare il costo dichiarato, e questo lo spiega. */
+      if (o.silenzioseNonCollegate && esito.motivo === R.MOTIVI.NESSUN_ARTICOLO) return '';
+      return '<span title="' + esc(esito.motivo) + '" style="display:inline-flex;align-items:center;gap:4px;'
+        + 'padding:1px 7px;border-radius:99px;font-size:9px;font-weight:700;'
+        + 'background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim)">'
+        + 'costo non nel registro</span>';
+    }
+
+    var scosta = esito.scostamentoPct;
+    var colore = scosta == null ? 'var(--text-muted)'
+      : scosta > 5 ? 'var(--red,#ef4444)' : scosta < -5 ? 'var(--green,#22c55e)' : 'var(--text-muted)';
+    var quando = (esito.lineage && esito.lineage.length && esito.lineage[esito.lineage.length - 1].quando)
+      ? String(esito.lineage[esito.lineage.length - 1].quando).slice(0, 10).split('-').reverse().join('/') : null;
+
+    return '<span title="' + esc(esito.base || '') + '" style="display:inline-flex;align-items:center;gap:5px;'
+      + 'padding:1px 7px;border-radius:99px;font-size:9px;font-weight:700;'
+      + 'background:var(--bg-card);border:1px solid var(--border);color:' + colore + '">'
+      + esc(eu(esito.costo)) + '<span style="opacity:.65;font-weight:600">'
+      + esc(esito.policyLabel + (quando ? ' · ' + quando : '')) + '</span>'
+      + (esito.completa === false ? '<span style="opacity:.8">· copertura ' + esc(q(esito.coperta) + '/' + q(esito.richiesta)) + '</span>' : '')
+      + '</span>';
+  }
+
+  /** Il dettaglio, per chi chiede «da dove arriva». */
+  async function spiegaCosto(itemKey, opzioni) {
+    var R = global.InglyInventoryCostResolver;
+    var UI = global.InglyUI;
+    if (!R || !UI || !UI.openDialog || !S()) return;
+    var esito = R.risolvi(await S().tutti(), itemKey, opzioni || {});
+    var s = R.spiega(esito);
+    var corpo;
+    if (!s.disponibile) {
+      corpo = '<div style="font-size:12px;color:var(--text-muted)">' + esc(s.motivo) + '</div>'
+        + (s.dichiarato != null ? '<div style="font-size:12px;margin-top:8px">Costo dichiarato in anagrafica: <strong>' + esc(eu(s.dichiarato)) + '</strong></div>' : '');
+    } else {
+      corpo = '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px">'
+        + '<span style="font-size:22px;font-weight:800">' + esc(s.titolo) + '</span>'
+        + '<span style="font-size:12px;color:var(--text-muted)">' + esc(s.metodo) + '</span></div>'
+        + '<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">' + esc(s.base) + '</div>'
+        + (s.copertura ? '<div style="font-size:11px;color:var(--amber,#f59e0b);margin-bottom:8px">' + esc(s.copertura) + '</div>' : '')
+        + '<table style="width:100%;border-collapse:collapse">'
+        + s.righe.map(function (r) {
+          return '<tr style="border-top:1px solid var(--border)">'
+            + '<td style="padding:5px 6px;font-size:11px;color:var(--text-muted)">' + esc(r.quando || '') + '</td>'
+            + '<td style="padding:5px 6px;font-size:11px">' + esc(r.cosa) + '</td>'
+            + '<td style="padding:5px 6px;font-size:11px;text-align:right">' + esc(q(r.quantita)) + '</td>'
+            + '<td style="padding:5px 6px;font-size:11px;text-align:right">' + esc(eu(r.costoUnitario)) + '</td>'
+            + '<td style="padding:5px 6px;font-size:10px;color:var(--text-dim)">' + esc(r.documento || r.fornitore || '') + '</td></tr>';
+        }).join('') + '</table>';
+    }
+    await UI.openDialog({
+      title: 'Da dove arriva questo costo',
+      size: 'sm',
+      body: corpo + '<div style="font-size:10px;color:var(--text-dim);margin-top:10px">'
+        + 'Il costo è quello pagato, letto dal registro di magazzino. Non è il prezzo di listino.</div>',
+      actions: [{ label: 'Chiudi', variant: 'secondary', value: true }],
+    }).promise;
+  }
+
   global.InglyInventoryView = {
     disegna: disegna,
+    badgeCosto: badgeCosto,
+    spiegaCosto: spiegaCosto,
     _contenitore: null,
 
     async monta(idContenitore) { this._contenitore = idContenitore; await disegna(idContenitore); },

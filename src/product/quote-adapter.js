@@ -61,6 +61,11 @@
         naturaLabel: l.catLabel || null,
         sku: l.sku || null,
         itemId: l.itemId != null ? l.itemId : (l.productId != null ? l.productId : null),
+        itemStore: l.itemStore || null,
+        /* La chiave del registro di magazzino, `store:id`. È il filo che
+           collega una riga di preventivo al materiale che consuma, e senza il
+           quale nessun ricalcolo può sapere che il materiale è rincarato. */
+        itemKey: l.itemKey || ((l.itemId != null && l.itemStore) ? (l.itemStore + ':' + l.itemId) : null),
         descrizione: l.detail || l.desc || '',
         /* Confezione e spedizione non si buttano con un pezzo fallito. */
         perdibile: !/spediz|imball|packag/i.test(String(l.name || l.desc || '')),
@@ -196,7 +201,8 @@
       return {
         id: r.id, label: r.label, qty: r.qty, unit: r.unit,
         natura: r.natura, naturaLabel: r.naturaLabel,
-        sku: r.sku, itemId: r.itemId, descrizione: r.descrizione,
+        sku: r.sku, itemId: r.itemId, itemStore: r.itemStore, itemKey: r.itemKey,
+        descrizione: r.descrizione,
         perdibile: r.perdibile,
         /* Quota del costo diretto: la base con cui l'avviamento e le spese
            generali si ripartiscono. Dichiararla serve a non far passare una
