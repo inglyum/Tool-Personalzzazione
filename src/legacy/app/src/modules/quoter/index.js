@@ -2169,73 +2169,195 @@ ${q.notes ? `<p style="margin-top:16px;font-size:13px;color:#6b7280">${q.notes}<
 
 // ===== ⑧ WEEKLY GOALS GAMIFICATION =====
 const QuoterTemplates = {
+  /* La logica sta in `InglyQuoteTemplates`, che è puro e si prova senza
+     browser. Qui si legge dai campi, si disegna e si parla col database:
+     nessuna decisione su **cosa** un template debba contenere si prende in
+     questo file. */
+  _stato: { q: '', category: 'tutte', ordine: 'recenti' },
+  _cache: [],
+
+  _M() { return typeof window !== 'undefined' && window.InglyQuoteTemplates; },
+
+  /** Lo stato del preventivo, completo: è quello che il template si porta. */
+  _statoCorrente() {
+    const s = Quoter._statoPrezzo ? Quoter._statoPrezzo({}) : {};
+    return Object.assign({}, s, { lines: Quoter.lines || [] });
+  },
+
   async openSave() {
-    const el = eid('qt-save-name'); if(el) el.value = '';
-    const desc = eid('qt-save-desc'); if(desc) desc.value = '';
+    const M = this._M(); if (!M) return toast('Modulo template non disponibile', 'error');
+    const sv = (id, v) => { const e = eid(id); if (e) e.value = v; };
+    sv('qt-save-name', ''); sv('qt-save-desc', ''); sv('qt-save-notes', '');
+
+    const sel = eid('qt-save-cat');
+    if (sel) sel.innerHTML = M.CATEGORIE.map(c => `<option value="${c.id}">${c.icona} ${c.label}</option>`).join('');
+
     const prev = eid('qt-save-preview');
-    if(prev) {
+    if (prev) {
       const lines = Quoter.lines || [];
-      prev.innerHTML = lines.length
-        ? `<strong style="color:var(--text)">${lines.length} voci · ${fmtCur(lines.reduce((a,l)=>a+(+l.price||0)*(+l.qty||1),0))} netto</strong>
-           <div style="margin-top:6px">${lines.map(l=>`<div>• ${l.name||'Voce'} × ${l.qty||1}</div>`).join('')}</div>`
-        : '<span style="color:var(--red)">⚠ Aggiungi almeno una voce al preventivo prima di salvare</span>';
+      if (!lines.length) {
+        prev.innerHTML = '<span style="color:var(--red)">⚠ Aggiungi almeno una voce prima di salvare un template</span>';
+      } else {
+        const r = M.riepilogo(M.daStato(this._statoCorrente(), { name: 'anteprima' }));
+        const c = Quoter._calcola ? Quoter._calcola({ setupCost: 0 }) : null;
+        prev.innerHTML =
+          `<div style="font-weight:800;color:var(--text);font-size:13px;margin-bottom:8px">${r.voci} voci · ${r.pezzi} pezzi · ${fmtCur(r.costo)} di costo</div>`
+          + (c && !c.indisponibile ? `<div style="margin-bottom:8px">Con le impostazioni attuali: <strong style="color:var(--text)">${fmtCur(c.totalGross)}</strong> · margine ${c.marginPct.toFixed(1)}%</div>` : '')
+          + `<div style="margin-bottom:8px">Il template conserva <strong style="color:var(--text)">${r.economia} impostazioni economiche</strong> — ricarico, IVA, sconto, avviamento, spedizione, commissioni e politica — così il lavoro si ricarica com'era, non a metà.</div>`
+          + (r.collegate ? `<div style="margin-bottom:8px">🔗 ${r.collegate} voci su ${r.voci} restano collegate al magazzino.</div>` : '')
+          + `<div style="color:var(--text-dim);font-size:11px">${lines.map(l => '• ' + sanitize(l.desc || l.name || 'Voce') + ' × ' + (l.qty || 1)).join('<br>')}</div>`;
+      }
     }
     openModal('qt-save');
-    setTimeout(()=>eid('qt-save-name')?.focus(), 100);
+    setTimeout(() => eid('qt-save-name')?.focus(), 100);
   },
 
   async save() {
-    const name = (eid('qt-save-name')?.value||'').trim();
-    if(!name) { toast('Inserisci un nome per il template','warning'); return; }
-    const lines = (Quoter.lines||[]).slice();
-        if(!lines.length) { toast('Il preventivo è vuoto','warning'); return; }
-    const markup = parseFloat(eid('qr-markup')?.value||100);
-    const discount = parseFloat(eid('qr-discount')?.value||0);
-    const tpl = { name, desc: eid('qt-save-desc')?.value||'', lines, markup, discount, ts: Date.now() };
+    const M = this._M(); if (!M) return;
+    const tpl = M.daStato(this._statoCorrente(), {
+      name: (eid('qt-save-name')?.value || '').trim(),
+      desc: eid('qt-save-desc')?.value || '',
+      notes: eid('qt-save-notes')?.value || '',
+      category: eid('qt-save-cat')?.value || 'altro',
+    });
+    const v = M.valida(tpl);
+    if (!v.valido) { toast(v.errori[0], 'warning'); return; }
     await IDB.put('quote_templates', tpl);
     closeModal('qt-save');
-    toast(`✅ Template "${name}" salvato!`);
+    toast(`✅ "${tpl.name}" salvato con ${Object.keys(tpl.pricing).length} impostazioni`);
   },
 
   async openLoad() {
-    const el = eid('qt-load-list'); if(!el) return;
-    const templates = (await IDB.getAll('quote_templates').catch(()=>[])).sort((a,b)=>b.ts-a.ts);
-    if(!templates.length) {
-      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fas fa-layer-group" style="font-size:32px;opacity:.3;display:block;margin-bottom:10px"></i>Nessun template salvato.<br><small>Crea un preventivo e clicca "Salva Template"</small></div>';
-    } else {
-      el.innerHTML = templates.map(t=>`
-        <div style="background:var(--bg-card2);border:1px solid var(--border2);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div style="font-weight:700;font-size:14px;color:var(--text)">${t.name}</div>
-            ${t.desc?`<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${t.desc}</div>`:''}
-            <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${t.lines.length} voci · ${fmtCur(t.lines.reduce((a,l)=>a+(+l.price||0)*(+l.qty||1),0))} · ${new Date(t.ts).toLocaleDateString('it-IT')}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:5px">
-            <button class="btn btn-primary btn-sm" onclick="QuoterTemplates.load(${t.id});closeModal('qt-load')"><i class="fas fa-upload"></i> Usa</button>
-            <button class="btn btn-secondary btn-sm" onclick="QuoterTemplates.del(${t.id},this.closest('div[style]'))"><i class="fas fa-trash"></i></button>
-          </div>
-        </div>`).join('');
-    }
+    this._stato = { q: '', category: 'tutte', ordine: 'recenti' };
+    const q = eid('qt-load-q'); if (q) q.value = '';
+    const M = this._M();
+    const ord = eid('qt-load-ord');
+    if (ord && M) ord.innerHTML = Object.entries(M.ORDINAMENTI).map(([k, o]) => `<option value="${k}">${o.label}</option>`).join('');
+    await this._ricarica();
     openModal('qt-load');
   },
 
-  async load(id) {
-    const tpl = await IDB.get('quote_templates', id);
-    if(!tpl) return;
-    Quoter.lines = tpl.lines.map(l=>({...l, id:Date.now()+Math.random()}));
-    if(eid('qr-markup')) eid('qr-markup').value = tpl.markup||100;
-    if(eid('qr-discount')) eid('qr-discount').value = tpl.discount||0;
-    Quoter.renderLines();
-    Quoter.recalcRight();
-    toast(`📋 Template "${tpl.name}" caricato`);
+  async _ricarica() {
+    this._cache = await IDB.getAll('quote_templates').catch(() => []);
+    this._disegna();
   },
 
-  async del(id, rowEl) {
-    if(!confirm('Eliminare questo template?')) return;
-    await IDB.del('quote_templates', id)
-    rowEl?.remove();
-    toast('Template eliminato','warning');
-  }
+  _cerca(v) { this._stato.q = v || ''; this._disegna(); },
+  _ordina(v) { this._stato.ordine = v || 'recenti'; this._disegna(); },
+  _categoria(v) { this._stato.category = v || 'tutte'; this._disegna(); },
+
+  _disegna() {
+    const M = this._M(); const el = eid('qt-load-list'); if (!M || !el) return;
+    const tutti = this._cache;
+
+    const barra = eid('qt-load-cats');
+    if (barra) {
+      const cats = M.perCategoria(tutti);
+      const b = (id, testo, attiva) => `<button onclick="QuoterTemplates._categoria('${id}')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:${attiva ? 'var(--primary)' : 'var(--bg-card2)'};color:${attiva ? '#000' : 'var(--text-muted)'}">${testo}</button>`;
+      barra.innerHTML = cats.length
+        ? b('tutte', 'Tutte (' + tutti.length + ')', this._stato.category === 'tutte') + cats.map(c => b(c.id, c.icona + ' ' + c.label + ' (' + c.quanti + ')', this._stato.category === c.id)).join('')
+        : '';
+    }
+
+    const trovati = M.cerca(tutti, this._stato);
+    if (!trovati.length) {
+      el.innerHTML = tutti.length
+        ? '<div style="text-align:center;padding:28px;color:var(--text-muted);font-size:12px">Nessun template corrisponde alla ricerca.</div>'
+        : '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fas fa-layer-group" style="font-size:32px;opacity:.3;display:block;margin-bottom:10px"></i>Nessun template salvato.<br><small>Costruisci un preventivo e premi "Salva Template": si conserva tutto il lavoro, non solo le voci.</small></div>';
+      return;
+    }
+
+    el.innerHTML = trovati.map(t => {
+      const r = M.riepilogo(t);
+      return `<div style="background:var(--bg-card2);border:1px solid var(--border2);border-radius:10px;padding:14px;display:flex;align-items:flex-start;gap:12px">
+        <div style="font-size:20px;flex-shrink:0;margin-top:1px">${r.categoria.icona}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;color:var(--text)">${sanitize(t.name)}</div>
+          ${t.desc ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${sanitize(t.desc)}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-dim);margin-top:5px">${r.voci} voci · ${r.pezzi} pz · ${fmtCur(r.costo)} di costo · ${r.economia} impostazioni${r.collegate ? ' · 🔗 ' + r.collegate + ' dal magazzino' : ''}</div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:3px">${t.usoConteggio ? 'usato ' + t.usoConteggio + (t.usoConteggio === 1 ? ' volta' : ' volte') + ' · ' : ''}${new Date(t.ts || Date.now()).toLocaleDateString('it-IT')}${r.migrato ? ' · <span style="color:#f59e0b" title="Salvato con la versione precedente: conserva solo voci, ricarico e sconto">versione precedente</span>' : ''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          <button class="btn btn-primary btn-sm" onclick="QuoterTemplates.load(${t.id});closeModal('qt-load')"><i class="fas fa-upload"></i> Usa</button>
+          <button class="btn btn-secondary btn-sm" onclick="QuoterTemplates.duplica(${t.id})" title="Duplica"><i class="fas fa-copy"></i></button>
+          <button class="btn btn-secondary btn-sm" onclick="QuoterTemplates.del(${t.id})" title="Elimina"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  async load(id) {
+    const M = this._M(); if (!M) return;
+    const tpl = await IDB.get('quote_templates', id);
+    if (!tpl) return;
+    const stato = M.aStato(tpl);
+
+    Quoter.lines = stato.lines;
+    /* I campi economici tornano **tutti**, non solo ricarico e sconto: è la
+       ragione per cui questo modulo esiste. Quelli che il template non aveva
+       restano com'erano invece di essere azzerati. */
+    const sv = (i2, v) => { const e = eid(i2); if (e && v != null) e.value = v; };
+    sv('qr-markup', stato.markupPct != null ? stato.markupPct : (stato.markup != null ? (stato.markup - 1) * 100 : null));
+    sv('qr-discount', stato.discountPct);
+    if (stato.vatPct != null) Quoter._ivaMode = stato.vatPct > 0;
+    Quoter._templateEconomia = M.CAMPI_PREZZO.reduce((a, k) => { if (stato[k] !== undefined) a[k] = stato[k]; return a; }, {});
+
+    await IDB.put('quote_templates', M.segnaUso(tpl));
+    Quoter.renderLines();
+    Quoter.recalcRight();
+    toast(`📋 "${tpl.name}" caricato — ${stato.lines.length} voci e ${Object.keys(Quoter._templateEconomia).length} impostazioni`);
+  },
+
+  async duplica(id) {
+    const M = this._M(); if (!M) return;
+    const tpl = await IDB.get('quote_templates', id);
+    if (!tpl) return;
+    const nome = await askPrompt('Nome del duplicato', (tpl.name || '') + ' (copia)', { title: 'Duplica template' });
+    if (!nome) return;
+    await IDB.put('quote_templates', M.duplica(tpl, nome));
+    await this._ricarica();
+    toast('Template duplicato');
+  },
+
+  async del(id) {
+    const tpl = await IDB.get('quote_templates', id).catch(() => null);
+    if (!await askConfirm(`"${tpl?.name || 'Questo template'}" verrà eliminato. I preventivi già creati non cambiano.`, { title: 'Eliminare il template?', confirmLabel: 'Elimina', danger: true })) return;
+    await IDB.del('quote_templates', id);
+    await this._ricarica();
+    toast('Template eliminato', 'warning');
+  },
+
+  /* Chi lavora su due computer non deve ricostruire i template a mano. */
+  async esporta() {
+    const M = this._M(); if (!M) return;
+    const tutti = await IDB.getAll('quote_templates').catch(() => []);
+    if (!tutti.length) return toast('Nessun template da esportare', 'info');
+    const pacchetto = M.perEsportazione(tutti);
+    const blob = new Blob([JSON.stringify(pacchetto, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ingly-template-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`${pacchetto.templates.length} template esportati`);
+  },
+
+  importa() { eid('qt-import-file')?.click(); },
+
+  async _importaFile(input) {
+    const M = this._M(); if (!M) return;
+    const f = input?.files?.[0]; if (!f) return;
+    input.value = '';
+    let testo = '';
+    try { testo = await f.text(); } catch (e) { return toast('File non leggibile', 'error'); }
+    const esito = M.daImportazione(testo);
+    if (!esito.ok) return toast(esito.motivo, 'error');
+    if (!esito.templates.length) return toast('Il file non contiene template validi', 'warning');
+    if (!await askConfirm(`${esito.templates.length} template verranno aggiunti a quelli esistenti.` + (esito.scartati.length ? ` ${esito.scartati.length} scartati perché incompleti.` : ''), { title: 'Importare i template?', confirmLabel: 'Importa' })) return;
+    for (const t of esito.templates) { delete t.id; await IDB.put('quote_templates', t); }
+    await this._ricarica();
+    toast(`${esito.templates.length} template importati`);
+  },
 };
 
 // ══════════════════════════════════════════════════════════════════════════

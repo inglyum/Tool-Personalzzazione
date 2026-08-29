@@ -61,6 +61,8 @@ export const PRODUCT_FILES = [
   'inventory-cost-resolver.js',
   /* La vista del registro: dopo il registro e dopo ui.js. */
   'inventory-view.js',
+  /* I template di preventivo: puri, dopo l'adapter di cui usano lo stato. */
+  'quote-templates.js',
   'first-run.js',
 ];
 
