@@ -654,6 +654,44 @@ window.CatalogCats = CatalogCats;
 ;
 
 const Catalog={
+
+  /* Le decisioni commerciali del catalogo, con un nome.
+
+     `margineConsigliatoPct` era il `0.45` dentro `costPrice / (1 - 0.45)`,
+     scritto in due punti diversi del codice che disegna. Il numero **non
+     cambia**: cambia che ora si chiama in un modo, sta in un posto, e si
+     modifica senza cercare una costante dentro una stringa di HTML.
+
+     Non si è usata la politica «premium» del motore, che punta al 55%:
+     avrebbe alzato ogni prezzo consigliato del 22% senza che nessuno lo
+     avesse chiesto. Rinominare una decisione non è prenderne un'altra. */
+
+  POLITICHE: { margineConsigliatoPct: 45 },
+
+
+  /**
+   * Il prezzo consigliato per un costo, dal motore.
+   *
+   * La formula del prezzo da margine vive in `InglyCostEngine` e in nessun
+   * altro posto: qui si dichiara solo quale margine si vuole.
+   */
+
+  _prezzoConsigliato(costo, marginePct){
+
+    const M = typeof window!=='undefined' && window.InglyCostEngine;
+
+    const c = parseFloat(costo)||0;
+
+    if(!(c>0)) return null;
+
+    const m = marginePct!=null ? marginePct : this.POLITICHE.margineConsigliatoPct;
+
+    if(!M) return null;
+
+    return M.prezzo(c, { strategia:'margine', marginePct:m, ivaPct:0 }).netto;
+
+  },
+
   editId:null,catFilter:'',_photo:null,_sort:'',_search:'',_view:'grid',_onlyIngly:false,
   get CAT_COLOR(){ return CatalogCats.getColorMap(); },
   set CAT_COLOR(v){},
@@ -814,7 +852,11 @@ const Catalog={
         <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
           ${underpriced.slice(0,5).map(p=>{
             const mg=Math.round((p.salePrice-p.costPrice)/p.salePrice*100);
-            const suggested=Math.round(p.costPrice/(1-0.45));
+            /* Il 45% era scritto qui dentro: una politica commerciale
+               travestita da formula. Ora è la politica «premium» del motore —
+               che ha un nome, una soglia minima e un pavimento — e il prezzo
+               lo calcola chi calcola i prezzi. */
+            const suggested=Catalogo._prezzoConsigliato(p.costPrice);
             return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(239,68,68,.06);border-radius:8px;border:1px solid rgba(239,68,68,.15)">
               <div style="flex:1;font-size:12px;font-weight:600">${p.name}</div>
               <div style="font-size:11px;color:#ef4444;font-weight:700">${mg}% mg</div>
@@ -1250,7 +1292,12 @@ const Catalog={
 
     el.innerHTML = items.map(p => {
       const sp   = +p.salePrice||+p.price||0;
-      const cp   = +p.costPrice||+p.cost||0;
+      /* Un costo mancante **non** vale zero euro: su zero il margine risulta
+         del 100%, e una scheda prodotto che dichiara il 100% di margine su un
+         costo che nessuno ha inserito è peggio di una casella vuota — perché
+         una casella vuota si vede. `null` significa «non lo so». */
+      const cp   = (p.costPrice!=null&&p.costPrice!=='')?+p.costPrice
+                 : (p.cost!=null&&p.cost!=='')?+p.cost : null;
       const mg   = cp>0&&sp>0 ? Math.round((sp-cp)/sp*100) : null;
       const cc   = this.CAT_COLOR[p.category]||'#8b5cf6';
       const mgC  = mg===null?'var(--text-dim)':mg>=50?'#22c55e':mg>=30?'#f59e0b':'#ef4444';
@@ -2291,7 +2338,7 @@ Genera ESATTAMENTE in questo formato:
       <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
         ${low.map(p=>{
           const curMargin = Math.round((p.salePrice-p.costPrice)/p.salePrice*100);
-          const price45 = Math.ceil(p.costPrice/(1-0.45));
+          const price45 = Math.ceil(Catalogo._prezzoConsigliato(p.costPrice));
           const price35 = Math.ceil(p.costPrice/(1-0.35));
           return `<div style="background:var(--bg-card2);border-radius:10px;padding:11px 13px;border:1px solid rgba(239,68,68,.15)">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">

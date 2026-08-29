@@ -440,8 +440,23 @@ LaserB2B.calc=function(){
   var el=document.getElementById('lb2b-calc'); if(!el) return;
   var p=d.p;
   var techCol=getTechColor(p.tech||'laser');
+  /* ── Politiche, non formule ────────────────────────────────────────────
+     Erano tre numeri sepolti nel codice — il prezzo minimo di 15 €, gli
+     scaglioni di sconto sul materiale, il tempo macchina che cala con il
+     lotto. I primi due sono decisioni commerciali e ora hanno un nome;
+     l'ultimo è conoscenza di mestiere e resta qui, dov'è di casa. */
+  var POL = Object.assign({
+    prezzoMinimo: 15,
+    scontoMateriale: [{qty:200,sconto:.15},{qty:100,sconto:.10},{qty:50,sconto:.07},{qty:20,sconto:.04}],
+    marginePavimento: 15,
+  }, (LaserB2B._politiche||{}));
+  var scontoDi=function(qty){
+    for(var i=0;i<POL.scontoMateriale.length;i++) if(qty>=POL.scontoMateriale[i].qty) return POL.scontoMateriale[i].sconto;
+    return 0;
+  };
+
   var rows=(LaserB2B._QTYS||[5,10,20,50,100,200]).map(function(qty){
-    var sd2=qty>=200?0.15:qty>=100?0.10:qty>=50?0.07:qty>=20?0.04:0;
+    var sd2=scontoDi(qty);
     var mc2=((LaserB2B._loadStock&&LaserB2B._loadStock()||{})[p.id]?.cost||p.costSup||p.cost||0)*(1-sd2);
     var tm2=p.timeMin*(qty>=50?0.85:qty>=20?0.92:1);
     var mk=document.getElementById('lb2b-machine')?.value||'xtool_f2';
@@ -452,13 +467,56 @@ LaserB2B.calc=function(){
     var mu2=(LaserB2B._markup&&LaserB2B._markup[ck2])||2.0;
     var mhc2=(m2.hourly+(m2.energyH||m2.energyHourly||0))/60*tm2;
     var lc2=lH2/60*tm2;
-    var cp2=mc2+mhc2+lc2+pk2;
-    var fp2=(LaserB2B._overrule>0)?LaserB2B._overrule:Math.max(15,cp2*mu2);
-    var mg2=Math.round((fp2-cp2)/fp2*100);
+
+    /* ── Il conto passa dal motore ──────────────────────────────────────
+       Questa tabella è quella che l'utente vede davvero: `view-laser_b2b`
+       disegna questa interfaccia, e i suoi ventitré comandi chiamano
+       `LaserB2B.calc`. La Fase 28 aveva migrato `_calcV32`, che è il
+       calcolatore di un'**altra** interfaccia — corretto, e non quello in uso.
+       Restano qui i driver del laser: sconto materiale a volume, tempo
+       macchina che cala con il lotto. Se ne va la matematica di prezzo. */
+    var motore=(typeof window!=='undefined')&&window.InglyCostEngine;
+    var cp2, fp2, mg2, pavimento=false;
+    if(motore){
+      var c2=motore.calcola({
+        tecnologia:'generico', qty:1,
+        costiPerPezzo:[
+          {id:'materiale',  label:'Materiale', value:mc2, detail:(sd2?Math.round(sd2*100)+'% di sconto a volume':'prezzo pieno')},
+          {id:'macchina',   label:'Macchina ed energia', value:mhc2, detail:tm2.toFixed(2)+' min'},
+          {id:'manodopera', label:'Manodopera', value:lc2, detail:tm2.toFixed(2)+' min', perdibile:false},
+          {id:'packaging',  label:'Confezione', value:pk2, perdibile:false},
+        ],
+      });
+      cp2=c2.costoPezzo;
+      var pr2=motore.prezzo(cp2,{strategia:'ricarico', ricarico:mu2, marginePavimentoPct:POL.marginePavimento, ivaPct:0});
+      fp2=(LaserB2B._overrule>0)?LaserB2B._overrule:Math.max(POL.prezzoMinimo, pr2.netto);
+      mg2=Math.round(pr2.marginePct);
+      pavimento=!!pr2.pavimentoScattato;
+      /* Il margine si ricalcola sul prezzo davvero applicato, che il prezzo
+         minimo e il forzato possono aver spostato. */
+      if(fp2!==pr2.netto) mg2=fp2>0?Math.round((fp2-cp2)/fp2*100):0;
+    } else {
+      /* Nessun prezzo indovinato quando il motore manca: si mostra il costo,
+         e il prezzo resta vuoto. Un preventivo sbagliato è peggio di uno
+         mancante, ed è la regola che vale in tutto il prodotto. */
+      cp2=mc2+mhc2+lc2+pk2; fp2=null; mg2=null;
+    }
+    if(fp2===null){
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:8px 10px;font-weight:800;color:var(--text)">'+qty+' pz</td>'
+        +'<td colspan="6" style="padding:8px 10px;color:var(--text-dim);font-size:11px">motore di costo non disponibile</td></tr>';
+    }
     var mc2col=mg2>=60?'#22c55e':mg2>=40?'#f59e0b':'#ef4444';
     return '<tr style="border-bottom:1px solid var(--border)">'
       +'<td style="padding:8px 10px;font-weight:800;color:var(--text)">'+qty+' pz</td>'
-      +'<td style="padding:8px 10px;color:var(--text-muted);font-size:11px">'+sd2>0?'-'+Math.round(sd2*100)+'%':'—'+'</td>'
+      /* `'…' + sd2 > 0 ? a : b` non fa quello che sembra: la concatenazione
+         lega più stretta del confronto, quindi si valutava
+         `('<td…>' + sd2) > 0`, cioè `false`, e il ternario restituiva sempre
+         il ramo negativo — «—</td>», senza il tag di apertura. L'HTML che ne
+         usciva era rotto, e il browser, chiudendo un `<td>` mai aperto, si
+         mangiava anche la colonna della quantità: la tabella mostrava prezzi
+         senza dire a quale quantità si riferissero. Bastano due parentesi. */
+      +'<td style="padding:8px 10px;color:var(--text-muted);font-size:11px">'+(sd2>0?'-'+Math.round(sd2*100)+'%':'—')+'</td>'
       +'<td style="padding:8px 10px;color:var(--text-muted)">€'+cp2.toFixed(2)+'</td>'
       +'<td style="padding:8px 10px;font-weight:800;color:var(--primary);font-size:13px">€'+fp2.toFixed(2)+'</td>'
       +'<td style="padding:8px 10px"><span style="background:'+mc2col+'20;color:'+mc2col+';padding:2px 8px;border-radius:20px;font-weight:700">'+mg2+'%</span></td>'
