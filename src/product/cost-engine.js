@@ -30,7 +30,20 @@
 (function (global) {
   'use strict';
 
-  var VERSIONE = '1.1.0';
+  var VERSIONE = '1.2.0';
+
+  /* ── Politiche di prezzo ──────────────────────────────────────────────────
+     Quattro posizionamenti, non quattro numeri a caso: sono i modi con cui un
+     laboratorio decide se sta rincorrendo il prezzo o il valore. Vivono qui
+     perché la UI deve **leggerle**, non riscriverle — era proprio la loro
+     assenza a far nascere ricarichi diversi in schermate diverse. */
+  var POLITICHE = {
+    competitive: { id: 'competitive', label: 'Competitivo', marginTarget: 25, maxDiscount: 10, floorMargin: 12, recommended: false },
+    standard:    { id: 'standard',    label: 'Standard',    marginTarget: 40, maxDiscount: 15, floorMargin: 20, recommended: true },
+    premium:     { id: 'premium',     label: 'Premium',     marginTarget: 55, maxDiscount: 20, floorMargin: 30, recommended: false },
+    luxury:      { id: 'luxury',      label: 'Luxury',      marginTarget: 70, maxDiscount: 25, floorMargin: 45, recommended: false },
+  };
+  var MARGINE_MINIMO = 10;   // % — nessuna politica scende sotto
 
   var num = function (v, d) {
     var n = parseFloat(v);
@@ -392,9 +405,19 @@
     var unaTantumPerPezzo = totaleUnaTantum / qty;
     var costoPezzo = totalePerPezzo + unaTantumPerPezzo;
 
-    /* Spese generali: una percentuale del costo diretto, non una voce a caso. */
-    var overheadPct = Math.max(0, pos(i.overheadPct)) / 100;
-    var overhead = costoPezzo * overheadPct;
+    /* Spese generali. Due modi di dichiararle, entrambi legittimi: una
+       percentuale del costo diretto, oppure un costo orario di struttura —
+       affitto, utenze, amministrazione — spalmato sulle ore di lavoro. Chi ha
+       fatto i conti del proprio laboratorio di solito conosce il secondo. */
+    var overhead = 0;
+    var overheadModo = 'nessuno';
+    if (pos(i.overheadPerHour) > 0) {
+      overhead = pos(i.overheadPerHour) * ore;
+      overheadModo = 'orario';
+    } else if (pos(i.overheadPct) > 0) {
+      overhead = costoPezzo * (Math.max(0, pos(i.overheadPct)) / 100);
+      overheadModo = 'percentuale';
+    }
     costoPezzo += overhead;
 
     return {
@@ -406,6 +429,7 @@
       unaTantum: { voci: vociUnaTantum, totale: totaleUnaTantum, perPezzo: unaTantumPerPezzo },
       perPezzo: { voci: vociPerPezzo, totale: totalePerPezzo },
       overhead: overhead,
+      overheadModo: overheadModo,
       costoPezzo: costoPezzo,
       costoTotale: costoPezzo * qty,
       costoOrarioMacchina: oraMacchina(i),
@@ -455,15 +479,36 @@
       if (netto < pavimento) { netto = pavimento; scattato = true; }
     }
 
-    /* Commissioni di canale e pagamento: si pagano sul lordo incassato. */
+    /* Commissioni di canale e pagamento: si pagano sul lordo incassato, e sono
+       tre cose diverse che finivano in un numero solo. Separarle è ciò che
+       permette di vedere che un marketplace al 12% pesa più dello sconto che
+       si è appena rifiutato di fare. */
     var ivaPct = Math.max(0, num(o.ivaPct, 22));
     var iva = netto * ivaPct / 100;
     var lordo = netto + iva;
 
-    var commissioni = lordo * (Math.max(0, pos(o.commissionePct)) / 100) + pos(o.commissioneFissa);
-    /* La spedizione pesa solo se la paga il laboratorio. Se è addebitata al
-       cliente non è un costo: è un ricavo che entra e esce. */
-    var spedizione = o.spedizioneAddebitata ? 0 : pos(o.spedizione);
+    var commPagamentoPct = lordo * (Math.max(0, pos(o.commissionePagamentoPct != null ? o.commissionePagamentoPct : o.commissionePct)) / 100);
+    var commPagamentoFissa = pos(o.commissionePagamentoFissa != null ? o.commissionePagamentoFissa : o.commissioneFissa);
+    var commMarketplace = lordo * (Math.max(0, pos(o.commissioneMarketplacePct)) / 100);
+    var commissioni = commPagamentoPct + commPagamentoFissa + commMarketplace;
+
+    /* La spedizione ha due facce che venivano confuse: quanto si fa pagare e
+       quanto costa davvero. Il profitto deve usare la seconda — chi addebita
+       6 € e ne spende 9 sta perdendo 3 € a ogni ordine, e il conto vecchio non
+       lo mostrava. */
+    /* `spedizioneAddebitata: true` è la forma storica e vuol dire «la paga il
+       cliente»: si assume che paghi esattamente quanto costa, cioè che la
+       spedizione sia neutra. Chi vuole dire altro passa i due importi. */
+    var spedizioneCosto, spedizioneAddebitata;
+    if (o.spedizioneAddebitata === true) {
+      spedizioneCosto = pos(o.spedizioneCosto != null ? o.spedizioneCosto : o.spedizione);
+      spedizioneAddebitata = spedizioneCosto;
+    } else {
+      spedizioneCosto = pos(o.spedizioneCosto != null ? o.spedizioneCosto : o.spedizione);
+      spedizioneAddebitata = pos(o.spedizioneAddebitata);
+    }
+    var margineSpedizione = spedizioneAddebitata - spedizioneCosto;
+    var spedizione = spedizioneCosto - spedizioneAddebitata;   // peso netto sul conto
     var altriVariabili = pos(o.altriCostiVariabili);
 
     /* L'IVA non è mai profitto: è denaro dello Stato che transita. Nessuna
@@ -481,8 +526,15 @@
       iva: iva,
       lordo: lordo,
       commissioni: commissioni,
+      commissioniDettaglio: {
+        pagamentoPct: commPagamentoPct,
+        pagamentoFissa: commPagamentoFissa,
+        marketplace: commMarketplace,
+      },
       spedizione: spedizione,
-      spedizioneAddebitata: !!o.spedizioneAddebitata,
+      spedizioneAddebitata: spedizioneAddebitata,
+      spedizioneCosto: spedizioneCosto,
+      margineSpedizione: margineSpedizione,
       altriCostiVariabili: altriVariabili,
 
       /* Quattro livelli, perché «profitto» da solo non vuol dire niente:
@@ -557,7 +609,7 @@
   var CAMPI = {
     comuni: ['qty', 'machinePrice', 'residualValue', 'machineLifeHours', 'watt', 'kwhPrice',
       'dutyCycle', 'maintenancePerHour', 'laborPerHour', 'setupMin', 'failureRate',
-      'packagingPerUnit', 'overheadPct'],
+      'packagingPerUnit', 'overheadPct', 'overheadPerHour'],
     print3d: ['grams', 'volumeCm3', 'density', 'material', 'supportGrams', 'purgeGrams',
       'materialPricePerKg', 'spoolPrice', 'spoolGrams', 'hours', 'washCureMin',
       'consumablesPerPrint', 'finishMin', 'testPrintCost'],
@@ -572,7 +624,7 @@
       'graphicHeightMm', 'gapMm', 'filmPricePerM2', 'inkMlPerM2', 'inkPricePerMl',
       'whiteMlPerM2', 'whitePricePerMl', 'powderGPerM2', 'powderPricePerKg',
       'pressSec', 'handlingMin'],
-    generico: ['costiPerPezzo', 'costiUnaTantum', 'hours'],
+    generico: ['costiPerPezzo', 'costiUnaTantum', 'hours'],   /* i costi arrivano già calcolati */
     sublimation: ['printAreaMm2', 'printMin', 'pressSec', 'blankPrice', 'sheets', 'sheetPrice',
       'inkMlPerM2', 'inkPricePerMl', 'handlingMin', 'testPrintCost'],
   };
@@ -594,6 +646,19 @@
     if (typeof v === 'number') return isFinite(v);
     if (typeof v === 'string') return isFinite(parseFloat(v)) || campo === 'material';
     return true;
+  }
+
+  /* ── Provenienza dei numeri ───────────────────────────────────────────────
+     La modalità «audit costo» deve poter dire se un numero viene dal magazzino,
+     dalle impostazioni, da un valore di ripiego o da nessuna parte. Il motore
+     non può saperlo da solo: lo dichiara chi lo chiama, in `fonti`. Quello che
+     il motore sa dire da sé è se il campo c'era o no — e non finge il resto. */
+  var FONTI_NOTE = ['reale', 'magazzino', 'configurato', 'default', 'stima'];
+
+  function fonteDi(i, campo) {
+    var f = (i.fonti || {})[campo];
+    if (f && FONTI_NOTE.indexOf(f) >= 0) return f;
+    return presente(i, campo) ? 'inserito' : 'mancante';
   }
 
   /**
@@ -639,20 +704,138 @@
       if (k.charAt(0) !== '_' && !conosciuti[k]) avvisi.push('campo «' + k + '» ignorato: nessun profilo lo legge');
     });
 
-    return { ok: problemi.length === 0, problemi: problemi, avvisi: avvisi, mancanti: mancanti };
+    /* Lo stato di ogni campo, non solo l'elenco di quelli mancanti: chi disegna
+       una schermata deve poter mettere un contrassegno accanto al campo
+       giusto, e per farlo gli serve sapere *perché*. */
+    var fields = {};
+    noti.forEach(function (c) {
+      var stato;
+      if (!presente(i, c)) stato = 'missing';
+      else if (typeof i[c] !== 'string' && num(i[c]) < 0) stato = 'negative';
+      else if ((i.fonti || {})[c] === 'default') stato = 'defaulted';
+      else if ((i.fonti || {})[c] === 'stima') stato = 'estimated';
+      else stato = 'ok';
+      fields[c] = { stato: stato, valore: presente(i, c) ? i[c] : null, fonte: fonteDi(i, c) };
+    });
+
+    return {
+      /* Contratto richiesto. */
+      valid: problemi.length === 0,
+      errors: problemi,
+      warnings: avvisi,
+      fields: fields,
+      /* Nomi storici, conservati per chi li legge già. */
+      ok: problemi.length === 0, problemi: problemi, avvisi: avvisi, mancanti: mancanti,
+    };
   }
 
-  /* ── Provenienza dei numeri ───────────────────────────────────────────────
-     La modalità «audit costo» deve poter dire se un numero viene dal magazzino,
-     dalle impostazioni, da un valore di ripiego o da nessuna parte. Il motore
-     non può saperlo da solo: lo dichiara chi lo chiama, in `fonti`. Quello che
-     il motore sa dire da sé è se il campo c'era o no — e non finge il resto. */
-  var FONTI_NOTE = ['reale', 'magazzino', 'configurato', 'default', 'stima'];
+  /* ── Avvisi ───────────────────────────────────────────────────────────────
+     Un preventivo può essere aritmeticamente giusto e commercialmente
+     sbagliato. Questi controlli guardano il risultato, non l'input: un margine
+     del 3% è un numero valido e un problema serio, e una spedizione che costa
+     più del profitto è un ordine che conviene rifiutare.
 
-  function fonteDi(i, campo) {
-    var f = (i.fonti || {})[campo];
-    if (f && FONTI_NOTE.indexOf(f) >= 0) return f;
-    return presente(i, campo) ? 'inserito' : 'mancante';
+     Tre livelli, perché bloccare tutto sarebbe come non avvisare di niente:
+       INFO      · da sapere
+       WARNING   · da guardare prima di inviare
+       CRITICAL  · da non inviare così
+     Nessuno di questi impedisce di calcolare. */
+  function avvisi(costo, prezzoCalcolato, input) {
+    var i = input || {};
+    var lista = [];
+    var agg = function (livello, id, testo, azione) {
+      lista.push({ livello: livello, id: id, messaggio: testo, azione: azione || null });
+    };
+
+    var val = validateInput(i);
+    val.errors.forEach(function (e) { agg('CRITICAL', 'input', e, 'correggi il dato prima di preventivare'); });
+
+    /* Dati mancanti che spostano il costo verso il basso: il preventivo esce
+       più economico del vero, ed è il modo più comune di perdere soldi. */
+    var PESANTI = {
+      materialPricePerKg: 'il costo del materiale', sheetPrice: 'il prezzo del foglio',
+      blankPrice: 'il costo del supporto', laborPerHour: 'il costo della manodopera',
+      machinePrice: 'il prezzo della macchina', machineLifeHours: 'la vita utile della macchina',
+      kwhPrice: 'il prezzo dell\'energia',
+    };
+    /* Solo i campi che **questo** profilo legge davvero. Avvisare che manca il
+       prezzo della macchina a chi porta già il costo macchina calcolato — è il
+       caso del profilo generico — è un falso allarme, e i falsi allarmi sono
+       il modo più rapido per far ignorare anche quelli veri. */
+    var tecnologia = String(i.tecnologia || i.technology || '');
+    var letti = {};
+    var comuni = CAMPI.comuni;
+    if (tecnologia === 'generico' && !pos(i.hours)) {
+      /* Senza ore dichiarate il generico non tocca macchina, energia e
+         manutenzione: chiedergliele sarebbe chiedere un dato che non userebbe. */
+      comuni = comuni.filter(function (c) {
+        return ['machinePrice', 'residualValue', 'machineLifeHours', 'watt', 'kwhPrice', 'dutyCycle', 'maintenancePerHour', 'laborPerHour'].indexOf(c) < 0;
+      });
+    }
+    comuni.concat(CAMPI[tecnologia] || []).forEach(function (c) { letti[c] = true; });
+
+    Object.keys(PESANTI).forEach(function (c) {
+      if (!letti[c]) return;
+      if ((val.fields[c] || {}).stato === 'missing') {
+        agg('WARNING', 'manca:' + c, 'Manca ' + PESANTI[c] + ': il costo esce più basso del reale', 'inseriscilo nelle impostazioni');
+      }
+    });
+
+    if ((val.fields.failureRate || {}).stato === 'missing') {
+      agg('INFO', 'scarto', 'Tasso di scarto non configurato: i pezzi da rifare non sono nel conto', 'impostalo dai costi fissi');
+    }
+
+    if (prezzoCalcolato) {
+      var p = prezzoCalcolato;
+      if (p.inPerdita) {
+        agg('CRITICAL', 'perdita', 'Questo prezzo è in perdita: il profitto operativo è ' + p.profittoOperativo.toFixed(2) + ' €', 'alza il prezzo o riduci lo sconto');
+      } else if (p.marginePct < MARGINE_MINIMO) {
+        agg('WARNING', 'margine-basso', 'Margine ' + p.marginePct.toFixed(1) + '%: sotto il minimo consigliato del ' + MARGINE_MINIMO + '%', 'rivedi lo sconto');
+      }
+      if (p.pavimentoScattato) {
+        agg('INFO', 'pavimento', 'Lo sconto richiesto è stato ridotto per non scendere sotto il margine minimo', null);
+      }
+      if (p.spedizioneCosto > 0 && p.spedizioneCosto > p.profittoLordo) {
+        agg('WARNING', 'spedizione', 'La spedizione (' + p.spedizioneCosto.toFixed(2) + ' €) costa più del profitto lordo', 'addebitala al cliente o rivedi il prezzo');
+      }
+      if (p.margineSpedizione < 0) {
+        agg('INFO', 'spedizione-sotto', 'Si addebitano ' + p.spedizioneAddebitata.toFixed(2) + ' € di spedizione e se ne spendono ' + p.spedizioneCosto.toFixed(2) + ' €', null);
+      }
+      if (p.lordo > 0 && p.commissioni / p.lordo > 0.15) {
+        agg('WARNING', 'commissioni', 'Le commissioni sono il ' + (p.commissioni / p.lordo * 100).toFixed(1) + '% dell\'incassato', 'valuta un canale diverso');
+      }
+    }
+
+    var stimati = Object.keys(val.fields).filter(function (c) {
+      return val.fields[c].stato === 'estimated' || val.fields[c].stato === 'defaulted';
+    });
+    if (stimati.length) {
+      agg('INFO', 'stimati', stimati.length + ' valori sono stimati o di ripiego: ' + stimati.slice(0, 4).join(', '), 'attiva l\'audit costo per vederli');
+    }
+
+    return lista;
+  }
+
+  /** Il prezzo secondo ognuna delle politiche, per confrontarli a colpo d'occhio. */
+  function consigli(costo, opzioni) {
+    var o = opzioni || {};
+    return Object.keys(POLITICHE).map(function (k) {
+      var pol = POLITICHE[k];
+      var p = prezzo(costo, Object.assign({}, o, {
+        strategia: 'margine', marginePct: pol.marginTarget,
+        marginePavimentoPct: pol.floorMargin,
+      }));
+      return {
+        id: pol.id, label: pol.label, recommended: pol.recommended,
+        price: p.netto, lordo: p.lordo,
+        margin: p.marginePct, markup: p.ricaricoPct,
+        profit: p.profittoLordo, profitOperating: p.profittoOperativo,
+        maxDiscount: pol.maxDiscount, floorMargin: pol.floorMargin,
+        reason: pol.recommended
+          ? 'Il posizionamento predefinito: copre i costi con un margine che regge uno sconto del ' + pol.maxDiscount + '%'
+          : 'Margine obiettivo ' + pol.marginTarget + '%, sconto massimo ' + pol.maxDiscount + '%',
+      };
+    });
   }
 
   /**
@@ -746,15 +929,43 @@
       formula: 'netto − costo − commissioni − spedizione − altri variabili',
       input: 'l\'IVA non entra mai in questo conto', result: p.profittoOperativo, fonte: 'calcolato' });
 
+    var val = validateInput(i);
+
     return {
       vuoto: false, versione: VERSIONE, tecnologia: tec,
-      voci: righe, costo: c, prezzo: p,
-      validazione: validateInput(i),
+
+      /* Contratto richiesto: input, ipotesi, righe, formule, totali, prezzo
+         e avvisi — tutto ciò che serve per difendere un numero. */
+      input: i,
+      assumptions: Object.keys(val.fields)
+        .filter(function (k) { return val.fields[k].stato !== 'ok'; })
+        .map(function (k) { return { field: k, stato: val.fields[k].stato, fonte: val.fields[k].fonte }; }),
+      lines: righe,
+      formulas: righe.map(function (r) { return { id: r.id, label: r.label, formula: r.formula }; }),
+      totals: {
+        unaTantum: c.unaTantum.totale,
+        unaTantumPerPezzo: c.unaTantum.perPezzo,
+        perPezzo: c.perPezzo.totale,
+        overhead: c.overhead,
+        costoPezzo: c.costoPezzo,
+        costoTotale: c.costoTotale,
+        qty: c.qty,
+      },
+      pricing: p,
+      warnings: avvisi(c.costoPezzo, p, i),
+      recommendations: consigli(c.costoPezzo, opzioniPrezzo),
+
+      /* Nomi storici. */
+      voci: righe, costo: c, prezzo: p, validazione: val,
     };
   }
 
   global.InglyCostEngine = {
     version: VERSIONE,
+    POLITICHE: POLITICHE,
+    MARGINE_MINIMO: MARGINE_MINIMO,
+    avvisi: avvisi,
+    consigli: consigli,
     CAMPI: CAMPI,
     validateInput: validateInput,
     explain: explain,

@@ -569,17 +569,50 @@
 
   /* Il preventivo del Product Builder passa dal motore esistente: qui non c'è
      aritmetica di costo, solo la chiamata e i suoi ingressi. */
-  async function price({ materialCost, machineMin, laborMin, category }) {
+  async function price({ materialCost, machineMin, laborMin, category, qty, setupCost, extras, packaging, other }) {
     if (!global.PricingEngine || !global.PricingEngine.suggest) {
       return { empty: true, reason: 'Il motore di pricing non è disponibile.' };
     }
+    const voci = [];
+    if (num(packaging) > 0) voci.push({ cost: num(packaging) });
+    if (num(other) > 0) voci.push({ cost: num(other) });
+
     const r = await global.PricingEngine.suggest({
       materialCost: num(materialCost),
       machineMin: num(machineMin),
       laborMin: num(laborMin),
       category: category || '',
+      qty: Math.max(1, num(qty, 1)),
+      setupCost: num(setupCost),
+      extras: (extras || []).concat(voci),
     });
     return { empty: false, ...r };
+  }
+
+  /* Il tragitto completo del prezzo, per la vista «come è stato calcolato».
+     Non ricalcola niente: chiede al motore di raccontare il conto che ha già
+     fatto, con formule e provenienza di ogni numero. */
+  async function priceExplain(input) {
+    const M = global.InglyCostEngine;
+    if (!M) return { vuoto: true, motivo: 'Motore di costo non disponibile' };
+    const cfg = (await readSettings()) || {};
+    const s = cfg.settings || cfg;
+    const i = input || {};
+    return M.explain({
+      tecnologia: 'generico',
+      qty: Math.max(1, num(i.qty, 1)),
+      costiUnaTantum: num(i.setupCost) > 0 ? [{ id: 'avviamento', label: 'Avviamento', value: num(i.setupCost) }] : [],
+      costiPerPezzo: [
+        { id: 'materiale', label: 'Materiale', value: num(i.materialCost) },
+        { id: 'macchina', label: 'Macchina', value: num(i.machineMin) * num(s.machineCostPerMin, 0.35), detail: num(i.machineMin) + ' min' },
+        { id: 'manodopera', label: 'Manodopera', value: num(i.laborMin) * num(s.laborCostPerMin, 0.5), detail: num(i.laborMin) + ' min', perdibile: false },
+        { id: 'packaging', label: 'Confezione', value: num(i.packaging), perdibile: false },
+        { id: 'extra', label: 'Altri costi', value: num(i.other) },
+      ].filter((v) => v.value > 0),
+      /* La provenienza la dichiara chi la conosce: queste due tariffe vengono
+         dalle impostazioni del laboratorio, non da un valore di ripiego. */
+      fonti: { laborPerHour: 'configurato', machinePrice: 'configurato' },
+    }, { strategia: 'ricarico', ricarico: 1 + num(s.markup, 40) / 100, ivaPct: num(s.vat, 22) });
   }
 
   /* ══ Ricerca globale ═══════════════════════════════════════════════════
@@ -649,6 +682,7 @@
     insights,
     builderSources,
     price,
+    priceExplain,
     search,
     workspace,
     _readStore: readStore,

@@ -423,6 +423,51 @@ const Quoter={
   editId:null,
   _lastSavedId:null,
 
+  /* ── L'unico punto in cui questo modulo calcola un prezzo ─────────────────
+     Prima la formula `subtotal * (1 + markup) * (1 - discount)` era scritta in
+     sei funzioni diverse, ognuna dentro il codice che disegna. Sei copie della
+     stessa riga sono sei occasioni di divergere, e qui era già successo: la
+     schermata dei totali e quella del PDF non usavano lo stesso arrotondamento.
+
+     Adesso la UI fa una cosa sola — raccoglie i valori dai campi — e il conto
+     lo fa `InglyCostEngine` attraverso `InglyQuoteAdapter`. Quello che torna
+     è `QuoteCalculationResult`, la stessa forma per tutti i quoter. */
+  _statoPrezzo(extra){
+    const e = extra || {};
+    /* Il campo «markup» del quoter è una percentuale: 100 significa +100%,
+       cioè un ricarico di 2. Si conserva quella semantica — cambiarla in
+       silenzio sposterebbe ogni preventivo già salvato. */
+    const markupPct = parseFloat(eid('qr-markup')?.value ?? 100) || 0;
+    return {
+      lines: e.lines || this.lines,
+      strategia: 'ricarico',
+      markup: 1 + markupPct / 100,
+      discountPct: parseFloat(eid('qr-discount')?.value || 0) || 0,
+      vatPct: this._ivaMode !== false ? 22 : 0,
+      setupCost: e.setupCost != null ? e.setupCost : this._getExtraCosts?.() || 0,
+      shippingCost: e.shippingCost || 0,
+      shippingCharged: e.shippingCharged || 0,
+      paymentFeePct: e.paymentFeePct || 0,
+      paymentFeeFixed: e.paymentFeeFixed || 0,
+      marketplaceFeePct: e.marketplaceFeePct || 0,
+      failureRate: e.failureRate || 0,
+      ...e,
+    };
+  },
+
+  /** Il preventivo calcolato dal motore. Nessuna aritmetica in questo file. */
+  _calcola(extra){
+    const A = typeof window !== 'undefined' && window.InglyQuoteAdapter;
+    if (!A) return { indisponibile: true, motivo: 'motore di costo non disponibile', lines: [] };
+    return A.calculateQuote(this._statoPrezzo(extra));
+  },
+
+  /** Il tragitto del prezzo, per la vista «come è nato». */
+  _spiega(extra){
+    const A = typeof window !== 'undefined' && window.InglyQuoteAdapter;
+    return A ? A.explainQuote(this._statoPrezzo(extra)) : { vuoto: true, lines: [] };
+  },
+
   addLineFromCalc(d){
     if(!d) return;
     this.lines.push({id:Date.now(), name:d.name, desc:d.name||'', catLabel:d.category||'', detail:'', unit:d.unit||'pz', qty:d.qty||1, unitCost:d.unitCost||0, markup:1.4, price:+((d.unitCost||0)*1.4).toFixed(2), subtotal:+((d.unitCost||0)*(d.qty||1)).toFixed(2)});
@@ -807,14 +852,9 @@ const Quoter={
         <td style="padding:10px 6px;text-align:right;font-weight:700;color:#fff">${fmtCur(l.subtotal)}</td>
         <td style="padding:10px 4px;text-align:right"><button onclick="Quoter.removeLine(${l.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:2px 4px">✕</button></td>
       </tr>`).join('');
-    const totalCost=this.lines.reduce((a,l)=>a+(+(l.subtotal)||((+(l.unitCost)||0)*(+(l.qty)||1))),0);
-    const markup=parseFloat(eid('qr-markup')?.value||100)/100;
-    const discount=parseFloat(eid('qr-discount')?.value||0)/100;
-    const net=totalCost*(1+markup)*(1-discount);
-    const vatRate=this._ivaMode!==false?0.22:0;
-    const vat=net*vatRate;
-    const gross=net+vat;
-    this._updateTotals(totalCost,net,vat,gross);
+    const r=this._calcola({setupCost:0});
+    if(r.indisponibile){ this._updateTotals(0,0,0,0); return; }
+    this._updateTotals(r.totalCost,r.subtotalNet,r.vat,r.totalGross);
   },
 
   _updateTotals(cost,net,vat,gross){
@@ -866,15 +906,9 @@ const Quoter={
     return total;
   },
   _recalcNow(){
-    const extraCost=this._getExtraCosts();
-    const totalCost=this.lines.reduce((a,l)=>a+l.subtotal,0)+extraCost;
-    const markup=parseFloat(eid('qr-markup')?.value||100)/100;
-    const discount=parseFloat(eid('qr-discount')?.value||0)/100;
-    const net=totalCost*(1+markup)*(1-discount);
-    const vatRate=this._ivaMode!==false?0.22:0;
-    const vat=net*vatRate;
-    const gross=net+vat;
-    const margin=net>0?((net-totalCost)/net*100):0;
+    const r=this._calcola();
+    if(r.indisponibile) return;
+    const totalCost=r.totalCost, net=r.subtotalNet, vat=r.vat, gross=r.totalGross, margin=r.marginPct;
     if(eid('qr-cost'))eid('qr-cost').textContent=fmtCur(totalCost);
     if(eid('qr-sub'))eid('qr-sub').textContent=fmtCur(net);
     if(eid('qr-iva'))eid('qr-iva').textContent=this._ivaMode!==false?fmtCur(vat):'— (esclusa)';
@@ -907,11 +941,11 @@ const Quoter={
     const clientEl=eid('q-client');
     const clientId=clientEl?.value?+clientEl.value:null;
     const clientName=clientId?clientEl.options[clientEl.selectedIndex].text:'';
-    const totalCost=this.lines.reduce((a,l)=>a+l.subtotal,0);
-    const markup=parseFloat(eid('qr-markup')?.value||100)/100;
-    const discount=parseFloat(eid('qr-discount')?.value||0)/100;
-    const net=+((totalCost*(1+markup))*(1-discount)).toFixed(2);
-    const gross=+(net*1.22).toFixed(2);
+    const _r=this._calcola({setupCost:0});
+    if(_r.indisponibile){ toast('Motore di costo non disponibile: preventivo non salvato','error'); return; }
+    const totalCost=+_r.totalCost.toFixed(2);
+    const net=+_r.subtotalNet.toFixed(2);
+    const gross=+_r.totalGross.toFixed(2);
     const q={name,clientId,clientName,date:today(),deadline:eid('q-deadline')?.value||'',priority:eid('q-priority')?.value||'Media',notes:eid('q-notes')?.value||'',lines:this.lines,totalCost:+totalCost.toFixed(2),netPrice:net,grossPrice:gross,markup:parseFloat(eid('qr-markup')?.value||100)/100,discount:parseFloat(eid('qr-discount')?.value||0),ivaMode:this._ivaMode!==false,status:'in_attesa',category:'Quoter'};
     if(this.editId){q.id=this.editId;await snapshotRecord('quotes',this.editId);}else{q.id=Date.now();}
     const id=await IDB.put('quotes',q);
@@ -938,12 +972,10 @@ const Quoter={
   async shareWhatsApp(){
     if(!this.lines.length){toast('Aggiungi voci al preventivo prima','warning');return;}
     // Inline data extraction (no _buildPDFData dependency)
-    const markup=parseFloat(eid('qr-markup')?.value||100)/100;
-    const discount=parseFloat(eid('qr-discount')?.value||0)/100;
-    const netBase=this.lines.reduce((a,l)=>a+l.subtotal,0)*(1+markup);
-    const netFinal=netBase*(1-discount);
-    const vatRate=this._ivaMode!==false?0.22:0;
-    const grossPrice=netFinal*(1+vatRate);
+    const _wa=this._calcola({setupCost:0});
+    if(_wa.indisponibile){ toast('Motore di costo non disponibile','error'); return; }
+    const netFinal=_wa.subtotalNet;
+    const grossPrice=_wa.totalGross;
     const clientEl=eid('q-client');
     const clientNameInline=clientEl?.selectedIndex>0?clientEl.options[clientEl.selectedIndex].text:'';
     const titleInline=eid('q-name')?.value||'Preventivo';
@@ -1003,13 +1035,17 @@ const Quoter={
     const quoteNum='INT-'+Date.now().toString().slice(-6);
 
     // Cost aggregates
-    const totalCost=this.lines.reduce((a,l)=>a+l.subtotal,0);
-    const grossRevenue=totalCost*(1+markup);
-    const netAfterDiscount=grossRevenue*(1-discount);
-    const vat22=netAfterDiscount*0.22;
-    const totalWithVat=netAfterDiscount+vat22;
-    const totalProfit=netAfterDiscount-totalCost;
-    const marginPct=netAfterDiscount>0?((totalProfit/netAfterDiscount)*100):0;
+    const _an=this._calcola({setupCost:0});
+    if(_an.indisponibile){ toast('Motore di costo non disponibile','error'); return; }
+    const totalCost=_an.totalCost;
+    const netAfterDiscount=_an.subtotalNet;
+    const vat22=_an.vat;
+    const totalWithVat=_an.totalGross;
+    const totalProfit=_an.grossProfit;
+    const marginPct=_an.marginPct;
+    /* Il prezzo di ogni riga arriva già ripartito dall'adapter, in proporzione
+       al costo: è come veniva calcolato prima, ma in un posto solo. */
+    const _prezzoRiga={}; _an.lines.forEach(r=>{ _prezzoRiga[r.id]=r; });
 
     // Cost by category
     const catTotals={};
@@ -1022,8 +1058,9 @@ const Quoter={
     const marginIcon=marginPct>=40?'✅':marginPct>=20?'⚠️':'🔴';
 
     const rowsHTML=this.lines.map((l,i)=>{
-      const lineSell=l.subtotal*(1+markup)*(1-discount);
-      const lineMargin=lineSell>0?((lineSell-l.subtotal)/lineSell*100):0;
+      const _lr=_prezzoRiga[l.id]||{price:0,marginPct:0};
+      const lineSell=_lr.price;
+      const lineMargin=_lr.marginPct;
       const lmColor=lineMargin>=40?'#22c55e':lineMargin>=20?'#f59e0b':'#ef4444';
       const lmBar=Math.max(0,Math.min(100,lineMargin));
       return `<tr style="background:${i%2===0?'#0f172a':'#111827'}">
@@ -1291,20 +1328,23 @@ const Quoter={
     const withIVA=this._ivaMode!==false;
     const deadline=eid('q-deadline')?.value;
     const selectedLines=this.lines.filter(l=>selectedIds.includes(l.id));
-    const subTotalNet=selectedLines.reduce((a,l)=>a+l.subtotal*(1+markup),0);
-    const finalNet=subTotalNet*(1-discount);
+    const _pdf=this._calcola({lines:selectedLines,setupCost:0});
+    if(_pdf.indisponibile){ toast('Motore di costo non disponibile: PDF non generato','error'); win.close(); return; }
+    const subTotalNet=_pdf.subtotalNet;
+    const finalNet=_pdf.subtotalNet;
     const vatRate=withIVA?0.22:0;
-    const vat=finalNet*vatRate;
-    const gross=finalNet+vat;
+    const vat=_pdf.vat;
+    const gross=_pdf.totalGross;
+    const _pdfRiga={}; _pdf.lines.forEach(r=>{ _pdfRiga[r.id]=r; });
     const quoteNum='PRV-'+Date.now().toString().slice(-6);
     const dateStr=new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
     const accentColor=cfg.accentColor||'#10b981';
 
     // Build table rows HTML
     const rowsHTML=selectedLines.map((l,i)=>{
-      const lineBase=l.subtotal*(1+markup);
-      const lineNet=lineBase*(1-discount);
-      const unitPrice=lineNet/l.qty;
+      const _lp=_pdfRiga[l.id]||{price:0,unitPrice:0};
+      const lineNet=_lp.price;
+      const unitPrice=_lp.unitPrice;
       const _rowBg = i%2===0?'#f8fafc':'#fff';
       const _detailHtml = l.detail&&l.detail!==l.desc?('<br><span style="font-size:11px;color:#94a3b8;font-weight:400">'+l.detail+'</span>'):'';
       return '<tr style="border-bottom:1px solid #e2e8f0;background:'+_rowBg+'">'
@@ -1519,10 +1559,10 @@ const Quoter={
     await this.saveQuote().catch(()=>{});
     const clientEl = eid('q-client');
     const clientName = clientEl?.selectedIndex>0 ? clientEl.options[clientEl.selectedIndex].text : '';
-    const markup  = parseFloat(eid('qr-markup')?.value||100)/100;
-    const total   = (this.lines||[]).reduce((a,l)=>a+l.subtotal*(1+markup),0);
-    const discount= parseFloat(eid('qr-discount')?.value||0)/100;
-    const finalTotal = total*(1-discount);
+    const _wf = this._calcola({setupCost:0});
+    if(_wf.indisponibile){ toast('Motore di costo non disponibile: ordine non creato','error'); return; }
+    const total = _wf.subtotalNet;
+    const finalTotal = _wf.subtotalNet;
     // Create order in GestioneOrdini unified workflow
     if(typeof GestioneOrdini!=='undefined'){
       await GestioneOrdini._saveOrderFromQuoter({
@@ -2224,7 +2264,11 @@ const PriceAdvisor = {
 
     const targetMargin = 45; // target %
     const row = (p,cls,reason,suggestion) => {
-      const suggestedPrice = p.cost>0 ? p.cost/(1-targetMargin/100) : 0;
+      /* Il prezzo consigliato lo dà il motore: qui non si rifà la formula del
+         margine, che è la stessa che sbagliavano i quoter storici. */
+      const suggestedPrice = (typeof window!=='undefined' && window.InglyCostEngine && p.cost>0)
+        ? window.InglyCostEngine.prezzo(p.cost, { strategia:'margine', marginePct:targetMargin, ivaPct:0 }).netto
+        : 0;
       const delta = suggestedPrice - p.price;
       return `<div style="border:1px solid var(--border2);border-radius:10px;padding:14px;background:var(--bg-card2);margin-bottom:8px">
         <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">

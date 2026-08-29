@@ -176,9 +176,13 @@
   function injectBtn(){
     ['view-settings','view-backup'].forEach(function(vid){
       var view=document.getElementById(vid); if(!view) return;
-      if(view.querySelector('#dt-hub-btn')) return;
+      /* L'id è unico nel documento, non nella vista: la guardia per-vista
+         lasciava passare il secondo pulsante e nasceva un id duplicato — con
+         il secondo nodo invisibile a `getElementById`. Un id per vista, e una
+         classe comune per chi li deve selezionare tutti. */
+      if(view.querySelector('.dt-hub-btn')) return;
       var host=view.querySelector('.module-actions')||view.querySelector('.module-header')||view;
-      var b=document.createElement('button'); b.id='dt-hub-btn'; b.className='btn btn-secondary btn-sm ds-btn';
+      var b=document.createElement('button'); b.id='dt-hub-btn-'+vid.replace('view-',''); b.className='btn btn-secondary btn-sm ds-btn dt-hub-btn';
       b.innerHTML='⚙️ Personalizza dati'; b.style.margin='8px 0';
       b.onclick=function(){ DataTools.hub(); };
       host.appendChild(b);

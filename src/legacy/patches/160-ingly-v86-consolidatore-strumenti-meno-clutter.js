@@ -10,7 +10,7 @@
   "use strict";
   if(window.__toolsConsolidator) return; window.__toolsConsolidator=true;
 
-  var SEL='#mcat-open-btn,#mc-open-btn,#mi-open-btn,#dt-hub-btn,#audit-btn,.mh-open-btn,#consum-seed-btn,#qa-open-btn,#fa-open-btn,.bi-open-btn,#oa-kpi-btn,#oa-kpi-btn2,#ca-seg-btn';
+  var SEL='#mcat-open-btn,#mc-open-btn,#mi-open-btn,.dt-hub-btn,#audit-btn,.mh-open-btn,#consum-seed-btn,#qa-open-btn,#fa-open-btn,.bi-open-btn,#oa-kpi-btn,#oa-kpi-btn2,#ca-seg-btn';
 
   var css=`
   .ingly-tools{ position:relative; display:inline-block; margin:8px 6px; }

@@ -74,6 +74,10 @@
 
   let sources = null;
   let result = null;
+  let spiegazione = null;
+  /* Due interruttori di vista, non di calcolo: il conto è sempre lo stesso. */
+  let mostraSpiegazione = false;
+  let auditCosto = false;
 
   /* ── Passi ──────────────────────────────────────────────────────────────  */
 
@@ -257,23 +261,150 @@
     }
 
     const qty = Math.max(1, Number(state.quantity || 1));
-    // Il prezzo B2B è il netto del motore con lo sconto quantità che il
-    // laboratorio applica di norma: nessuna scala inventata, solo la soglia
-    // dichiarata dall'utente nel campo "pezzi per lotto".
-    const b2b = result.net * (qty >= 50 ? 0.8 : qty >= 20 ? 0.88 : 0.95);
 
     return '<div class="pb__prices">' +
-      priceTile('Costo', result.totalCost, 'per pezzo') +
-      priceTile('Prezzo B2C', result.gross, 'IVA inclusa') +
-      priceTile('Prezzo B2B', b2b, 'netto, da ' + qty + ' pz') +
-      priceTile('Margine', result.margin, 'sul netto', 'percent') +
+      priceTile('Costo reale', result.totalCost, 'per pezzo, ' + qty + ' pz') +
+      priceTile('Prezzo netto', result.priceNet, 'senza IVA') +
+      priceTile('Prezzo cliente', result.priceGross, 'IVA ' + sources.settings.vat + '% inclusa') +
+      priceTile('Margine', result.margin, 'sul ricavo', 'percent') +
+      priceTile('Ricarico', result.markupPct, 'sul costo', 'percent') +
       '</div>' +
+      posizionamenti() +
       field('Ricarico applicato (%)',
         '<input class="form-control" type="number" min="0" step="1" data-pb="markupOverride" ' +
         'value="' + (state.markupOverride === null ? sources.settings.markup : state.markupOverride) + '">',
         'Predefinito da Impostazioni: ' + sources.settings.markup + '%') +
-      '<p class="pb__note">Prezzi calcolati da <strong>PricingEngine</strong>, lo stesso motore del Catalogo, ' +
-      'con IVA al ' + sources.settings.vat + '%.</p>';
+      scaglioni() +
+      '<div class="pb__actions-inline">' +
+      '<button type="button" class="ds-btn ds-btn--ghost" data-pb-explain aria-expanded="' + (mostraSpiegazione ? 'true' : 'false') + '">' +
+      '<i class="fa-solid fa-list-check" aria-hidden="true"></i> ' +
+      (mostraSpiegazione ? 'Nascondi il calcolo' : 'Come è stato calcolato?') + '</button>' +
+      '<button type="button" class="ds-btn ds-btn--ghost' + (auditCosto ? ' is-on' : '') + '" data-pb-audit aria-pressed="' + (auditCosto ? 'true' : 'false') + '">' +
+      '<i class="fa-solid fa-magnifying-glass-dollar" aria-hidden="true"></i> Audit costo</button>' +
+      '</div>' +
+      cassetto();
+  }
+
+  /* ── I quattro posizionamenti ─────────────────────────────────────────────
+     Non quattro numeri a caso: le politiche del motore, lette e non riscritte.
+     È la differenza fra un prezzo e una decisione di prezzo. */
+  function posizionamenti() {
+    const cons = (spiegazione && spiegazione.recommendations) || [];
+    if (!cons.length) return '';
+    return '<div class="pb__policies">' +
+      '<div class="pb__breakdown-title">Posizionamento</div>' +
+      '<div class="pb__policy-row">' + cons.map(function (c) {
+        return '<div class="pb__policy' + (c.recommended ? ' is-recommended' : '') + '">' +
+          (c.recommended ? '<span class="pb__policy-tag">Consigliato</span>' : '') +
+          '<div class="pb__policy-label">' + esc(c.label) + '</div>' +
+          '<div class="pb__policy-price">' + fmt.currency(c.price) + '</div>' +
+          '<div class="pb__policy-meta">margine ' + fmt.value(c.margin, 'percent') +
+          ' · ricarico ' + fmt.value(c.markup, 'percent') + '</div>' +
+          '<div class="pb__policy-why">' + esc(c.reason) + '</div>' +
+          '</div>';
+      }).join('') + '</div></div>';
+  }
+
+  /* ── Scaglioni di quantità ────────────────────────────────────────────────
+     Il prezzo scende perché scende il costo: l'avviamento si divide. La
+     colonna «Setup/pz» lo rende visibile, ed è la risposta alla domanda che
+     il cliente fa sempre — «e se ne prendo il doppio?». */
+  function scaglioni() {
+    const righe = (result && result.quantityTiers) || [];
+    if (!righe.length) return '';
+
+    /* Il miglior punto non è il più grande: è quello dove l'ultimo raddoppio
+       di quantità smette di far scendere il costo unitario in modo sensibile.
+       Sotto il 3% il lotto più grande immobilizza magazzino senza guadagnarci. */
+    let migliore = righe[0];
+    for (let i = 1; i < righe.length; i += 1) {
+      const guadagno = migliore.costoPezzo > 0
+        ? (migliore.costoPezzo - righe[i].costoPezzo) / migliore.costoPezzo : 0;
+      if (guadagno >= 0.03) migliore = righe[i];
+    }
+
+    return '<div class="pb__tiers">' +
+      '<div class="pb__breakdown-title">Scaglioni di quantità</div>' +
+      '<div class="pb__tiers-scroll"><table class="pb__tiers-table">' +
+      '<thead><tr><th scope="col">Quantità</th><th scope="col">Costo/pz</th>' +
+      '<th scope="col">Setup/pz</th><th scope="col">Prezzo/pz</th>' +
+      '<th scope="col">Totale</th><th scope="col">Profitto</th><th scope="col">Margine</th></tr></thead>' +
+      '<tbody>' + righe.map(function (t) {
+        const evidenzia = t.qty === migliore.qty;
+        return '<tr' + (evidenzia ? ' class="is-best"' : '') + '>' +
+          '<th scope="row">' + t.qty + (evidenzia ? '<span class="pb__best">Miglior valore</span>' : '') + '</th>' +
+          '<td>' + fmt.currency(t.costoPezzo) + '</td>' +
+          '<td>' + fmt.currency(t.unaTantumPerPezzo) + '</td>' +
+          '<td>' + fmt.currency(t.prezzoPezzo) + '</td>' +
+          '<td>' + fmt.currency(t.totaleNetto) + '</td>' +
+          '<td>' + fmt.currency(t.profitto) + '</td>' +
+          '<td>' + fmt.value(t.marginePct, 'percent') + '</td>' +
+          '</tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
+
+  /* ── Il cassetto «come è stato calcolato» ─────────────────────────────────
+     Dentro la pagina, non in una finestra del browser: chi sta preventivando
+     non deve perdere di vista i campi che ha appena compilato. */
+  function cassetto() {
+    if (!mostraSpiegazione || !spiegazione || spiegazione.vuoto) return '';
+
+    const gruppi = [
+      { id: 'una tantum', titolo: 'Costi una tantum' },
+      { id: 'per pezzo', titolo: 'Costi per pezzo' },
+      { id: 'costo', titolo: '' },
+      { id: 'prezzo', titolo: 'Prezzo' },
+      { id: 'profitto', titolo: 'Profitto' },
+    ];
+
+    const righe = gruppi.map(function (g) {
+      const voci = spiegazione.lines.filter(function (r) { return r.gruppo === g.id; });
+      if (!voci.length) return '';
+      return (g.titolo ? '<li class="pb__calc-head">' + esc(g.titolo) + '</li>' : '') +
+        voci.map(function (r) {
+          const forte = r.id === 'costoPezzo' || r.id === 'lordo' || r.id === 'operativo';
+          return '<li class="pb__calc-row' + (forte ? ' is-total' : '') + '">' +
+            '<span class="pb__calc-label">' + esc(r.label) +
+            (auditCosto ? badgeFonte(r.fonte) : '') + '</span>' +
+            '<span class="pb__calc-formula">' + esc(r.formula) + '</span>' +
+            '<span class="pb__calc-value">' + fmt.currency(r.result) + '</span>' +
+            '</li>';
+        }).join('');
+    }).join('');
+
+    const avvisi = (spiegazione.warnings || []).length
+      ? '<ul class="pb__warnings">' + spiegazione.warnings.map(function (w) {
+        return '<li class="pb__warning pb__warning--' + w.livello.toLowerCase() + '">' +
+          '<span class="pb__warning-level">' + w.livello + '</span> ' + esc(w.messaggio) +
+          (w.azione ? ' <em>' + esc(w.azione) + '</em>' : '') + '</li>';
+      }).join('') + '</ul>'
+      : '';
+
+    return '<div class="pb__calc" role="region" aria-label="Dettaglio del calcolo">' +
+      (auditCosto
+        ? '<p class="pb__note">Audit costo attivo: accanto a ogni voce c\'è da dove viene il numero.</p>'
+        : '') +
+      '<ul class="pb__calc-list">' + righe + '</ul>' + avvisi + '</div>';
+  }
+
+  /* La provenienza di un numero, dichiarata e non dedotta: il motore sa se un
+     campo c\'era, e chi lo chiama sa da dove l\'ha preso. */
+  const FONTI = {
+    magazzino:   { et: 'Magazzino',   cl: 'reale' },
+    reale:       { et: 'Reale',       cl: 'reale' },
+    inventory:   { et: 'Magazzino',   cl: 'reale' },
+    configurato: { et: 'Configurato', cl: 'configurato' },
+    inserito:    { et: 'Manuale',     cl: 'manuale' },
+    default:     { et: 'Default',     cl: 'default' },
+    stima:       { et: 'Stimato',     cl: 'stima' },
+    calcolato:   { et: 'Calcolato',   cl: 'calcolato' },
+    mancante:    { et: 'Mancante',    cl: 'mancante' },
+  };
+
+  function badgeFonte(fonte) {
+    const f = FONTI[fonte];
+    if (!f) return '';
+    return ' <span class="pb__source pb__source--' + f.cl + '">' + esc(f.et) + '</span>';
   }
 
   function priceTile(label, value, note, format) {
@@ -371,7 +502,21 @@
       result = null;
       return;
     }
-    result = await Data.price({ materialCost, machineMin, laborMin, category: state.category });
+    result = await Data.price({
+      materialCost, machineMin, laborMin, category: state.category,
+      qty: Math.max(1, Number(state.quantity || 1)),
+      packaging: Number(state.packaging || 0),
+      other: Number(state.extra || 0),
+    });
+    /* La spiegazione si chiede insieme al prezzo: sono lo stesso conto visto
+       da due lati, e chiederli in momenti diversi vorrebbe dire poterli
+       vedere diversi. */
+    spiegazione = await Data.priceExplain({
+      materialCost, machineMin, laborMin,
+      qty: Math.max(1, Number(state.quantity || 1)),
+      packaging: Number(state.packaging || 0),
+      other: Number(state.extra || 0),
+    });
   }
 
   /* ── Salvataggio ────────────────────────────────────────────────────────
@@ -467,6 +612,14 @@
      markup. */
   function bind(view) {
     view.addEventListener('click', async function (e) {
+      /* I due interruttori di vista: cambiano cosa si mostra, mai cosa si
+         calcola. Il conto resta quello che il motore ha già fatto. */
+      if (e.target.closest('[data-pb-explain]')) { mostraSpiegazione = !mostraSpiegazione; return render(); }
+      if (e.target.closest('[data-pb-audit]')) {
+        auditCosto = !auditCosto;
+        if (auditCosto) mostraSpiegazione = true;   // l'audit senza il dettaglio non mostrerebbe nulla
+        return render();
+      }
       const stepBtn = e.target.closest('[data-pb-step]');
       if (stepBtn) { state.step = +stepBtn.getAttribute('data-pb-step'); return render(); }
 

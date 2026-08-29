@@ -44,6 +44,8 @@ export const PRODUCT_FILES = [
      bundle incontra la matematica comune prima delle sue applicazioni. */
   'cost-engine.js',
   'print3d-cost.js',
+  /* L'adapter del preventivo: dopo il motore, prima di chi lo usa. */
+  'quote-adapter.js',
   'first-run.js',
 ];
 
