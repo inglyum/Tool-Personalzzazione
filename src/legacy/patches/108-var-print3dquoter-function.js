@@ -170,15 +170,10 @@ function render(){
           +'<button class="act-btn act-del" onclick="Print3DQuoter.rmLine('+l.id+')">🗑️</button>'
         +'</td></tr>';
     }).join('');
-    /* Lo sconto è già dentro `ppz` — è il prezzo che l'utente ha visto e
-       accettato. Qui veniva applicato una seconda volta, sulla somma delle
-       righe: il totale scendeva di uno sconto che era già stato fatto. */
-    var listino=LINES.reduce(function(a,l){return a+(l.ppzListino||l.ppz)*l.qty;},0);
-    var discAmt=listino-totN;
-    var vatAmt=IVA_ON?totN*0.22:0;
-    var gross=totN+vatAmt;
-    var mg=totN>0?((totN-totC)/totN*100):0;
-    var forzate=LINES.filter(function(l){return l.manuale;}).length;
+    /* Gli stessi totali del PDF e del messaggio WhatsApp: una funzione sola. */
+    var TOT=totali();
+    var listino=TOT.listino, discAmt=TOT.sconto, vatAmt=TOT.iva, gross=TOT.lordo;
+    var mg=TOT.margine, forzate=TOT.forzate;
     linesHtml='<table><thead><tr>'
       +'<th>Descrizione</th><th style="text-align:center">Qtà</th><th style="text-align:right">Costo/pz</th><th style="text-align:right">Prezzo/pz</th><th style="text-align:right">Subtot.</th><th></th>'
       +'</tr></thead><tbody>'+rows+'</tbody></table>'
@@ -511,6 +506,31 @@ function bandaEnergia(){
   +'</div>';
 }
 
+/* ── I totali, in un posto solo ────────────────────────────────────────────
+   Erano calcolati tre volte: nella tabella, nel PDF e nel messaggio
+   WhatsApp. Le tre copie coincidevano perché ripetevano le stesse due
+   operazioni nello stesso ordine — una coincidenza mantenuta a mano, non una
+   garanzia. La prima volta che una delle tre avesse smesso di somigliare
+   alle altre, il cliente avrebbe ricevuto un PDF con un totale diverso da
+   quello che l'utente aveva visto e approvato. */
+function totali(){
+  var costo=0, netto=0, listino=0, forzate=0;
+  LINES.forEach(function(l){
+    costo   += l.cpz*l.qty;
+    netto   += l.ppz*l.qty;
+    listino += (l.ppzListino||l.ppz)*l.qty;
+    if(l.manuale) forzate++;
+  });
+  var sconto=listino-netto;
+  var iva=IVA_ON?netto*0.22:0;
+  return {
+    costo:costo, listino:listino, sconto:sconto, netto:netto, iva:iva,
+    lordo:netto+iva,
+    margine: netto>0 ? ((netto-costo)/netto*100) : 0,
+    forzate:forzate, righe:LINES.length,
+  };
+}
+
 function setType(t){T=t;render();}
 function setIva(on){
   IVA_ON=on;
@@ -837,11 +857,8 @@ function doPdf(){
   var name=(el('p3d-name')||{}).value||'Preventivo 3D';
   var client=(el('p3d-client')||{}).value||'';
   var notes=(el('p3d-notes')||{}).value||'';
-  var totN=LINES.reduce(function(a,l){return a+l.ppz*l.qty;},0);
-  var listino=LINES.reduce(function(a,l){return a+(l.ppzListino||l.ppz)*l.qty;},0);
-  var discAmt=listino-totN;   // già scontato nelle righe: qui si dichiara, non si riapplica
-  var vatAmt=IVA_ON?totN*0.22:0;
-  var gross=totN+vatAmt;
+  var TOT=totali();
+  var totN=TOT.netto, listino=TOT.listino, discAmt=TOT.sconto, vatAmt=TOT.iva, gross=TOT.lordo;
   var tbody=LINES.map(function(l){return '<tr><td>'+l.n+' '+(l.t==='resin'?'🧴':'🧵')+'</td><td align="center">'+l.qty+'</td><td align="right">'+eur(l.ppz)+'</td><td align="right"><strong>'+eur(l.ppz*l.qty)+'</strong></td></tr>';}).join('');
   var w=window.open('','_blank','width=800,height=1000');if(!w){showToastP('Popup bloccato','warning');return;}
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+name+'</title>'
@@ -864,9 +881,8 @@ function doPdf(){
 function doWa(){
   if(!LINES.length){showToastP('⚠️ Nessuna voce','warning');return;}
   var name=(el('p3d-name')||{}).value||'Stampa 3D';
-  var totN=LINES.reduce(function(a,l){return a+l.ppz*l.qty;},0);
-  var listino=LINES.reduce(function(a,l){return a+(l.ppzListino||l.ppz)*l.qty;},0);
-  var gross=IVA_ON?totN*1.22:totN;
+  var TOT=totali();
+  var totN=TOT.netto, listino=TOT.listino, gross=TOT.lordo;
   var lines=LINES.map(function(l){return '• '+l.n+' ×'+l.qty+' = '+eur(l.ppz*l.qty);}).join('\n');
   var msg='🖨️ *Preventivo Stampa 3D*\n\n*'+name+'*\n\n'+lines
     +(listino-totN>0.005?'\n\nListino: '+eur(listino)+'\nSconto '+DISC+'%: -'+eur(listino-totN):'')
@@ -956,6 +972,8 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   /* Letto dal collaudo per verificare l'ingresso senza ricostruirlo: un
      collaudo che ricopia la lettura dei campi prova la propria copia. */
   _ingresso:ingresso,
+  /* Letto dal collaudo: schermo, PDF e WhatsApp devono dire lo stesso numero. */
+  _totali:totali,
   /* Letto da patch 109 per «→ Catalogo», che prima lo cercava e non lo
      trovava: `_state` non è mai stato esportato, e il pulsante salvava a
      costo 0 un prodotto il cui prezzo leggeva per scraping di una dimensione

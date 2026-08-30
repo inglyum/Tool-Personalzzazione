@@ -20,6 +20,10 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const erroriJS = [];
 page.on('pageerror', (e) => erroriJS.push(e.message));
+/* `clearLines()` chiede conferma: senza questa riga Playwright annulla il
+   dialogo, le voci non si svuotano e il collaudo conta righe di prove
+   precedenti — accusando il preventivatore di un difetto che è solo suo. */
+page.on('dialog', (d) => d.accept());
 await page.addInitScript(() => {
   localStorage.setItem('ingly_wizard_done_v2', '1');
   localStorage.setItem('ingly_tour_done_v1', '1');
@@ -295,6 +299,51 @@ const esito = await page.evaluate(async () => {
     sv('p3d-g', 290); sv('p3d-h', 9.95);
     await new Promise((r) => setTimeout(r, 250));
   }
+
+  /* ── Schermo, PDF e WhatsApp dicono lo stesso numero ────────────────────
+     I tre totali erano calcolati tre volte e coincidevano perché ripetevano
+     le stesse due operazioni nello stesso ordine: una coincidenza mantenuta a
+     mano, non una garanzia. */
+  Print3DQuoter.clearLines();
+  sv('p3d-g', 290); sv('p3d-h', 9.95); sv('p3d-qty', 3);
+  Print3DQuoter.setMargine(45);
+  await new Promise((r) => setTimeout(r, 300));
+  Print3DQuoter.addLine();
+  sv('p3d-g', 120); sv('p3d-h', 4); sv('p3d-qty', 10);
+  await new Promise((r) => setTimeout(r, 300));
+  Print3DQuoter.addLine();
+  Print3DQuoter.setDisc(10);
+  await new Promise((r) => setTimeout(r, 350));
+
+  const T = Print3DQuoter._totali();
+  dico('il preventivo ha due righe', T.righe === 2);
+  /* Il totale grande a schermo. */
+  const testoVista = document.querySelector('#view-print3d')?.textContent.replace(/\s+/g, ' ') || '';
+  const grande = (testoVista.match(/TOTALE (?:IVA INCLUSA|SENZA IVA)\s*€\s*([\d.,]+)/i) || [0, '0'])[1];
+  const grandeNum = parseFloat(String(grande).replace(/\.(?=\d{3})/g, '').replace(',', '.')) || 0;
+  dico('il totale a schermo è quello della funzione unica',
+    Math.abs(grandeNum - T.lordo) < 0.02, `schermo €${grandeNum.toFixed(2)} · funzione €${T.lordo.toFixed(2)}`);
+
+  /* Le somme devono chiudere: netto = listino − sconto, lordo = netto + IVA. */
+  dico('listino meno sconto fa il netto', Math.abs(T.listino - T.sconto - T.netto) < 0.001);
+  dico('netto più IVA fa il lordo', Math.abs(T.netto + T.iva - T.lordo) < 0.001);
+  dico("l'IVA è il 22% del netto, non del listino",
+    Math.abs(T.iva - T.netto * 0.22) < 0.001);
+  dico('il margine è calcolato su costo e netto',
+    Math.abs(T.margine - (T.netto - T.costo) / T.netto * 100) < 0.001);
+
+  /* E le tre superfici leggono la stessa funzione, non tre copie. */
+  const sorgentePdf = String(Print3DQuoter.doPdf);
+  const sorgenteWa = String(Print3DQuoter.doWa);
+  dico('il PDF usa la funzione unica dei totali', /totali\(\)/.test(sorgentePdf));
+  dico('WhatsApp usa la funzione unica dei totali', /totali\(\)/.test(sorgenteWa));
+  dico('e nessuna delle due ricalcola l\'IVA per conto suo',
+    !/0\.22|1\.22/.test(sorgentePdf) && !/0\.22|1\.22/.test(sorgenteWa));
+
+  Print3DQuoter.clearLines();
+  Print3DQuoter.setDisc(0);
+  sv('p3d-g', 290); sv('p3d-h', 9.95); sv('p3d-qty', 1);
+  await new Promise((r) => setTimeout(r, 300));
 
   /* Nessuna duplicazione introdotta. */
   const ids = [...document.querySelectorAll('[id]')].map((e) => e.id).filter(Boolean);
