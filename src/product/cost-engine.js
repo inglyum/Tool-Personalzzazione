@@ -92,6 +92,10 @@
     print3d: {
       id: 'print3d',
       label: 'Stampa 3D',
+      /* La stampante lavora da sola, spesso di notte: le spese generali non
+         si spalmano sulle sue ore, ma su quelle di chi la prepara e la
+         finisce. Vedi il calcolo dell overhead. */
+      presidiata: false,
       /** Ore macchina per pezzo: dallo slicer, oppure dichiarate. */
       ore: function (i) { return pos(i.hours); },
       unaTantum: function (i) {
@@ -358,6 +362,71 @@
   /* ── Il conto ─────────────────────────────────────────────────────────────
      Uguale per tutte le tecnologie. È questa funzione che il difetto misurato
      nel modulo apparel non aveva: la divisione dei costi una tantum. */
+  /* ── I livelli di costo ────────────────────────────────────────────────────
+     La domanda «quanto costa questo pezzo» ha tre risposte diverse, tutte e
+     tre vere, e confonderle è il modo più rapido di credere che un sistema
+     sbagli i conti.
+
+     Misurato sul caso di calibrazione — 290 g, 9h57, riferimento 4,50 €:
+
+       solo materiale                € 6,96
+       + energia                     € 7,21
+       + macchina e manutenzione     € 10,39
+       + scarto                      € 11,18
+       + manodopera (setup+finitura) € 18,68
+
+     Lo slicer dice 4,50 € perché mostra **il materiale**, a 15,52 €/kg. Non è
+     un costo di produzione più basso: è un'altra cosa. La sola manodopera di
+     avviamento e finitura vale 7,50 €, più del riferimento intero.
+
+     Chi confronta i due numeri senza sapere questo conclude che il
+     preventivatore sbaglia. Il preventivatore ha ragione e non lo spiega, che
+     è un difetto suo.
+
+     Da qui in poi il livello si dichiara, e il risultato dice quale sta
+     usando. */
+  var LIVELLI = {
+    stampa: {
+      id: 'stampa', label: 'Costo di stampa', breve: 'stampa',
+      spiega: 'Materiale ed energia: quello che consuma la macchina mentre lavora. È il numero che mostrano gli slicer.',
+      voci: ['materiale', 'energia', 'extra'],
+      manodopera: false, unaTantum: false, scarto: false, overhead: false,
+    },
+    macchina: {
+      id: 'macchina', label: 'Costo di produzione', breve: 'produzione',
+      spiega: 'Aggiunge l\'usura della macchina, la manutenzione e i pezzi che vanno rifatti. È quanto ti costa davvero produrlo.',
+      voci: ['materiale', 'energia', 'macchina', 'manutenzione', 'packaging', 'extra'],
+      manodopera: false, unaTantum: false, scarto: true, overhead: false,
+    },
+    completo: {
+      id: 'completo', label: 'Costo aziendale pieno', breve: 'pieno',
+      spiega: 'Aggiunge il tuo tempo — avviamento, finitura, post-processo — e le spese generali. È quanto devi rientrare per non lavorare in perdita.',
+      voci: null,   // tutte
+      manodopera: true, unaTantum: true, scarto: true, overhead: true,
+    },
+  };
+  /* Il livello predefinito è quello **pieno**, cioè il comportamento che il
+     motore ha sempre avuto. Sceglierne uno più stretto come predefinito
+     cambierebbe in silenzio il prezzo di ogni preventivo già costruito, e in
+     questo progetto un numero non si muove senza che qualcuno l'abbia
+     chiesto. Chi vuole il costo di stampa lo dichiara. */
+  var LIVELLO_PREDEFINITO = 'completo';
+
+  /* Le voci che sono **tempo di una persona**: quello che distingue il costo
+     di produzione dal costo aziendale pieno. */
+  var VOCI_MANODOPERA = ['manodopera', 'postProcesso', 'finitura', 'lavoro', 'qc'];
+
+  /**
+   * Le ore in cui c'è una persona: avviamento, finitura, post-processo.
+   *
+   * Serve alle spese generali, che sono costo di struttura e si consumano
+   * quando qualcuno è al lavoro — non mentre una macchina stampa da sola.
+   */
+  function oreDiPersona(i) {
+    return (pos(i.setupMin) + pos(i.finishMin) + pos(i.washCureMin) +
+            pos(i.qcMin) + pos(i.laborMin) + pos(i.postMin)) / 60;
+  }
+
   function calcola(input) {
     var i = input || {};
     var profilo = PROFILI[String(i.tecnologia || i.technology || 'print3d')];
@@ -366,8 +435,25 @@
     var qty = Math.max(1, Math.floor(num(i.qty, 1)));
     var ore = profilo.ore(i);
 
-    var vociUnaTantum = profilo.unaTantum(i).filter(function (v) { return v.value > 0.0000001; });
-    var vociPerPezzo = profilo.perPezzo(i, ore).filter(function (v) { return v.value > 0.0000001; });
+    /* Il livello decide **quali voci entrano**, non quanto valgono: non si
+       sconta niente e non si nasconde niente, si risponde a una domanda più
+       stretta. Le voci escluse restano leggibili in `escluse`, perché «questo
+       livello non le conta» è un'informazione, non un silenzio. */
+    var livello = LIVELLI[String(i.livelloCosto || '')] || LIVELLI[LIVELLO_PREDEFINITO];
+    var ammessa = function (v) {
+      if (livello.voci && livello.voci.indexOf(v.id) < 0) return false;
+      if (!livello.manodopera && VOCI_MANODOPERA.indexOf(v.id) >= 0) return false;
+      return true;
+    };
+
+    var tutteUnaTantum = profilo.unaTantum(i).filter(function (v) { return v.value > 0.0000001; });
+    var tuttePerPezzo = profilo.perPezzo(i, ore).filter(function (v) { return v.value > 0.0000001; });
+
+    var vociUnaTantum = livello.unaTantum ? tutteUnaTantum.filter(ammessa) : [];
+    var vociPerPezzo = tuttePerPezzo.filter(ammessa);
+
+    var escluse = tuttePerPezzo.filter(function (v) { return !ammessa(v); })
+      .concat(livello.unaTantum ? [] : tutteUnaTantum);
 
     var extra = (i.extras || []).reduce(function (a, e) { return a + pos(e && e.cost); }, 0);
     if (extra > 0) vociPerPezzo.push({ id: 'extra', label: 'Extra', value: extra, detail: (i.extras || []).length + ' voci' });
@@ -393,7 +479,7 @@
         return v.perdibile !== false && v.id !== 'packaging' && v.id !== 'extra';
       })
       .reduce(function (a, v) { return a + v.value; }, 0);
-    var tasso = Math.max(0, Math.min(90, pos(i.failureRate))) / 100;
+    var tasso = livello.scarto ? Math.max(0, Math.min(90, pos(i.failureRate))) / 100 : 0;
     var scarto = perdibile * (tasso / (1 - tasso || 1));
     if (scarto > 0.0000001) {
       vociPerPezzo.push({ id: 'scarto', label: 'Scarto previsto', value: scarto,
@@ -410,11 +496,27 @@
        affitto, utenze, amministrazione — spalmato sulle ore di lavoro. Chi ha
        fatto i conti del proprio laboratorio di solito conosce il secondo. */
     var overhead = 0;
-    var overheadModo = 'nessuno';
-    if (pos(i.overheadPerHour) > 0) {
-      overhead = pos(i.overheadPerHour) * ore;
-      overheadModo = 'orario';
-    } else if (pos(i.overheadPct) > 0) {
+    var overheadModo = livello.overhead ? 'nessuno' : 'escluso dal livello';
+    if (!livello.overhead) { /* le spese generali sono costo aziendale, non di stampa */ }
+    else if (pos(i.overheadPerHour) > 0) {
+      /* ── Su quali ore si spalmano le spese generali ─────────────────────
+         Non su quelle della macchina. Una stampante 3D lavora dieci ore da
+         sola, spesso di notte: attribuire a quel pezzo dieci ore di affitto,
+         utenze e amministrazione lo rende assurdo. Misurato sul caso di
+         calibrazione, con 4 €/h di struttura: 39,80 € di spese generali su un
+         pezzo da 290 g, cioè più del triplo del suo costo di produzione.
+
+         Le spese generali si spalmano sulle ore di **una persona**. Quando la
+         macchina lavora presidiata — il laser, la pressa — le due cose
+         coincidono e non cambia niente; quando lavora da sola, cambia tutto.
+
+         `overheadHours` permette di dichiararlo esplicitamente; altrimenti lo
+         decide il profilo. */
+      var orePresidiate = i.overheadHours != null ? pos(i.overheadHours)
+        : (profilo.presidiata === false ? oreDiPersona(i) : ore);
+      overhead = pos(i.overheadPerHour) * orePresidiate;
+      overheadModo = 'orario' + (profilo.presidiata === false ? ' sulle ore di lavoro' : '');
+    } else if (livello.overhead && pos(i.overheadPct) > 0) {
       overhead = costoPezzo * (Math.max(0, pos(i.overheadPct)) / 100);
       overheadModo = 'percentuale';
     }
@@ -430,6 +532,12 @@
       perPezzo: { voci: vociPerPezzo, totale: totalePerPezzo },
       overhead: overhead,
       overheadModo: overheadModo,
+      /* A quale domanda si è risposto, e cosa è rimasto fuori. */
+      livello: livello.id,
+      livelloLabel: livello.label,
+      livelloSpiega: livello.spiega,
+      escluse: escluse.map(function (v) { return { id: v.id, label: v.label, value: v.value }; }),
+      esclusoTotale: escluse.reduce(function (a, v) { return a + v.value; }, 0),
       costoPezzo: costoPezzo,
       costoTotale: costoPezzo * qty,
       costoOrarioMacchina: oraMacchina(i),
@@ -977,6 +1085,70 @@
     };
   }
 
+  /* ── Calibrazione ──────────────────────────────────────────────────────────
+     Confrontare il proprio conto con quello di uno slicer è utile, e quasi
+     sempre finisce male: i due numeri rispondono a domande diverse, e chi non
+     lo sa conclude che il preventivatore sbaglia.
+
+     Questa funzione non aggiusta niente. Prende un riferimento esterno, lo
+     confronta con ognuno dei tre livelli, e dice **quale livello gli
+     corrisponde** e cosa contiene in più ciascuno degli altri.
+
+     Non esiste, e non esisterà, un fattore di calibrazione: un numero
+     inventato per far coincidere due conti nasconde la differenza invece di
+     spiegarla, ed è il modo più efficace di non capire mai perché.
+
+     @param {Object} ingresso   gli stessi dati che si darebbero a `calcola`
+     @param {Object} riferimento { costo, sistema, cosaInclude }
+  */
+  function calibra(ingresso, riferimento) {
+    var rif = riferimento || {};
+    var costoRif = pos(rif.costo);
+    if (!(costoRif > 0)) return { confrontabile: false, motivo: 'nessun costo di riferimento' };
+
+    var livelli = Object.keys(LIVELLI).map(function (k) {
+      var r = calcola(Object.assign({}, ingresso, { livelloCosto: k }));
+      if (r.vuoto) return null;
+      return {
+        id: k, label: LIVELLI[k].label, spiega: LIVELLI[k].spiega,
+        costo: r.costoPezzo,
+        delta: r.costoPezzo - costoRif,
+        deltaPct: costoRif > 0 ? ((r.costoPezzo - costoRif) / costoRif) * 100 : null,
+        voci: r.perPezzo.voci.map(function (v) { return { id: v.id, label: v.label, value: v.value }; })
+          .concat(r.unaTantum.perPezzo > 0 ? [{ id: 'setup', label: 'Avviamento ripartito', value: r.unaTantum.perPezzo }] : [])
+          .concat(r.overhead > 0 ? [{ id: 'overhead', label: 'Spese generali', value: r.overhead }] : []),
+      };
+    }).filter(Boolean);
+
+    /* Il livello più vicino non è «quello giusto»: è quello che risponde alla
+       stessa domanda del riferimento. Dirlo è tutto il punto. */
+    var vicino = livelli.slice().sort(function (a, b) { return Math.abs(a.delta) - Math.abs(b.delta); })[0];
+
+    /* Quale singola voce spiega lo scarto residuo, se ce n'è una sola che
+       basta: è la domanda che si fa davvero guardando due numeri diversi. */
+    var residuo = vicino ? vicino.delta : 0;
+    var spiegaResiduo = null;
+    if (vicino && Math.abs(residuo) > 0.005) {
+      var candidate = vicino.voci.filter(function (v) { return Math.abs(v.value - Math.abs(residuo)) < 0.02; });
+      if (candidate.length === 1) spiegaResiduo = candidate[0];
+    }
+
+    return {
+      confrontabile: true,
+      riferimento: { costo: costoRif, sistema: rif.sistema || 'esterno', cosaInclude: rif.cosaInclude || null },
+      livelli: livelli,
+      corrispondente: vicino,
+      residuo: residuo,
+      residuoPct: costoRif > 0 ? (residuo / costoRif) * 100 : null,
+      spiegaResiduo: spiegaResiduo,
+      /* Un riferimento più basso del costo di stampa significa che i due
+         numeri non parlano nemmeno della stessa cosa: quasi sempre il prezzo
+         del materiale è diverso. */
+      materialeImplicito: pos(ingresso && ingresso.grams) > 0
+        ? (costoRif / (pos(ingresso.grams) / 1000)) : null,
+    };
+  }
+
   global.InglyCostEngine = {
     version: VERSIONE,
     POLITICHE: POLITICHE,
@@ -991,7 +1163,10 @@
     PROFILI: PROFILI,
     STRATEGIE: STRATEGIE,
     SCAGLIONI: SCAGLIONI,
+    LIVELLI: LIVELLI,
+    LIVELLO_PREDEFINITO: LIVELLO_PREDEFINITO,
     tecnologie: function () { return Object.keys(PROFILI); },
+    calibra: calibra,
     calcola: calcola,
     prezzo: prezzo,
     scaglioni: scaglioni,
