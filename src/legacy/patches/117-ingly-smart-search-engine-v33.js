@@ -2398,11 +2398,15 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     /* Company name */
     var nameEl = document.getElementById('_eh_company_name');
     if (nameEl && WL.companyName) nameEl.textContent = WL.companyName;
-    /* Brand color */
+    /* Brand color — lo applica InglyTema, che sa derivarne gli otto token e
+       misurarne il contrasto. Qui restava una scrittura diretta di
+       `--eh-brand`: due sistemi che cambiavano lo stesso colore senza
+       sapersi, e il risultato dipendeva da chi scriveva per ultimo. */
     if (WL.brandColor) {
-      document.documentElement.style.setProperty('--eh-brand', WL.brandColor);
+      if (window.InglyTema) window.InglyTema.salva({ accento: WL.brandColor });
+      else document.documentElement.style.setProperty('--eh-brand', WL.brandColor);
       var bar = document.getElementById('_eh_bar');
-      if (bar) bar.style.background = WL.brandColor;
+      if (bar) bar.style.background = 'var(--eh-brand)';
     }
     /* Favicon */
     if (WL.favicon) {
@@ -2700,6 +2704,12 @@ body.saas-active main {
           '<input type="color" id="_wl_color" value="' + (wl.brandColor||'#18181f') + '"></div>' +
         '<div class="_wl-group"><label>Favicon URL (opzionale)</label>' +
           '<input type="text" id="_wl_favicon" value="' + (wl.favicon||'') + '" placeholder="https://..."></div>' +
+        /* Tema, carattere e dimensione stanno in Aspetto: qui si sceglie
+           l'identità (nome, logo, colore del brand), là come si vede. */
+        '<div class="_wl-group" style="border-top:1px solid #2a2a35;padding-top:12px">' +
+          '<button type="button" onclick="document.getElementById(\'_wl_modal\').remove();window.InglyAspetto&&InglyAspetto.apri()" ' +
+          'style="width:100%;padding:9px;border-radius:9px;border:1px solid #2a2a35;background:transparent;color:#94a3b8;cursor:pointer;font-size:12px;font-weight:700">' +
+          '🎨 Tema, carattere e dimensione…</button></div>' +
         '<div style="font-size:10px;color:#555;margin-bottom:12px">Per il logo, trascina un\'immagine su <a href="https://www.base64-image.de" target="_blank" style="color:#6366f1">base64-image.de</a> e incolla il risultato</div>' +
         '<div class="_wl-btns">' +
           '<button class="_wl-btn reset" onclick="_ehResetWL()">&#9851; Reset</button>' +

@@ -113,7 +113,11 @@
       { label: 'Configurazione del laboratorio', hint: 'Nome, identità, tariffe', icon: 'fa-sliders', run: global.InglyFirstRun.configura },
       { label: 'Tour guidato', hint: 'Come si usa INGLY OS, in 7 passi', icon: 'fa-route', run: global.InglyFirstRun.tour },
       { label: 'Presentazione', hint: 'Cosa sa fare il prodotto, in 4 passi', icon: 'fa-circle-play', run: global.InglyFirstRun.onboarding },
-      { label: 'Riassunto della giornata', hint: 'Scadenze, urgenze, incassi', icon: 'fa-mug-hot', run: global.InglyFirstRun.briefing }
+      { label: 'Riassunto della giornata', hint: 'Scadenze, urgenze, incassi', icon: 'fa-mug-hot', run: global.InglyFirstRun.briefing },
+      /* L'aspetto si cambia da qui e dai due pannelli di branding: tre porte,
+         una stanza sola. */
+      { label: 'Aspetto', hint: 'Tema, colore d\'accento, carattere', icon: 'fa-palette',
+        run: function () { if (global.InglyAspetto) global.InglyAspetto.apri(); } }
     );
   }, 1500);
 })(window);

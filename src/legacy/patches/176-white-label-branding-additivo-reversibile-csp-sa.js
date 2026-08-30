@@ -16,7 +16,14 @@
   function set(b){ try{ localStorage.setItem(KEY, JSON.stringify(b)); }catch(e){} }
   function hexToRgba(hex,a){ var h=hex.replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
     var n=parseInt(h,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
-  function applyColor(c){ if(!c) return; var r=document.documentElement.style;
+  /* Il colore lo applica InglyTema, che ne deriva gli otto token — compresi
+     quelli del design system, che questa funzione non conosceva — e ne misura
+     il contrasto. Restava qui una seconda scrittura di `--primary`: con il
+     pannello di patch 117 che ne scriveva un'altra, il colore dell'app
+     dipendeva da quale dei due avesse parlato per ultimo. */
+  function applyColor(c){ if(!c) return;
+    if(window.InglyTema){ window.InglyTema.salva({ accento:c }); return; }
+    var r=document.documentElement.style;
     r.setProperty('--primary', c);
     r.setProperty('--primary-dim', hexToRgba(c,.14));
     r.setProperty('--primary-border', hexToRgba(c,.30));

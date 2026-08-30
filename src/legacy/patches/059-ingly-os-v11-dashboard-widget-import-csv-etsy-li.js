@@ -1088,10 +1088,13 @@ setTimeout(()=>WhiteLabel.apply(WhiteLabel.get()), 500);
       // White label
       const wlSection = document.createElement('div');
       wlSection.style.cssText = 'background:var(--bg-card2);border-radius:12px;border:1px solid var(--border);margin-bottom:14px;overflow:hidden';
-      wlSection.innerHTML = `<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+      /* La riga prometteva «colori, nome app, font» e apriva un pannello che
+         non sapeva fare né i temi né i caratteri: adesso apre Aspetto, che li
+         fa. Il pannello storico resta sotto, per il nome e il logo. */
+      wlSection.innerHTML = `<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.InglyAspetto?InglyAspetto.apri():(this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none')">
         <span style="font-size:16px">🎨</span>
-        <div style="flex:1"><div style="font-size:13px;font-weight:700">Tema & White Label</div><div style="font-size:11px;color:var(--text-muted)">Colori, nome app, font — personalizza l'aspetto</div></div>
-        <span style="color:var(--text-muted)">▼</span></div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:700">Aspetto &amp; White Label</div><div style="font-size:11px;color:var(--text-muted)">Tema chiaro/scuro, colore d'accento, carattere, dimensione</div></div>
+        <span style="color:var(--text-muted)">▸</span></div>
         <div id="whitelabel-panel" style="padding:0 16px;display:none"></div>`;
       parentSection.appendChild(wlSection);
 
