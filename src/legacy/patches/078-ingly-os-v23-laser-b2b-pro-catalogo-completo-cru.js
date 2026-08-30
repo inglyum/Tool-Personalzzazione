@@ -426,11 +426,25 @@ function calcData(){
   var mhc=(m.hourly+(m.energyH||m.energyHourly||0))/60*tm;
   var lc=lH/60*tm;
   var cp=mc+mhc+lc+pk;
-  var bp=cp*mu;
+  /* La stessa regola della tabella, e per la stessa ragione: la scheda
+     riepilogo e la riga della tabella descrivono lo stesso lavoro, e finché
+     usavano due regole diverse — qui nessun minimo, là un minimo per pezzo —
+     mostravano due prezzi diversi per la stessa quantità sulla stessa
+     schermata. */
+  var POLd=Object.assign({prezzoMinimo:15, marginePavimento:15}, (LaserB2B._politiche||{}));
+  var motored=(typeof window!=='undefined')&&window.InglyCostEngine;
+  var bp=motored
+    ? motored.prezzo(cp,{strategia:'ricarico', ricarico:mu, marginePavimentoPct:POLd.marginePavimento, ivaPct:0}).netto
+    : cp*mu;
   var fp=(LaserB2B._overrule>0)?LaserB2B._overrule:bp;
+  var minimoLavoro=false;
+  if(!(LaserB2B._overrule>0) && fp*qty < POLd.prezzoMinimo){
+    fp=POLd.prezzoMinimo/Math.max(1,qty);
+    minimoLavoro=true;
+  }
   var mg=Math.round((fp-cp)/fp*100);
   var md=Math.max(0,Math.round((1-cp/(0.65*fp))*100));
-  return {p,m,mk,lH,pk,ck,mu,qty,mc,tm,mhc,lc,cp,bp,fp,mg,md,profit:(fp-cp)*qty,total:fp*qty};
+  return {p,m,mk,lH,pk,ck,mu,qty,mc,tm,mhc,lc,cp,bp,fp,mg,md,minimoLavoro,prezzoMinimoLavoro:POLd.prezzoMinimo,profit:(fp-cp)*qty,total:fp*qty};
 }
 
 // Expose calc + selectProduct
@@ -476,7 +490,7 @@ LaserB2B.calc=function(){
        Restano qui i driver del laser: sconto materiale a volume, tempo
        macchina che cala con il lotto. Se ne va la matematica di prezzo. */
     var motore=(typeof window!=='undefined')&&window.InglyCostEngine;
-    var cp2, fp2, mg2, pavimento=false;
+    var cp2, fp2, mg2, pavimento=false, minimoScattato=false;
     if(motore){
       var c2=motore.calcola({
         tecnologia:'generico', qty:1,
@@ -489,11 +503,30 @@ LaserB2B.calc=function(){
       });
       cp2=c2.costoPezzo;
       var pr2=motore.prezzo(cp2,{strategia:'ricarico', ricarico:mu2, marginePavimentoPct:POL.marginePavimento, ivaPct:0});
-      fp2=(LaserB2B._overrule>0)?LaserB2B._overrule:Math.max(POL.prezzoMinimo, pr2.netto);
+      /* ── Il minimo è per **lavoro**, non per pezzo ─────────────────────
+         Qui c'era `Math.max(POL.prezzoMinimo, pr2.netto)`: un minimo di
+         fattura da 15 € applicato al prezzo di ogni singolo pezzo. Su un
+         portachiavi da 1,13 € di costo la tabella usciva a 15,00 €/pz a
+         **ogni** quantità — 5 pezzi come 200 — e duecento portachiavi
+         venivano preventivati 3 000 € invece di 454. Il margine si fermava
+         al 92% su tutte le righe, che è il segno che nessuno lo stava più
+         calcolando.
+
+         Un minimo di lavoro esiste ed è sensato: sotto una certa cifra la
+         commessa non copre il tempo di gestirla. Ma si applica al totale, e
+         quando scatta lo si dice. */
+      var unitario=(LaserB2B._overrule>0)?LaserB2B._overrule:pr2.netto;
+      var totaleRiga=unitario*qty;
+      if(!(LaserB2B._overrule>0) && totaleRiga < POL.prezzoMinimo){
+        totaleRiga=POL.prezzoMinimo;
+        unitario=totaleRiga/Math.max(1,qty);
+        minimoScattato=true;
+      }
+      fp2=unitario;
       mg2=Math.round(pr2.marginePct);
-      pavimento=!!pr2.pavimentoScattato;
-      /* Il margine si ricalcola sul prezzo davvero applicato, che il prezzo
-         minimo e il forzato possono aver spostato. */
+      pavimento=!!pr2.pavimentoScattato || minimoScattato;
+      /* Il margine si ricalcola sul prezzo davvero applicato, che il minimo di
+         lavoro e il prezzo forzato possono aver spostato. */
       if(fp2!==pr2.netto) mg2=fp2>0?Math.round((fp2-cp2)/fp2*100):0;
     } else {
       /* Nessun prezzo indovinato quando il motore manca: si mostra il costo,
@@ -518,7 +551,12 @@ LaserB2B.calc=function(){
          senza dire a quale quantità si riferissero. Bastano due parentesi. */
       +'<td style="padding:8px 10px;color:var(--text-muted);font-size:11px">'+(sd2>0?'-'+Math.round(sd2*100)+'%':'—')+'</td>'
       +'<td style="padding:8px 10px;color:var(--text-muted)">€'+cp2.toFixed(2)+'</td>'
-      +'<td style="padding:8px 10px;font-weight:800;color:var(--primary);font-size:13px">€'+fp2.toFixed(2)+'</td>'
+      /* Quando il minimo di lavoro alza il prezzo, la riga lo dice: un prezzo
+         unitario più alto senza spiegazione è il modo in cui una tabella
+         perde la fiducia di chi la legge. */
+      +'<td style="padding:8px 10px;font-weight:800;color:var(--primary);font-size:13px">€'+fp2.toFixed(2)
+        +(minimoScattato?'<div style="font-size:9px;font-weight:600;color:var(--orange)">minimo lavoro €'+POL.prezzoMinimo+'</div>':'')
+      +'</td>'
       +'<td style="padding:8px 10px"><span style="background:'+mc2col+'20;color:'+mc2col+';padding:2px 8px;border-radius:20px;font-weight:700">'+mg2+'%</span></td>'
       +'<td style="padding:8px 10px;font-weight:700">€'+(fp2*qty).toFixed(0)+'</td>'
       +'<td style="padding:8px 10px;color:#22c55e;font-weight:800">€'+((fp2-cp2)*qty).toFixed(0)+'</td>'

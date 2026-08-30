@@ -92,7 +92,15 @@ const esito = await page.evaluate(async () => {
       ],
     });
     const pr = E.prezzo(cc.costoPezzo, { strategia: 'ricarico', ricarico: mu, marginePavimentoPct: 15, ivaPct: 0 });
-    return { qty, cp: cc.costoPezzo, fp: Math.max(15, pr.netto) };
+    /* Il minimo di 15 € è un minimo di **lavoro**, non di pezzo. Questa riga
+       diceva `Math.max(15, prezzoUnitario)`, cioè il difetto che il collaudo
+       avrebbe dovuto scoprire: su un portachiavi da 1,13 € di costo la
+       tabella usciva a 15,00 €/pz a ogni quantità, e duecento pezzi venivano
+       preventivati 3 000 € invece di 404. L'attesa segue la regola corretta:
+       si alza il **totale**, e il prezzo unitario ne discende. */
+    const totale = pr.netto * qty;
+    const fp = totale < 15 ? 15 / Math.max(1, qty) : pr.netto;
+    return { qty, cp: cc.costoPezzo, fp };
   });
 
   const leggiEuro = (s) => parseFloat(String(s).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;

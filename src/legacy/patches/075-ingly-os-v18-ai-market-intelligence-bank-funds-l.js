@@ -1207,7 +1207,41 @@ const LaserB2B = {
   _QTYS: [5,10,20,50,100,200],
   _laborHourly: 18,
   _packCost: 0.30,
+  /* I moltiplicatori restano come **valori di partenza** dei margini di
+     canale: ×2,0 vale un margine del 50%, ×3,5 del 71,4%. Il prezzo non li usa
+     più direttamente — lo fa il motore, dal margine — ma cambiarli qui
+     continuerebbe a spostare i prezzi come prima, quindi nessun numero si è
+     mosso con questa modifica. */
   _markup: {b2b:2.0, etsy:3.5, retail:3.0},
+  /* Zero, e non un valore verosimile: un avviamento inventato gonfierebbe i
+     preventivi a bassa quantità di un numero che nessuno ha misurato. Finché
+     è zero la tabella lo dichiara. */
+  _setupMin: 0,
+
+  /* ── Le ipotesi di quantità, dichiarate ─────────────────────────────────
+     Erano tre ternari annidati dentro il calcolo: `qty>=50?0.20:qty>=25?...`.
+     Scritte così erano invisibili — nessuno poteva vederle senza leggere la
+     funzione, e nessuno poteva cambiarle senza modificarla.
+
+     Sono **ipotesi**, non dati: nessun fornitore ha confermato lo sconto del
+     20% sopra i 50 pezzi, e nessun cronometro la riduzione del 15% dei tempi.
+     Restano perché erano già in uso e toglierle sposterebbe i prezzi in
+     silenzio; come dati dichiarati almeno si vedono, si discutono e si
+     correggono senza toccare il codice. I valori riproducono esattamente i
+     ternari che sostituiscono. */
+  _ipotesiQuantita: [
+    { da: 50, scontoMateriale: 0.20, riduzioneTempo: 0.15 },
+    { da: 25, scontoMateriale: 0.15, riduzioneTempo: 0.08 },
+    { da: 20, scontoMateriale: 0.10, riduzioneTempo: 0.08 },
+    { da: 10, scontoMateriale: 0.10, riduzioneTempo: 0 },
+    { da: 1,  scontoMateriale: 0,    riduzioneTempo: 0 },
+  ],
+
+  _ipotesiPer(qty) {
+    const t = this._ipotesiQuantita;
+    for (let i = 0; i < t.length; i++) if (qty >= t[i].da) return t[i];
+    return t[t.length - 1];
+  },
 
   render() {
     let el = document.getElementById('view-laser_b2b');
@@ -1248,6 +1282,10 @@ const LaserB2B = {
         <div>
           <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px">📦 Packaging/pz €</label>
           <input id="lb2b-pack" type="number" value="${this._packCost}" step="0.05" onchange="LaserB2B.calc()" style="width:100%;padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label style="display:block;font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px">Avviamento (min/lavoro)</label>
+          <input id="lb2b-setup" type="number" value="${this._setupMin}" step="1" min="0" onchange="LaserB2B.calc()" title="Si paga una volta e si divide per i pezzi" style="width:100%;padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:12px">
         </div>
       </div>
 
@@ -1302,9 +1340,16 @@ const LaserB2B = {
     this.calc();
   },
 
-  calc() {
-    const el = document.getElementById('lb2b-calc'); if(!el) return;
-    const p = this._selProduct; if(!p){ return; }
+  /* ── Il conto, in un posto solo ─────────────────────────────────────────
+     Questa funzione esisteva due volte: una dentro `calc()` per disegnare la
+     tabella e una dentro `exportCSV()` per scriverla su file. Le due copie
+     erano già divergenti — il CSV non conosceva l'avviamento — e nessuna delle
+     due sapeva di essere una copia. È lo stesso difetto che questo progetto ha
+     già trovato quattro volte: due sistemi che possiedono lo stesso concetto,
+     ciascuno corretto da solo e sbagliato insieme. */
+  _conto() {
+    const p = this._selProduct;
+    if(!p) return { rows:[], posizioni:[], rifCosto:0, margineCanale:0, setupMin:0, p:null, mach:null };
     const machKey = document.getElementById('lb2b-machine')?.value||'xtool_f2';
     const mach = this._MACHINES[machKey];
     const laborH = parseFloat(document.getElementById('lb2b-labor')?.value)||18;
@@ -1312,24 +1357,60 @@ const LaserB2B = {
     const channelKey = document.getElementById('lb2b-channel')?.value||'b2b';
     const markup = this._markup[channelKey]||2.0;
 
+    /* Il moltiplicatore diventa il margine che gli corrisponde. ×2,0 è un
+       margine del 50%, ×3,5 del 71,4%: sono lo stesso prezzo detto in due
+       modi, e dirlo come margine è l'unico dei due che resta confrontabile con
+       il pavimento sotto cui non si vende. Nessun numero si muove. */
+    const MOT = (typeof window!=='undefined') && window.InglyCostEngine;
+    const margineCanale = markup>0 ? (1 - 1/markup)*100 : 0;
+    const setupMin = parseFloat(document.getElementById('lb2b-setup')?.value)||this._setupMin||0;
+
     const rows = this._QTYS.map(qty=>{
-      const scaleDiscount = qty>=50?0.20:qty>=25?0.15:qty>=10?0.10:0;
-      const materialCost = p.cost * (1-scaleDiscount);
-      const timeMin = p.timeMin * (qty>=50?0.85:qty>=20?0.92:1);
+      /* Lo sconto quantità sul materiale e la riduzione dei tempi sono
+         **ipotesi**, non dati: nessun fornitore le ha confermate. Restano
+         perché erano già in uso e toglierle sposterebbe i prezzi in silenzio,
+         ma adesso viaggiano dichiarate e il margine che producono è visibile. */
+      const ip = this._ipotesiPer(qty);
+      const scaleDiscount = ip.scontoMateriale;
+      const materialCost = p.cost * (1 - scaleDiscount);
+      const timeMin = p.timeMin * (1 - ip.riduzioneTempo);
       const machCostPz = (mach.hourly+mach.energyH)/60*timeMin;
       const laborCostPz = laborH/60*timeMin;
-      const totalCostPz = materialCost+machCostPz+laborCostPz+packCost;
-      const salePz = totalCostPz*markup;
-      const marginPct = Math.round((salePz-totalCostPz)/salePz*100);
-      const totalSale = salePz*qty;
+      /* L'avviamento si paga una volta per lavoro e si divide per i pezzi: è
+         la ragione vera per cui il pezzo costa meno in quantità, e finora non
+         era conteggiato affatto. */
+      const setupCostPz = (setupMin/60*laborH)/Math.max(1,qty);
+      const totalCostPz = materialCost+machCostPz+laborCostPz+packCost+setupCostPz;
+      /* Il prezzo lo fa il motore, dal margine. Senza motore non si indovina:
+         si mostra il costo e si tace il prezzo. */
+      const salePz = MOT ? MOT.prezzo(totalCostPz,{strategia:'margine',marginePct:margineCanale,ivaPct:0}).netto : null;
+      const minPz  = MOT ? MOT.prezzo(totalCostPz,{strategia:'margine',marginePct:MOT.MARGINE_MINIMO,ivaPct:0}).netto : null;
+      const marginPct = salePz>0 ? Math.round((salePz-totalCostPz)/salePz*100) : 0;
+      const totalSale = salePz!=null ? salePz*qty : null;
       const totalCost = totalCostPz*qty;
-      const profit = totalSale-totalCost;
-      return {qty,materialCost,machCostPz,laborCostPz,packCost,totalCostPz,salePz,marginPct,totalSale,totalCost,profit,scaleDiscount};
+      const profit = totalSale!=null ? totalSale-totalCost : null;
+      return {qty,materialCost,machCostPz,laborCostPz,packCost,setupCostPz,totalCostPz,salePz,minPz,marginPct,totalSale,totalCost,profit,scaleDiscount};
     });
 
-    const mktPrice = {
-      5: p.cost*5, 10: p.cost*4.5, 20: p.cost*4, 50: p.cost*3.5, 100: p.cost*3, 200: p.cost*2.8
-    };
+    /* Le cinque posizioni commerciali del motore, sul costo della quantità
+       mediana. Prima qui c'era una seconda scala di prezzi — cost×5 … cost×2,8
+       — scollegata dalla prima: due tabelle di prezzo nella stessa schermata
+       che non si parlavano. */
+    const rifCosto = (rows[Math.floor(rows.length/2)]||rows[0]||{totalCostPz:0}).totalCostPz;
+    const posizioni = MOT ? MOT.politiche().map(pol=>({
+      id: pol.id, label: pol.label, marginTarget: pol.marginTarget,
+      prezzo: MOT.prezzo(rifCosto,{strategia:'margine',marginePct:pol.marginTarget,ivaPct:0}).netto,
+    })) : [];
+
+    return { rows, posizioni, rifCosto, margineCanale, setupMin, p, mach, channelKey, markup };
+  },
+
+  calc() {
+    const el = document.getElementById('lb2b-calc'); if(!el) return;
+    const p = this._selProduct; if(!p){ return; }
+    /* Tutto il conto viene da `_conto()`: qui si disegna soltanto. Le righe che
+       rileggevano macchina, manodopera e canale per rifarlo sono sparite. */
+    const { rows, posizioni, rifCosto, margineCanale, setupMin, mach, channelKey } = this._conto();
 
     const channelLabel = {b2b:'B2B Aziende',etsy:'Etsy',retail:'Retail/Fiera'}[channelKey];
 
@@ -1368,27 +1449,50 @@ const LaserB2B = {
               <th style="padding:9px 12px;text-align:right;color:var(--text-muted);font-weight:700">Margine</th>
               <th style="padding:9px 12px;text-align:right;color:var(--text-muted);font-weight:700">Totale</th>
               <th style="padding:9px 12px;text-align:right;color:'#22c55e';font-weight:700">Profitto</th>
-              <th style="padding:9px 12px;text-align:right;color:var(--text-muted);font-weight:700">Mkt Ref.</th>
+              <th style="padding:9px 12px;text-align:right;color:var(--text-muted);font-weight:700" title="Sotto questo prezzo il lavoro non va accettato">Minimo</th>
             </tr>
           </thead>
           <tbody>
             ${rows.map(r=>{
               const mgColor = r.marginPct>=60?'#22c55e':r.marginPct>=45?'#f59e0b':'#ef4444';
-              const mktRef = mktPrice[r.qty]||0;
-              const vsMkt = mktRef>0?Math.round((r.salePz/mktRef-1)*100):null;
+              const eur = (v)=> v==null?'—':'€'+v.toFixed(2);
               return `<tr style="border-bottom:1px solid var(--border)">
                 <td style="padding:9px 12px;font-weight:800;color:var(--text)">${r.qty} pz</td>
                 <td style="padding:9px 12px;text-align:right;color:#22c55e">${r.scaleDiscount>0?'-'+Math.round(r.scaleDiscount*100)+'%':'—'}</td>
-                <td style="padding:9px 12px;text-align:right;color:var(--text-muted)">€${r.totalCostPz.toFixed(2)}</td>
-                <td style="padding:9px 12px;text-align:right;font-weight:800;color:var(--primary);font-size:13px">€${r.salePz.toFixed(2)}</td>
+                <td style="padding:9px 12px;text-align:right;color:var(--text-muted)" title="materiale €${r.materialCost.toFixed(2)} · macchina €${r.machCostPz.toFixed(2)} · lavoro €${r.laborCostPz.toFixed(2)} · confezione €${r.packCost.toFixed(2)}${r.setupCostPz>0?' · avviamento €'+r.setupCostPz.toFixed(2):''}">€${r.totalCostPz.toFixed(2)}</td>
+                <td style="padding:9px 12px;text-align:right;font-weight:800;color:var(--primary);font-size:13px">${eur(r.salePz)}</td>
                 <td style="padding:9px 12px;text-align:right"><span style="background:${mgColor}20;color:${mgColor};padding:2px 8px;border-radius:20px;font-weight:700">${r.marginPct}%</span></td>
-                <td style="padding:9px 12px;text-align:right;font-weight:700">€${r.totalSale.toFixed(0)}</td>
-                <td style="padding:9px 12px;text-align:right;font-weight:800;color:#22c55e">€${r.profit.toFixed(0)}</td>
-                <td style="padding:9px 12px;text-align:right;color:var(--text-dim);font-size:11px">${mktRef?'€'+mktRef.toFixed(2)+(vsMkt!==null?(vsMkt>0?' +'+vsMkt+'%':' '+vsMkt+'%'):''):'—'}</td>
+                <td style="padding:9px 12px;text-align:right;font-weight:700">${r.totalSale==null?'—':'€'+r.totalSale.toFixed(0)}</td>
+                <td style="padding:9px 12px;text-align:right;font-weight:800;color:#22c55e">${r.profit==null?'—':'€'+r.profit.toFixed(0)}</td>
+                <td style="padding:9px 12px;text-align:right;color:var(--text-dim);font-size:11px">${eur(r.minPz)}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
+      </div>
+
+      ${posizioni.length?`
+      <div style="margin-top:14px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:700;margin-bottom:8px">
+          Posizioni di prezzo &mdash; su un costo di €${rifCosto.toFixed(2)}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
+          ${posizioni.map(x=>`<div style="padding:10px;border-radius:10px;background:var(--bg-card);border:1px solid ${x.id==='standard'?'var(--primary)':'var(--border)'}">
+            <div style="font-size:10px;font-weight:800;color:${x.id==='standard'?'var(--primary)':'var(--text-muted)'}">${x.label}</div>
+            <div style="font-size:16px;font-weight:900;color:var(--text);line-height:1.2">€${x.prezzo.toFixed(2)}</div>
+            <div style="font-size:9px;color:var(--text-muted)">margine ${x.marginTarget}%</div>
+          </div>`).join('')}
+        </div>
+      </div>`:''}
+
+      <!-- Le ipotesi, dichiarate -->
+      <div style="margin-top:12px;padding:10px 12px;background:var(--bg-card);border-radius:10px;border-left:3px solid var(--orange)">
+        <div style="font-size:10px;font-weight:700;color:var(--orange);margin-bottom:4px">Su cosa regge questo conto</div>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.6">
+          Lo sconto materiale in quantità (fino al 20%) e la riduzione dei tempi (fino al 15%) sono <b>ipotesi</b>, non dati confermati da un fornitore: se non valgono, il costo reale è più alto.
+          ${setupMin>0?`L'avviamento di ${setupMin} min si divide sui pezzi.`:`<b>L'avviamento non è configurato:</b> il costo a bassa quantità esce più basso del reale.`}
+          Il prezzo viene dal margine del canale (${Math.round(margineCanale)}%), non da un moltiplicatore.
+        </div>
       </div>
 
       <!-- AI Pricing Button -->
@@ -1429,23 +1533,17 @@ Titolo e prezzo ottimale per Etsy IT ed EU
 
   exportCSV() {
     const p = this._selProduct; if(!p) { alert('Seleziona un prodotto!'); return; }
-    const machKey = document.getElementById('lb2b-machine')?.value||'xtool_f2';
-    const mach = this._MACHINES[machKey];
-    const laborH = parseFloat(document.getElementById('lb2b-labor')?.value)||18;
-    const packCost = parseFloat(document.getElementById('lb2b-pack')?.value)||0.30;
-    const channelKey = document.getElementById('lb2b-channel')?.value||'b2b';
-    const markup = this._markup[channelKey]||2.0;
-    const rows = [['Prodotto','Macchina','Quantità','Sconto Materiale','Costo/pz','Prezzo/pz','Margine%','Totale Ricavo','Profitto Totale']];
-    this._QTYS.forEach(qty=>{
-      const sd = qty>=50?0.20:qty>=25?0.15:qty>=10?0.10:0;
-      const mc = p.cost*(1-sd);
-      const tm = p.timeMin*(qty>=50?0.85:qty>=20?0.92:1);
-      const mcc = (mach.hourly+mach.energyH)/60*tm;
-      const lc = laborH/60*tm;
-      const tc = mc+mcc+lc+packCost;
-      const sp = tc*markup;
-      const mg = Math.round((sp-tc)/sp*100);
-      rows.push([p.name,mach.label,qty,(sd*100).toFixed(0)+'%',tc.toFixed(2),sp.toFixed(2),mg+'%',(sp*qty).toFixed(2),((sp-tc)*qty).toFixed(2)]);
+    /* Lo stesso conto della tabella, non una sua copia: il file esportato e la
+       schermata non possono più divergere. */
+    const { rows: righe, mach, setupMin } = this._conto();
+    const rows = [['Prodotto','Macchina','Quantità','Sconto Materiale','Avviamento/pz','Costo/pz','Prezzo/pz','Margine%','Prezzo minimo','Totale Ricavo','Profitto Totale']];
+    righe.forEach(r=>{
+      rows.push([p.name, mach.label, r.qty, (r.scaleDiscount*100).toFixed(0)+'%',
+        r.setupCostPz.toFixed(2), r.totalCostPz.toFixed(2),
+        r.salePz==null?'':r.salePz.toFixed(2), r.marginPct+'%',
+        r.minPz==null?'':r.minPz.toFixed(2),
+        r.totalSale==null?'':r.totalSale.toFixed(2),
+        r.profit==null?'':r.profit.toFixed(2)]);
     });
     const csv = rows.map(r=>r.map(v=>'"'+String(v)+'"').join(',')).join('\n');
     const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv); a.download='quoter_b2b_'+p.id+'.csv'; a.click();

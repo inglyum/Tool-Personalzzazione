@@ -308,6 +308,76 @@
     };
   }
 
+  /* ── Il foglio ────────────────────────────────────────────────────────────
+     Un pannello non si consuma a centimetri quadri: si consuma a **pezzi che
+     ci stanno dentro**. Fra le due cose c'è tutto quello che si butta — il
+     solco del taglio, il bordo che la macchina non raggiunge, e lo spazio fra
+     un pezzo e l'altro — e il costo per pezzo calcolato dividendo l'area è
+     sistematicamente più basso del vero.
+
+     Il conto per riga e colonna è approssimato per difetto rispetto a un
+     nesting vero, ed è la direzione giusta in cui sbagliare: un preventivo
+     che sovrastima leggermente lo scarto perde una commessa, uno che lo
+     sottostima la esegue in perdita. */
+  function pezziPerFoglio(o) {
+    var c = o || {};
+    var fW = pos(c.foglioLarghezzaMm), fH = pos(c.foglioAltezzaMm);
+    var pW = pos(c.pezzoLarghezzaMm), pH = pos(c.pezzoAltezzaMm);
+    if (!(fW > 0 && fH > 0 && pW > 0 && pH > 0)) {
+      return { disponibile: false, motivo: 'misure del foglio o del pezzo mancanti', pezzi: null };
+    }
+    var bordo = pos(c.bordoMm, 5);
+    var kerf = pos(c.kerfMm, 0.2);
+    var utileW = fW - 2 * bordo, utileH = fH - 2 * bordo;
+    if (!(utileW > 0 && utileH > 0)) {
+      return { disponibile: false, motivo: 'il bordo di sicurezza non lascia area utile', pezzi: 0 };
+    }
+    /* Ogni pezzo porta con sé mezzo solco per lato: fra due pezzi adiacenti il
+       solco è uno solo, e contarlo due volte sprecherebbe area vera. */
+    var passoW = pW + kerf, passoH = pH + kerf;
+    var conta = function (uW, uH, aW, aH) {
+      return Math.max(0, Math.floor((uW + kerf) / aW)) * Math.max(0, Math.floor((uH + kerf) / aH));
+    };
+    var dritto = conta(utileW, utileH, passoW, passoH);
+    /* Ruotare di 90° è gratis e a volte cambia tutto: 3 pezzi invece di 2. */
+    var ruotato = c.ruotabile === false ? 0 : conta(utileW, utileH, passoH, passoW);
+    var pezzi = Math.max(dritto, ruotato);
+
+    var areaFoglio = fW * fH;
+    var areaPezzi = pezzi * pW * pH;
+    return {
+      disponibile: true, pezzi: pezzi,
+      orientamento: ruotato > dritto ? 'ruotato' : 'dritto',
+      dritto: dritto, ruotato: ruotato,
+      resaPct: areaFoglio > 0 ? (areaPezzi / areaFoglio) * 100 : 0,
+      scartoPct: areaFoglio > 0 ? 100 - (areaPezzi / areaFoglio) * 100 : 0,
+      bordoMm: bordo, kerfMm: kerf,
+    };
+  }
+
+  /** Il costo di un pezzo ricavato da un foglio: il foglio intero diviso i
+      pezzi che ci stanno, non l'area del pezzo. Quello che avanza è pagato. */
+  function costoDaFoglio(o) {
+    var c = o || {};
+    var n = pezziPerFoglio(c);
+    var prezzo = pos(c.prezzoFoglio);
+    if (!n.disponibile) return Object.assign({ costoPezzo: null }, n);
+    if (!(n.pezzi > 0)) {
+      return Object.assign({ costoPezzo: null, motivo: 'nessun pezzo entra in questo foglio' }, n);
+    }
+    if (!(prezzo > 0)) {
+      return Object.assign({ costoPezzo: null, disponibile: false,
+        motivo: 'prezzo del foglio mancante' }, n);
+    }
+    return Object.assign({}, n, {
+      costoPezzo: prezzo / n.pezzi,
+      prezzoFoglio: prezzo,
+      /* Quanto costa quello che si butta: la voce che nessuno guarda e che su
+         un pannello mal sfruttato è il 40% della spesa. */
+      costoScarto: prezzo * (n.scartoPct / 100),
+    });
+  }
+
   /* ── La cache ─────────────────────────────────────────────────────────────
      Il registro vive su IndexedDB e si legge in modo asincrono; i
      preventivatori ricalcolano a ogni tasto premuto, in modo sincrono. Fra le
@@ -366,6 +436,8 @@
     unitaDi: unitaDi,
     idDi: idDi,
     costoReale: costoReale,
+    pezziPerFoglio: pezziPerFoglio,
+    costoDaFoglio: costoDaFoglio,
     storico: storico,
     perPreventivo: perPreventivo,
     congela: congela,

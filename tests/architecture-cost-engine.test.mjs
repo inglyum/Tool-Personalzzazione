@@ -168,11 +168,13 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
   /* Misurati oggi. Ogni riduzione va accompagnata dall'abbassamento del tetto:
      è il modo per accorgersi se un numero risale in silenzio. */
   const TETTI = {
-    /* 10 e 9: il preventivatore 3D è passato da D a E perché ora nomina il
-       motore, come il laser nella Fase 33. Nessuna riga di prezzo è nata —
-       una si è spostata di casella, e la somma sotto lo dimostra. */
-    motoriDuplicati: 10,      // categoria D — un secondo conto del prezzo
-    regoleDaEstrarre: 9,      // categoria E — politiche commerciali nel codice
+    /* 9 e 10: il Laser B2B ha consolidato in `_conto()` le due copie del suo
+       calcolo — una per la tabella, una per il CSV, già divergenti — e la
+       copia sopravvissuta è più leggibile anche per il classificatore. Una
+       riga è passata da D a E, D è scesa di uno ed E salita di uno; la somma
+       sotto è ferma a 19 e lo dimostra. Nessuna formula di prezzo è nata. */
+    motoriDuplicati: 9,       // categoria D — un secondo conto del prezzo
+    regoleDaEstrarre: 10,     // categoria E — politiche commerciali nel codice
   };
 
   for (const [chiave, tetto] of Object.entries(TETTI)) {
