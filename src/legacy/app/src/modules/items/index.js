@@ -1256,8 +1256,19 @@ const ItemsModule = {
     ov.onclick = e => { if(e.target===ov) ov.remove(); };
     // Store data for onclick access
     window._imPriceRows = priceData;
+    /* Il ×2,5 era un ricarico scritto a mano, e come tutti i ricarichi
+       travestiti non diceva quale margine producesse: il 60%. Adesso lo fa il
+       motore, dal margine, e il numero non si muove — ×2,5 e margine 60%
+       sono lo stesso prezzo detto in due modi, ma solo il secondo si può
+       confrontare con il pavimento sotto cui non si vende. */
+    const MARGINE_SUGGERITO = 60;
+    const prezzoSuggerito = (c) => {
+      const M = window.InglyCostEngine;
+      if (!M) return c * 2.5;
+      return M.prezzo(c, { strategia: 'margine', marginePct: MARGINE_SUGGERITO, ivaPct: 0 }).netto;
+    };
     let rows = priceData.map(([cat,name,unit,cost,sup,url],idx) => {
-      const sale = (cost * 2.5).toFixed(2);
+      const sale = prezzoSuggerito(cost).toFixed(2);
       const supHtml = url ? '<a href="'+url+'" target="_blank" style="color:#60a5fa;text-decoration:none">'+sup+' 🌐</a>' : sup;
       return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:8px 12px;font-size:11px;color:var(--text-muted)">'+cat+'</td>'
@@ -1301,7 +1312,12 @@ const ItemsModule = {
     const item = {
       id: Date.now(), name, category: cat, unit,
       quantity: 0, qty: 0, minStock: 1,
-      costPrice: cost, salePrice: +(cost*2.5).toFixed(2),
+      costPrice: cost,
+      /* Lo stesso prezzo della tabella, dalla stessa funzione: due strade allo
+         stesso numero è come nascono i motori paralleli. */
+      salePrice: +((window.InglyCostEngine
+        ? window.InglyCostEngine.prezzo(cost, { strategia:'margine', marginePct:60, ivaPct:0 }).netto
+        : cost * 2.5).toFixed(2)),
       supplier: sup, supplierUrl: url,
       notes: 'Aggiunto da Prezzi Mercato Laser 2026',
       updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(),

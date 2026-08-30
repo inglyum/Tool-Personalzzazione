@@ -1277,11 +1277,19 @@ textarea.px-input{resize:vertical;min-height:90px}
       var now = new Date();
       var rows = [1, 2, 3].map(function (offset) {
         var d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-        var base = Math.max(0, intercept + slope * (n + offset - 1));
+        /* Questi non sono prezzi: sono la banda di confidenza di una
+           previsione di fatturato, ±20% attorno alla retta di regressione.
+           Il nome lo dice, perché `base * 1.2` in mezzo a un gestionale che
+           ha avuto quattro motori di prezzo si legge come un ricarico — e un
+           classificatore automatico lo ha infatti contato come tale. */
+        var previstoBase = Math.max(0, intercept + slope * (n + offset - 1));
+        var BANDA = 0.20;
+        var previstoPessimista = previstoBase * (1 - BANDA);
+        var previstoOttimista  = previstoBase * (1 + BANDA);
         return '<tr><td>' + months[d.getMonth()] + ' ' + d.getFullYear() + '</td>' +
-          '<td style="color:var(--red)">' + fmtEur(base * 0.8) + '</td>' +
-          '<td style="color:var(--primary)">' + fmtEur(base) + '</td>' +
-          '<td style="color:var(--green)">' + fmtEur(base * 1.2) + '</td></tr>';
+          '<td style="color:var(--red)">' + fmtEur(previstoPessimista) + '</td>' +
+          '<td style="color:var(--primary)">' + fmtEur(previstoBase) + '</td>' +
+          '<td style="color:var(--green)">' + fmtEur(previstoOttimista) + '</td></tr>';
       }).join('');
       fcastEl.innerHTML = '<div class="px-table-wrap"><table class="px-table"><thead><tr><th>Mese</th><th>Pessimista</th><th>Base</th><th>Ottimista</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     } else if (fcastEl) {

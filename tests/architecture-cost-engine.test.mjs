@@ -168,13 +168,14 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
   /* Misurati oggi. Ogni riduzione va accompagnata dall'abbassamento del tetto:
      è il modo per accorgersi se un numero risale in silenzio. */
   const TETTI = {
-    /* 9 e 10: il Laser B2B ha consolidato in `_conto()` le due copie del suo
-       calcolo — una per la tabella, una per il CSV, già divergenti — e la
-       copia sopravvissuta è più leggibile anche per il classificatore. Una
-       riga è passata da D a E, D è scesa di uno ed E salita di uno; la somma
-       sotto è ferma a 19 e lo dimostra. Nessuna formula di prezzo è nata. */
+    /* 9 e 9. Il ×2,5 del magazzino è diventato un margine del 60% chiesto al
+       motore — stesso prezzo, ma confrontabile con il pavimento — e la banda
+       di previsione di patch 099 ha smesso di somigliare a un ricarico:
+       `base * 1.2` in un gestionale che ha avuto quattro motori di prezzo si
+       legge come tale, e il classificatore lo contava come tale. Adesso si
+       chiama `previstoOttimista`. */
     motoriDuplicati: 9,       // categoria D — un secondo conto del prezzo
-    regoleDaEstrarre: 10,     // categoria E — politiche commerciali nel codice
+    regoleDaEstrarre: 9,      // categoria E — politiche commerciali nel codice
   };
 
   for (const [chiave, tetto] of Object.entries(TETTI)) {
@@ -196,9 +197,21 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
      prezzo è nata o morta — e con i soli tetti per categoria il test griderebbe
      a una regressione che non c'è, o coprirebbe una crescita vera dietro uno
      spostamento. La somma non si sposta per un cambio di casella. */
-  await t.test('D + E ≤ 19 — la somma non cresce, comunque si spostino', () => {
+  await t.test('D + E ≤ 18 — la somma non cresce, comunque si spostino', () => {
     const somma = dati.riassunto.motoriDuplicati + dati.riassunto.regoleDaEstrarre;
-    assert.ok(somma <= 19, 'prezzo fuori dal motore salito a ' + somma + ' (tetto 19)');
+    assert.ok(somma <= 18, 'prezzo fuori dal motore salito a ' + somma + ' (tetto 18)');
+  });
+
+  /* Il numero che conta davvero: quanti moduli calcolano un prezzo **senza**
+     chiedere al motore. Le categorie D ed E contano righe in file che il
+     motore lo chiamano già per altro; questo conta i motori veri e propri. */
+  await t.test('nessun modulo calcola più un prezzo per conto suo', async () => {
+    const { execFileSync: run } = await import('node:child_process');
+    const audit = JSON.parse(run('node', ['scripts/audit-quoters.mjs', '--json'],
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }));
+    assert.equal(audit.matematicheParallele, 0,
+      'moduli con moltiplicazioni di prezzo e nessuna chiamata al motore: '
+      + audit.dettaglio.filter((m) => m.parallelo).map((m) => m.file).join(', '));
   });
 
   await t.test('il motore resta uno solo', () => {
