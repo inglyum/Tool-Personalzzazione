@@ -531,9 +531,33 @@ const Clients={
   },
   async del(id){
     id = typeof id==='string' ? +id||id : id;
-    if(!confirm('Eliminare questo cliente?')) return;
     const record = await IDB.get('clients', id).catch(()=>null);
     if (!record) return;
+
+    /* ── Un cliente con una storia non si cancella ─────────────────────────
+       Prima si chiedeva conferma e si cancellava. I documenti restavano con un
+       `clientId` che non puntava più a niente: nella scheda dell'ordine
+       compariva uno spazio vuoto dove c'era un nome, e nessuna schermata
+       sapeva più dire di chi fosse quel lavoro. Il danno non si vede il
+       giorno in cui si cancella: si vede sei mesi dopo. */
+    const G = window.InglyClienteIntegrita;
+    if (G) {
+      const v = await G.puoEliminare(id);
+      if (!v.ok) {
+        const nome = record.name || record.fullName || 'questo cliente';
+        if (!confirm(v.spiega + '\n\nArchiviare «' + nome + '»?\n'
+          + 'Resta collegato ai suoi documenti e sparisce dalla rubrica attiva. Reversibile.')) return;
+        await IDB.put('clients', G.archivia(record, 'archiviato dalla rubrica'));
+        AppStore.invalidate('clients');
+        if(typeof BDW!=='undefined') BDW.touch('clients');
+        await logAction('client', id, 'archived');
+        toast('Cliente archiviato — i suoi ' + v.dipendenze.totale + ' documenti restano collegati', 'info');
+        await this.render();
+        if(typeof App!=='undefined') App.populateClientSelects();
+        return;
+      }
+    }
+    if(!confirm('Eliminare questo cliente?\nNon ha documenti collegati.')) return;
     if(!this._pendingDeletes) this._pendingDeletes = new Set();
     this._pendingDeletes.add(id);this._pendingDeletes.add(+id);this._pendingDeletes.add(String(id)); // type-safe
     if(typeof BDW!=='undefined') BDW.touch('clients');
@@ -717,14 +741,39 @@ const Clients={
   async bulkDelete() {
     const n = this._selected.size;
     if (!n) { toast('Nessun cliente selezionato','warning'); return; }
-    if (!confirm(`Eliminare ${n} client${n===1?'e':'i'}? Azione irreversibile.`)) return;
     const ids = [...this._selected];
+    /* Lo stesso presidio dell'eliminazione singola: senza, bastava
+       selezionare tutto per aggirarlo. Chi ha documenti viene archiviato,
+       chi non ne ha viene eliminato, e il conto di cosa è successo si dice. */
+    const G = window.InglyClienteIntegrita;
+    let daArchiviare = [], daEliminare = [];
+    if (G) {
+      for (const id of ids) {
+        const v = await G.puoEliminare(+id||id);
+        (v.ok ? daEliminare : daArchiviare).push(+id||id);
+      }
+    } else { daEliminare = ids.map(x=>+x||x); }
+
+    const parti = [];
+    if (daEliminare.length) parti.push('eliminare ' + daEliminare.length + ' senza documenti');
+    if (daArchiviare.length) parti.push('archiviare ' + daArchiviare.length + ' con documenti collegati');
+    if (!confirm('Stai per ' + parti.join(' e ') + '.\n\nProcedere?')) return;
+
     this._selected.clear();
     this._updateBulkBar();
-    for (const id of ids) await IDB.del('clients', +id||id).catch(()=>{});
+    for (const id of daArchiviare) {
+      const rec = await IDB.get('clients', id).catch(()=>null);
+      if (rec && G) await IDB.put('clients', G.archivia(rec, 'archiviato in blocco dalla rubrica')).catch(()=>{});
+    }
+    for (const id of daEliminare) await IDB.del('clients', id).catch(()=>{});
     AppStore.invalidate('clients');
     await this.render();
-    toast(`✅ ${ids.length} client${ids.length===1?'e':'i'} eliminat${ids.length===1?'o':'i'}`,'success',3000);
+    /* Il messaggio dice cosa è successo davvero: dire «eliminati» di clienti
+       che sono stati archiviati insegnerebbe a non fidarsi dei messaggi. */
+    const detto = [];
+    if (daEliminare.length) detto.push(daEliminare.length + ' eliminat' + (daEliminare.length===1?'o':'i'));
+    if (daArchiviare.length) detto.push(daArchiviare.length + ' archiviat' + (daArchiviare.length===1?'o':'i') + ' (hanno documenti collegati)');
+    toast('✅ ' + detto.join(' · '), 'success', 4000);
   },
 
   clearSelection() {

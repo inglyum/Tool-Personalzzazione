@@ -316,7 +316,21 @@ const CLVDash = {
   async _del(clientId) {
     const cl = await IDB.get('clients', clientId).catch(()=>null);
     const nm = cl ? (cl.name||cl.fullName||'Cliente') : 'Cliente';
-    if (!confirm('Eliminare "'+nm+'"?\nEliminata la scheda, NON le vendite.')) return;
+    /* «Eliminata la scheda, NON le vendite» descriveva esattamente il
+       problema come se fosse una rassicurazione: le vendite restavano, senza
+       più sapere di chi fossero. Lo stesso presidio della rubrica. */
+    const G = window.InglyClienteIntegrita;
+    if (G && cl) {
+      const v = await G.puoEliminare(clientId);
+      if (!v.ok) {
+        if (!confirm(v.spiega + '\n\nArchiviare "'+nm+'"?')) return;
+        await IDB.put('clients', G.archivia(cl, 'archiviato dalla scheda cliente'));
+        if (typeof toast==='function') toast('Cliente archiviato — i documenti restano collegati','info');
+        if (typeof AppStore!=='undefined') AppStore.invalidate('clients');
+        return;
+      }
+    }
+    if (!confirm('Eliminare "'+nm+'"?\nNon ha documenti collegati.')) return;
     await IDB.del('clients', clientId)
     toast('Cliente eliminato','\ud83d\uddd1');
     await this._load();

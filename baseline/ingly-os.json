@@ -995,14 +995,14 @@
   ],
   "counts": {
     "files": 190,
-    "bytes": 9474890,
+    "bytes": 9478299,
     "inlineStyleAttrs": 16384,
     "inlineOnclick": 2555,
     "hardcodedHex": 8212,
     "important": 181,
     "emoji": 9185,
     "alertCalls": 55,
-    "confirmCalls": 123,
+    "confirmCalls": 125,
     "promptCalls": 69,
     "ariaAttrs": 26
   }

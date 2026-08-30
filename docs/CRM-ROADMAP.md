@@ -38,7 +38,7 @@ scrive la ricerca prima degli id stabili la riscrive due volte.
 
 | # | Cosa |
 | - | ---- |
-| CRM-11 | Vincoli in eliminazione: un cliente con ordini, preventivi, fatture o pagamenti **non si cancella** — `status: 'ARCHIVED'` |
+| CRM-11 | Vincoli in eliminazione: un cliente con ordini, preventivi, fatture o pagamenti **non si cancella** — `status: 'ARCHIVED'` | ✅ fatto — `src/product/cliente-integrita.js`. Presidia i **tre** punti di eliminazione (rubrica, eliminazione in blocco, scheda cliente): senza quello in blocco bastava selezionare tutto per aggirarlo. Conta i riferimenti su cinque archivi e tre nomi di campo, confronta gli id per valore perché arrivano stringa dalle `<select>` e numero dal database, e distingue «ho guardato e non c'era niente» da «l'archivio non esiste». Archiviare aggiunge tre campi e non ne toglie nessuno; è reversibile. `tests/qa/cliente-integrita.mjs` crea un cliente con un ordine, prova a cancellarlo e verifica **nel database** che sia ancora lì, archiviato, con l'ordine collegato |
 | CRM-12 | Unione dei duplicati che non perde nulla: gli storici dei due record confluiscono, non si scelgono |
 | CRM-13 | Validazione di email e telefono in ingresso, non solo alla vista |
 | CRM-14 | Registro delle modifiche al cliente, come `economicLog` per gli ordini |
