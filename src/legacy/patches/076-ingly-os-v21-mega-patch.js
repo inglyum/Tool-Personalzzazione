@@ -147,7 +147,31 @@ window.CRMSmart = {
      `_load` assegna un id a chi non ce l'ha e lo salva una volta sola. La
      chiave di memoria non cambia, nessun record si perde, e i contatti già
      salvati continuano a leggersi. */
+  /* ── CRM-04 · una lista sola ─────────────────────────────────────────────
+     Misurato nel browser: scrivendo un cliente su IndexedDB e un altro su
+     `ingly_crm_v1`, questa funzione vedeva solo il secondo e
+     `IDB.getAll('clients')` solo il primo. Due liste disgiunte — e siccome
+     ordini, preventivi e vendite riferiscono l'archivio IndexedDB, un cliente
+     creato qui non compariva mai nel menu di un preventivo. Chi lo cercava
+     concludeva che il prodotto avesse perso i dati, mentre erano dall'altra
+     parte.
+
+     Adesso legge l'unione da `InglyClienti`. Lo specchio in localStorage resta
+     — è quello che questa rubrica ha scritto per anni — ma smette di essere
+     una seconda verità: lo mantiene un solo scrittore. */
   _load(){
+    var U = window.InglyClienti;
+    if(U){
+      var e = U.elenco();
+      /* Alla prima lettura la cache può non essere pronta: si chiede
+         l'unione e si ridisegna quando arriva, invece di restare per sempre
+         su metà elenco. */
+      if(!U.stato().pronta && !this._unioneChiesta){
+        this._unioneChiesta = true;
+        U.carica().then(function(){ try{ CRMSmart.render(); }catch(err){} });
+      }
+      return e;
+    }
     try{
       var d = JSON.parse(localStorage.getItem(this._SK)||'[]');
       if(!Array.isArray(d)) return [];
@@ -162,7 +186,18 @@ window.CRMSmart = {
       return d;
     }catch(e){ return []; }
   },
-  _save(d){ try{ localStorage.setItem(this._SK,JSON.stringify(d)); }catch(e){} },
+  _save(d){
+    /* `_save(elenco)` vuol dire «questo è l'elenco adesso»: la rubrica lo usa
+       anche per cancellare, passando la lista senza il contatto eliminato.
+       Trattarlo come un semplice inserimento toglieva la cancellazione senza
+       che niente protestasse — il contatto restava e tornava al
+       ricaricamento — ed è quello che il collaudo della rubrica ha
+       scoperto. `sostituisci` fa la sostituzione vera, e chi sparisce passa
+       dal presidio di integrità invece di essere cancellato al buio. */
+    var U = window.InglyClienti;
+    if(U && Array.isArray(d)){ U.sostituisci(d); return; }
+    try{ localStorage.setItem(this._SK,JSON.stringify(d)); }catch(e){}
+  },
 
   render(){
     var el=document.getElementById('view-clienti')||document.getElementById('view-crm');

@@ -565,7 +565,12 @@ const Clients={
     await logAction('client',id,'deleted');
     UndoStack.schedule('clients', record, async () => {
       this._pendingDeletes.delete(id);
-      await IDB.del('clients', id);
+      /* Passa dallo scrittore unico: cancellare solo dall'archivio lasciava il
+         cliente nello specchio della rubrica, e la migrazione successiva lo
+         faceva risorgere. Un record che torna dopo essere stato cancellato è
+         peggio di uno che non si cancella: nessuno va a ricontrollare. */
+      if (window.InglyClienti) await window.InglyClienti.elimina(id, { forza: true });
+      else await IDB.del('clients', id);
       AppStore.invalidate('clients');
       if(typeof App!=='undefined') App.populateClientSelects();
     }, 'Cliente ' + (record.name||''), () => {
@@ -765,7 +770,10 @@ const Clients={
       const rec = await IDB.get('clients', id).catch(()=>null);
       if (rec && G) await IDB.put('clients', G.archivia(rec, 'archiviato in blocco dalla rubrica')).catch(()=>{});
     }
-    for (const id of daEliminare) await IDB.del('clients', id).catch(()=>{});
+    for (const id of daEliminare) {
+      if (window.InglyClienti) await window.InglyClienti.elimina(id, { forza: true }).catch(()=>{});
+      else await IDB.del('clients', id).catch(()=>{});
+    }
     AppStore.invalidate('clients');
     await this.render();
     /* Il messaggio dice cosa è successo davvero: dire «eliminati» di clienti
