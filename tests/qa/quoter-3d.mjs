@@ -345,6 +345,55 @@ const esito = await page.evaluate(async () => {
   sv('p3d-g', 290); sv('p3d-h', 9.95); sv('p3d-qty', 1);
   await new Promise((r) => setTimeout(r, 300));
 
+  /* ── «Perché questo prezzo?» ────────────────────────────────────────────
+     Un preventivo deve reggere due domande fatte da due persone diverse: il
+     cliente chiede perché costa così, chi porta i libri chiede da dove viene
+     il numero. Un totale grande e nient'altro non risponde a nessuna. */
+  sv('p3d-g', 290); sv('p3d-h', 9.95); sv('p3d-qty', 1);
+  /* I campi del consumo misurato restano compilati da una prova precedente —
+     è il salvataggio dei valori fra un ridisegno e l'altro, e funziona. Qui
+     si vuole il caso «solo targa», quindi si svuotano. */
+  sv('p3d-avgw', ''); sv('p3d-kwhm', '');
+  Print3DQuoter.setMargine(40);
+  await new Promise((r) => setTimeout(r, 300));
+  const testoChiuso = document.querySelector('#view-print3d')?.textContent || '';
+  dico('il pulsante «Perché questo prezzo?» è in pagina', /Perché questo prezzo/.test(testoChiuso));
+  dico('e il pannello è chiuso finché non lo si apre', !document.getElementById('p3d-perche'));
+
+  Print3DQuoter.togglePerche();
+  await new Promise((r) => setTimeout(r, 400));
+  const pannello = document.getElementById('p3d-perche');
+  dico('si apre', !!pannello);
+  if (pannello) {
+    const t = pannello.textContent.replace(/\s+/g, ' ');
+    const celle = [...pannello.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()));
+    dico('ogni voce di costo ha una riga', celle.length >= 5, `${celle.length} voci`);
+    dico('ogni riga porta valore, formula, dato e fiducia',
+      celle.every((c) => c.length === 5 && c[1].includes('€') && c[2].length > 2 && c[4].length > 2));
+    dico('le formule sono quelle vere, non etichette generiche',
+      /÷ 1000 × €\/kg/.test(t) && /tasso ÷ \(1 − tasso\)/.test(t));
+    dico('la fiducia distingue stimato da dichiarato',
+      /stimato/.test(t) && /dichiarato/.test(t));
+    dico('l\'energia da targa è marcata stimata',
+      celle.some((c) => /Energia/.test(c[0]) && /stimato/.test(c[4])));
+    dico('le tre posizioni di prezzo sono nel pannello',
+      /Prezzo minimo/.test(t) && /Prezzo consigliato/.test(t) && /Prezzo premium/.test(t));
+    dico('le ipotesi sono dichiarate', /Su cosa regge questo numero/.test(t));
+    dico('la fiducia complessiva è la peggiore, e lo dice',
+      /Fiducia complessiva/.test(t) && /peggiore/.test(t));
+    /* E i numeri del pannello sono quelli del motore, non una seconda copia. */
+    /* Gli importi sono formattati all'italiana — «€6,96» — e togliere tutto
+       tranne cifre e punto trasforma 6,96 in 696. */
+    const somma = celle.reduce((a, c) => a + (parseFloat(String(c[1]).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')) || 0), 0);
+    const costo = Print3DQuoter._state().cost;
+    dico(`le voci del pannello sommano al costo mostrato (€${somma.toFixed(2)} vs €${costo.toFixed(2)})`,
+      Math.abs(somma - costo) < 0.02);
+  }
+  Print3DQuoter.togglePerche();
+  await new Promise((r) => setTimeout(r, 300));
+  dico('si richiude', !document.getElementById('p3d-perche'));
+
   /* Nessuna duplicazione introdotta. */
   const ids = [...document.querySelectorAll('[id]')].map((e) => e.id).filter(Boolean);
   const dupli = ids.filter((x, i) => ids.indexOf(x) !== i);

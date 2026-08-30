@@ -1189,11 +1189,26 @@
       else if (v.id === 'macchina') { formula = '(prezzo − residuo) ÷ vita utile × ore'; fonte = fonteDi(i, 'machinePrice'); }
       else if (v.id === 'manutenzione') { formula = '€/h di manutenzione × ore'; fonte = fonteDi(i, 'maintenancePerHour'); }
       else if (v.id === 'scarto') { formula = 'perdibile × tasso ÷ (1 − tasso)'; fonte = fonteDi(i, 'failureRate'); }
-      else if (v.id === 'materiale' && tec === 'print3d') { formula = '(grammi + supporti + spurgo) ÷ 1000 × €/kg'; fonte = fonteDi(i, 'materialPricePerKg'); }
+      /* Il prezzo del materiale arriva da tre campi diversi a seconda di come
+         è stato comprato — al chilo, a bobina, a foglio — e guardarne uno solo
+         faceva dichiarare «mancante» un dato che c'era. */
+      else if (v.id === 'materiale' && tec === 'print3d') {
+        formula = '(grammi + supporti + spurgo) ÷ 1000 × €/kg';
+        fonte = presente(i, 'materialPricePerKg') ? fonteDi(i, 'materialPricePerKg')
+          : (presente(i, 'spoolPrice') ? fonteDi(i, 'spoolPrice') : 'mancante');
+      }
       else if (v.id === 'materiale' && tec === 'laser') { formula = 'prezzo foglio ÷ pezzi per foglio'; fonte = fonteDi(i, 'sheetPrice'); }
       else if (v.id === 'film') { formula = 'm² di film consumati × €/m²'; fonte = fonteDi(i, 'filmPricePerM2'); }
       else if (v.id === 'inchiostro') { formula = 'm² × ml/m² × €/ml'; fonte = fonteDi(i, 'inkPricePerMl'); }
-      righe.push({ gruppo: 'per pezzo', id: v.id, label: v.label, formula: formula, input: v.detail, result: v.value, fonte: fonte });
+      /* `value` accanto a `result`: chi disegna la riga cerca il primo dei due
+         nomi che gli viene in mente, e trovarne solo uno è il modo in cui una
+         colonna resta vuota senza che nessuno se ne accorga. La confidenza
+         viene dalla provenienza, che è l'unica a saperla. */
+      var prov = (c.provenienza || []).filter(function (x) { return x.id === v.id; })[0];
+      righe.push({ gruppo: 'per pezzo', id: v.id, label: v.label, formula: formula,
+        input: v.detail, detail: v.detail, result: v.value, value: v.value,
+        fonte: fonte, source: (prov && prov.source) || fonte,
+        confidence: (prov && prov.confidence) || 'estimated' });
     });
 
     if (c.overhead > 0) {

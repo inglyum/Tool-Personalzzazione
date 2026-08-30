@@ -292,9 +292,16 @@ function render(){
       +linesHtml
     +'</div>'
     // ── B · la risposta, prima di tutto il resto ─────────────────────
-    +'<div class="p3-card cyan"><div class="p3-ct c" id="p3d-hero-t">📊 IL CONTO</div>'
+    +'<div class="p3-card cyan">'
+      +'<div class="p3-ct c" style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        +'<span id="p3d-hero-t">📊 IL CONTO</span>'
+        +'<button onclick="Print3DQuoter.togglePerche()" style="padding:4px 10px;border-radius:7px;cursor:pointer;font-size:10px;font-weight:700;text-transform:none;letter-spacing:0;'
+          +'border:1px solid '+(PERCHE_APERTO?'#22d3ee':'var(--border2)')+';background:'+(PERCHE_APERTO?'#22d3ee18':'transparent')+';color:'+(PERCHE_APERTO?'#22d3ee':'var(--text-muted)')+'">'
+          +(PERCHE_APERTO?'▲ Chiudi':'🔍 Perché questo prezzo?')+'</button>'
+      +'</div>'
       +'<div id="p3d-hero"><div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div></div>'
       +'<div id="p3d-avvisi"></div>'
+      +(PERCHE_APERTO?'<div id="p3d-perche">'+pannelloPerche()+'</div>':'')
     +'</div>'
     // ── C · dove vanno i soldi ────────────────────────────────────────
     +'<div class="p3-card"><div class="p3-ct">🔢 DETTAGLIO COSTI — live</div><div id="p3d-bk"><div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div></div></div>'
@@ -529,6 +536,108 @@ function totali(){
     margine: netto>0 ? ((netto-costo)/netto*100) : 0,
     forzate:forzate, righe:LINES.length,
   };
+}
+
+/* ── «Perché questo prezzo?» ───────────────────────────────────────────────
+   Un preventivo deve reggere due domande, e sono due persone diverse a
+   farle. Il cliente chiede «perché costa così»; chi porta i libri chiede
+   «da dove viene questo numero». Un totale grande e nient'altro non risponde
+   a nessuna delle due, e chi lo mostra finisce per trattare sul prezzo
+   invece che sul lavoro.
+
+   Qui ogni voce dichiara quattro cose: quanto vale, con quale formula, con
+   quale dato, e quanto ci si può contare. La quarta è quella che mancava. */
+var PERCHE_APERTO=false;
+function togglePerche(){ PERCHE_APERTO=!PERCHE_APERTO; render(); }
+
+var CONF_ETICHETTA={
+  measured:  { lab:'misurato',  col:'var(--green,#22c55e)', spiega:'letto da uno strumento' },
+  verified:  { lab:'verificato',col:'var(--green,#22c55e)', spiega:'da una fonte identificabile' },
+  declared:  { lab:'dichiarato',col:'var(--text-muted)',    spiega:'inserito da te' },
+  estimated: { lab:'stimato',   col:'var(--orange)',        spiega:'dedotto, non verificato' },
+  missing:   { lab:'mancante',  col:'var(--red)',           spiega:'non c\'è: il costo esce più basso del vero' },
+};
+
+function pannelloPerche(){
+  var MOT=(typeof window!=='undefined') && window.InglyCostEngine;
+  if(!MOT || typeof MOT.explain!=='function') return '';
+  var x;
+  try{ x=MOT.explain(ingresso(), {marginePct:MARG, ivaPct:IVA_ON?22:0, scontoPct:DISC}); }
+  catch(e){ return ''; }
+  if(!x || x.vuoto) return '';
+
+  /* Le voci che compongono il costo del pezzo, e **solo** quelle. `explain`
+     elenca anche l'avviamento intero accanto alla sua quota per pezzo: sono
+     lo stesso denaro detto due volte, e sommarle entrambe farebbe un totale
+     che non torna con quello mostrato. Si tiene la quota — è quella che il
+     pezzo paga — e la si etichetta perché si capisca da dove viene. */
+  var COMPONENTI={ 'per pezzo':true, 'una tantum':true };
+  var righe=(x.lines||[]).filter(function(r){
+    if(r.id==='setup') return false;               // c'è già come quota per pezzo
+    if(!COMPONENTI[r.gruppo]) return false;        // prezzo, IVA e profitto non sono costi
+    return (r.value!=null?r.value:r.result||0)>0.0001;
+  }).map(function(r){
+    if(r.id!=='unaTantumPerPezzo') return r;
+    var q=Math.max(1,gv('p3d-qty',1));
+    return { id:r.id, label:'Avviamento ripartito', gruppo:r.gruppo,
+             value:r.result, result:r.result,
+             formula:'minuti ÷ 60 × tariffa oraria ÷ quantità',
+             detail: q>1 ? ('diviso su '+q+' pezzi') : 'un solo pezzo: lo paga tutto',
+             confidence:'declared' };
+  });
+  var conf=function(id){ var c=CONF_ETICHETTA[id]||CONF_ETICHETTA.declared; return c; };
+
+  var riga=function(r){
+    var c=conf(r.confidence);
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:7px 8px;font-size:11px;color:var(--text)">'+r.label+'</td>'
+      +'<td style="padding:7px 8px;text-align:right;font-size:12px;font-weight:800;white-space:nowrap">'+eur(r.value||r.result||0)+'</td>'
+      +'<td style="padding:7px 8px;font-size:10px;color:var(--text-muted);font-family:ui-monospace,monospace">'+(r.formula||'—')+'</td>'
+      +'<td style="padding:7px 8px;font-size:10px;color:var(--text-dim)">'+(r.detail||r.input||'—')+'</td>'
+      +'<td style="padding:7px 8px;font-size:9px;white-space:nowrap"><span style="color:'+c.col+';font-weight:700">'+c.lab+'</span></td>'
+      +'</tr>';
+  };
+
+  var avvisi=(x.warnings||[]).filter(function(a){ return a && a.livello!=='INFO'; });
+
+  return '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">'
+      +'<thead><tr style="border-bottom:1px solid var(--border2)">'
+      +['Voce','Valore','Formula','Dato usato','Fiducia'].map(function(h,i){
+        return '<th style="padding:6px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);text-align:'+(i===1?'right':'left')+'">'+h+'</th>';
+      }).join('')+'</tr></thead><tbody>'+righe.map(riga).join('')+'</tbody></table></div>'
+
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      +(x.recommendedPrices||[]).map(function(pz){
+        return '<div style="flex:1;min-width:120px;padding:9px 11px;border-radius:10px;background:var(--bg-card2);border:1px solid '+(pz.id==='consigliato'?'#22d3ee':'var(--border)')+'">'
+          +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:'+(pz.id==='consigliato'?'#22d3ee':'var(--text-dim)')+';font-weight:700">'+pz.label+'</div>'
+          +'<div style="font-size:17px;font-weight:900;color:var(--text);line-height:1.2">'+eur(pz.netto)+'</div>'
+          +'<div style="font-size:9px;color:var(--text-muted)">margine '+pz.marginePct.toFixed(0)+'% · profitto '+eur(pz.profitto)+'</div>'
+          +'<div style="font-size:9px;color:var(--text-dim);line-height:1.35;margin-top:3px">'+pz.nota+'</div>'
+        +'</div>';
+      }).join('')
+    +'</div>'
+
+    +(x.assunzioni&&x.assunzioni.length
+      ? '<div style="margin-top:10px;padding:9px 11px;background:var(--bg-card2);border-radius:9px;border-left:3px solid var(--text-dim)">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:4px">Su cosa regge questo numero</div>'
+        +x.assunzioni.map(function(a){ return '<div style="font-size:10px;color:var(--text-dim);line-height:1.55">· '+a.testo+'</div>'; }).join('')
+      +'</div>' : '')
+
+    +(avvisi.length
+      ? '<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">'
+        +avvisi.map(function(a){
+          var grave=a.livello==='CRITICAL';
+          return '<div style="font-size:10px;padding:6px 9px;border-radius:8px;background:var(--bg-card2);border-left:3px solid '+(grave?'var(--red)':'var(--orange)')+';color:var(--text-muted)">'
+            +(grave?'⛔ ':'⚠️ ')+a.messaggio+(a.azione?' <span style="color:var(--text-dim)">— '+a.azione+'</span>':'')+'</div>';
+        }).join('')
+      +'</div>' : '')
+
+    +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.5">'
+      +'Fiducia complessiva del preventivo: <b style="color:'+conf(x.confidence).col+'">'+conf(x.confidence).lab+'</b> — '
+      +conf(x.confidence).spiega+'. È la <b>peggiore</b> delle voci, non la media: un preventivo non è più solido del suo dato più incerto.'
+    +'</div>'
+  +'</div>';
 }
 
 function setType(t){T=t;render();}
@@ -779,6 +888,8 @@ function calc(){
     }).join('')+'</div>' : '';
   }
 
+  if(PERCHE_APERTO){ var pw=el('p3d-perche'); if(pw) pw.innerHTML=pannelloPerche(); }
+
   var bk=el('p3d-bk');
   if(bk){
     bk.innerHTML = (ok && V) ? V.dettaglio(R)
@@ -967,7 +1078,7 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   doPdf:doPdf,doWa:doWa,sendQ:sendQ,openMat:openMat,closeMat:closeMat,
   addMat:addMat,editMat:editMat,delMat:delMat,
   setModo:setModo,setMargine:setMargine,setCalib:setCalib,setPrezzoMat:setPrezzoMat,
-  setEnergia:setEnergia,setSlicer:setSlicer,svuotaSlicer:svuotaSlicer,
+  setEnergia:setEnergia,setSlicer:setSlicer,svuotaSlicer:svuotaSlicer,togglePerche:togglePerche,
   aggiornaRegistro:aggiornaRegistro,
   /* Letto dal collaudo per verificare l'ingresso senza ricostruirlo: un
      collaudo che ricopia la lettura dei campi prova la propria copia. */
