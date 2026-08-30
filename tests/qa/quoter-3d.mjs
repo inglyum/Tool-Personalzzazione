@@ -443,6 +443,35 @@ const esito = await page.evaluate(async () => {
     dico('scorporare 122 € dà 100 €, non 95,16 €', Math.abs(F.scorpora(122) - 100) < 0.01);
   }
 
+  /* ── Una sola lista di materiali ────────────────────────────────────────
+     Il preventivatore teneva la propria lista in localStorage, separata dal
+     magazzino, riempita una volta sola in una direzione: un prezzo corretto in
+     magazzino non arrivava qui, e un materiale aggiunto qui non esisteva per
+     il magazzino. */
+  const MCm = window.InglyMaterialCost;
+  dico('il preventivatore sa leggere i materiali dal magazzino',
+    !!MCm && typeof MCm.materialiPerStampa3D === 'function');
+
+  Print3DQuoter.openMat();
+  await new Promise((r) => setTimeout(r, 400));
+  const gestore = document.getElementById('p3d-mat-list')?.textContent.replace(/\s+/g, ' ') || '';
+  dico('il gestore materiali distingue magazzino e lista locale',
+    /Dal magazzino/.test(gestore) && /Solo in questo preventivatore/.test(gestore));
+  dico('e i materiali non tracciati sono marcati «solo qui»',
+    /solo qui/.test(gestore) || /tutti i materiali che usi sono tracciati/.test(gestore));
+  dico('con l\'invito a registrarli invece di lasciarli scollegati',
+    /non a magazzino/.test(gestore) || /tutti i materiali che usi sono tracciati/.test(gestore));
+  dico('quelli a magazzino non si modificano da qui',
+    !/a magazzino<\/span>[\s\S]{0,200}act-edit/.test(document.getElementById('p3d-mat-list')?.innerHTML || ''));
+  Print3DQuoter.closeMat();
+  await new Promise((r) => setTimeout(r, 350));
+
+  /* Il menu a tendina dichiara la provenienza di ogni voce. */
+  const opzioni = [...(document.getElementById('p3d-mat')?.options || [])].map((o) => o.text);
+  dico('il menu dei materiali dichiara la provenienza di ogni voce',
+    opzioni.length > 1 && opzioni.slice(1).every((t) => /✅|📦|✎/.test(t)),
+    opzioni.slice(1, 3).join(' | '));
+
   /* Nessuna duplicazione introdotta. */
   const ids = [...document.querySelectorAll('[id]')].map((e) => e.id).filter(Boolean);
   const dupli = ids.filter((x, i) => ids.indexOf(x) !== i);

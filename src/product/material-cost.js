@@ -423,6 +423,65 @@
       articolo: o.articolo || CACHE.articoli[id] || {} });
   }
 
+  /* ── I materiali da stampa, letti dal registro ────────────────────────────
+     Il preventivatore 3D teneva la propria lista di filamenti in
+     localStorage, separata dal magazzino, e un ponte la riempiva **una volta
+     sola in una direzione**. Il risultato: un prezzo corretto in magazzino non
+     arrivava al preventivo, e un materiale aggiunto nel preventivatore non
+     esisteva per il magazzino. Due sistemi che possiedono lo stesso concetto,
+     ciascuno corretto da solo.
+
+     Qui si legge il registro. La lista locale non sparisce — contiene lavoro
+     vero di chi l'ha compilata — ma smette di essere una fonte alternativa:
+     diventa l'elenco di ciò che **non è ancora** a magazzino, e lo dichiara. */
+  var PAROLE_3D = /filament|filamento|pla\b|petg|abs\b|asa\b|tpu\b|nylon|pa6|resin|resina|bobina|spool/i;
+  var PAROLE_RESINA = /resin|resina/i;
+
+  async function materialiPerStampa3D(opzioni) {
+    var o = opzioni || {};
+    var db = global.IDB;
+    if (!db || typeof db.getAll !== 'function') return [];
+
+    var archivi = o.archivi || ['items', 'gadgets', 'inventory', 'components'];
+    var trovati = [];
+    for (var a = 0; a < archivi.length; a++) {
+      var righe = await db.getAll(archivi[a]).catch(function () { return []; });
+      (righe || []).forEach(function (r) {
+        if (!r) return;
+        var testo = [r.name, r.category, r.categoria, r.unit, r.notes].filter(Boolean).join(' ');
+        if (!PAROLE_3D.test(testo)) return;
+        var resina = PAROLE_RESINA.test(testo);
+        /* Il costo viene dal registro se c'è; altrimenti dall'anagrafica, e in
+           quel caso è dichiarato e non verificato. */
+        var daRegistro = dallaCache(archivi[a] + ':' + r.id, { articolo: r });
+        var prezzo = daRegistro.disponibile ? daRegistro.costoUnitario
+          : num(r.costPrice != null ? r.costPrice : r.cost, 0);
+        if (!(prezzo > 0)) return;
+        trovati.push({
+          id: 'inv:' + archivi[a] + ':' + r.id,
+          n: r.name || r.nome || 'Materiale',
+          t: resina ? 'resin' : 'fdm',
+          p: Math.round(prezzo * 100) / 100,
+          u: resina ? 1000 : 1000,
+          s: r.supplier || r.fornitore || r.notes || 'Magazzino',
+          fonte: daRegistro.disponibile ? 'registro' : 'anagrafica',
+          confidence: daRegistro.disponibile ? 'verified' : 'declared',
+          itemKey: archivi[a] + ':' + r.id,
+          giacenza: num(r.quantity != null ? r.quantity : (r.stock != null ? r.stock : r.qty), 0),
+        });
+      });
+    }
+    /* Lo stesso materiale può comparire in due archivi: vince quello che ha un
+       costo a registro, perché è l'unico verificabile. */
+    var perNome = {};
+    trovati.forEach(function (m) {
+      var k = String(m.n).toLowerCase().trim();
+      var pre = perNome[k];
+      if (!pre || (m.fonte === 'registro' && pre.fonte !== 'registro')) perNome[k] = m;
+    });
+    return Object.keys(perNome).map(function (k) { return perNome[k]; });
+  }
+
   function statoCache() {
     return { pronta: CACHE.pronta, quando: CACHE.quando,
       materiali: Object.keys(CACHE.perId).length };
@@ -443,6 +502,7 @@
     congela: congela,
     confronta: confronta,
     aggiornaCache: aggiornaCache,
+    materialiPerStampa3D: materialiPerStampa3D,
     dallaCache: dallaCache,
     statoCache: statoCache,
     svuotaCache: svuotaCache,

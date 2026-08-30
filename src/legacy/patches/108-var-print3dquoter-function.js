@@ -67,6 +67,11 @@ var MARG=(1-1/3.5)*100;
 var MODO='completo';
 var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
 var _registroLetto=false;
+/* I materiali che il magazzino conosce. Tenuti separati da MATS — la lista
+   locale del preventivatore — perché la differenza fra i due è esattamente
+   l'informazione che mancava: quali filamenti sono tracciati e quali sono solo
+   scritti qui dentro. */
+var MATS_INV=[];
 /* I dati che arrivano dallo slicer, tenuti separati da quelli digitati: è la
    distinzione che permette di non contarli due volte. */
 var SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
@@ -82,6 +87,32 @@ function hydrate(){
     MATS=(d.mats&&d.mats.length)?d.mats:JSON.parse(JSON.stringify(DEF_MATS));
     SAVED=d.saved||[];
   }catch(e){MATS=JSON.parse(JSON.stringify(DEF_MATS));SAVED=[];}
+}
+
+/* ── La lista dei materiali, una sola ─────────────────────────────────────
+   Il magazzino davanti, perché è l'unico che sa quanto è stato pagato. La
+   lista locale resta dietro, ma non come fonte alternativa: come elenco di
+   ciò che **non è ancora** a magazzino. Un materiale che compare in entrambe
+   con lo stesso nome viene mostrato una volta sola, e vince quello tracciato.
+
+   Non si cancella niente: chi ha compilato quella lista ha fatto un lavoro
+   vero, e perderlo per «pulizia» sarebbe peggio del difetto. */
+function materialiVisibili(){
+  var nomiInv={};
+  MATS_INV.forEach(function(m){ nomiInv[String(m.n).toLowerCase().trim()]=true; });
+  var locali=MATS.filter(function(m){
+    return !nomiInv[String(m.n).toLowerCase().trim()];
+  }).map(function(m){
+    return Object.assign({}, m, { fonte:'locale', confidence:'declared' });
+  });
+  return MATS_INV.concat(locali);
+}
+
+/** Trova un materiale nella lista unica, per id. */
+function materialeDi(id){
+  var tutti=materialiVisibili();
+  for(var i=0;i<tutti.length;i++) if(tutti[i].id===id) return tutti[i];
+  return null;
 }
 function eur(n){return '€'+(+n||0).toFixed(2).replace('.',',');}
 function el(id){return document.getElementById(id);}
@@ -143,7 +174,13 @@ function render(){
   var MODI=MODI_();
   var isFdm=T==='fdm';
   var machOpts=(MACH[T]||[]).map(function(m){return '<option value="'+m.id+'">'+m.n+' ('+m.w+'W · €'+m.c+')</option>';}).join('');
-  var matOpts=MATS.filter(function(m){return m.t===T;}).map(function(m){return '<option value="'+m.id+'">'+m.n+' (€'+m.p+'/'+(m.t==='resin'?'L':'kg')+' · '+m.u+(m.t==='resin'?'ml':'g')+')</option>';}).join('');
+  var visibili=materialiVisibili();
+  var segno={registro:'✅', anagrafica:'📦', locale:'✎'};
+  var matOpts=visibili.filter(function(m){return m.t===T;}).map(function(m){
+    return '<option value="'+m.id+'">'+(segno[m.fonte]||'')+' '+m.n
+      +' (€'+m.p+'/'+(m.t==='resin'?'L':'kg')+')'
+      +(m.fonte==='locale'?' — non a magazzino':'')+'</option>';
+  }).join('');
   var machBtns=(MACH[T]||[]).map(function(m){return '<button class="p3-mb" onclick="Print3DQuoter.pickMach(\''+m.id+'\')">'+m.n+'<br><span style="font-size:9px;opacity:.6">'+m.w+'W·€'+m.c+'</span></button>';}).join('');
   var extHtml=EXTRAS.length?EXTRAS.map(function(e,i){
     return '<div class="p3-ext">'
@@ -703,7 +740,7 @@ function pickMach(id){
   calc();
 }
 function pickMat(id){
-  var m=MATS.find(function(x){return x.id===id;});if(!m)return;
+  var m=materialeDi(id);if(!m)return;
   /* Il prezzo digitato è un punto di partenza, non una verità: se il registro
      di magazzino sa quanto è stato **pagato** davvero, quello vince. L'audit
      di Fase 1 ha misurato che l'intera differenza con lo slicer sul caso di
@@ -723,8 +760,13 @@ function costoDalRegistro(m){
      (vedi InglySync.importMaterials): è l'unico aggancio esistente fra le due
      liste, e finché il magazzino separato `p3dq_v4` non viene ritirato è
      l'unico modo onesto di collegarle. */
-  var id = /^g/.test(String(m.id)) ? String(m.id).slice(1) : String(m.id);
-  var e = MC.dallaCache(id, { articolo:{ unit: m.t==='resin' ? 'bottiglia' : 'bobina' } });
+  /* I materiali che vengono dal magazzino portano la propria chiave; quelli
+     importati una volta dal vecchio ponte hanno l'id preceduto da «g»; gli
+     altri sono locali e non hanno niente da chiedere al registro. */
+  var chiave = m.itemKey ? m.itemKey
+    : (/^g/.test(String(m.id)) ? String(m.id).slice(1) : null);
+  if(!chiave) return null;
+  var e = MC.dallaCache(chiave, { articolo:{ unit: m.t==='resin' ? 'bottiglia' : 'bobina' } });
   return (e && e.disponibile) ? e : e;
 }
 
@@ -733,8 +775,11 @@ function aggiornaRegistro(){
   var MC=(typeof window!=='undefined') && window.InglyMaterialCost;
   if(!MC || typeof MC.aggiornaCache!=='function') return;
   MC.aggiornaCache().then(function(){
+    return (typeof MC.materialiPerStampa3D==='function') ? MC.materialiPerStampa3D() : [];
+  }).then(function(lista){
+    MATS_INV=lista||[];
     var sel=(el('p3d-mat')||{}).value;
-    if(sel){ var m=MATS.find(function(x){return x.id===sel;}); if(m) MAT_REG=costoDalRegistro(m); }
+    if(sel){ var m=materialeDi(sel); if(m) MAT_REG=costoDalRegistro(m); }
     render();
   }).catch(function(){});
 }
@@ -1047,18 +1092,44 @@ function openMat(){renderMatList();var m=el('p3d-mat-modal');if(m)m.classList.ad
 function closeMat(){var m=el('p3d-mat-modal');if(m)m.classList.remove('open');render();}
 function renderMatList(){
   var root=el('p3d-mat-list');if(!root)return;
-  function grp(title,color,icon,items){
-    return '<div style="font-size:10px;color:'+color+';font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">'+icon+' '+title+' ('+items.length+')</div>'
-      +(items.length?items.map(function(m){
-        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg-card2);border-radius:8px;margin-bottom:5px;border:1px solid var(--border)">'
-          +'<div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--text)">'+m.n+'</div>'
-          +'<div style="font-size:10px;color:#475569">'+m.s+' · €'+m.p+'/'+(m.t==='resin'?'L':'kg')+' · '+m.u+(m.t==='resin'?'ml':'g')+'</div></div>'
-          +'<button class="act-btn act-edit" onclick="Print3DQuoter.editMat(\''+m.id+'\')">✏️</button>'
-          +'<button class="act-btn act-del" onclick="Print3DQuoter.delMat(\''+m.id+'\')">🗑️</button></div>';
-      }).join(''):'<div style="color:#475569;font-size:12px;padding:8px">Nessun materiale — aggiungine uno sopra</div>');
+  /* Due gruppi, e la differenza fra loro è il punto: quelli a magazzino si
+     modificano in Magazzino — modificarli qui creerebbe la terza copia dopo
+     averne appena ritirata una — e quelli locali si modificano qui, con
+     l'invito a portarli a magazzino perché il costo diventi verificabile. */
+  function riga(m,tracciato){
+    var badge = tracciato
+      ? '<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:#22c55e20;color:#22c55e;font-weight:700">a magazzino</span>'
+      : '<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--bg-card);color:var(--text-dim);font-weight:700;border:1px solid var(--border)">solo qui</span>';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg-card2);border-radius:8px;margin-bottom:5px;border:1px solid var(--border)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px">'+m.n+' '+badge+'</div>'
+      +'<div style="font-size:10px;color:#475569">'+(m.s||'—')+' · €'+m.p+'/'+(m.t==='resin'?'L':'kg')
+        +(tracciato&&m.giacenza>0?' · giacenza '+m.giacenza:'')+'</div></div>'
+      +(tracciato
+        ? '<span style="font-size:10px;color:var(--text-dim)">si modifica in Magazzino</span>'
+        : '<button class="act-btn act-edit" onclick="Print3DQuoter.editMat(\''+m.id+'\')">✏️</button>'
+          +'<button class="act-btn act-del" onclick="Print3DQuoter.delMat(\''+m.id+'\')">🗑️</button>')
+      +'</div>';
   }
-  root.innerHTML=grp('FDM','#22d3ee','🧵',MATS.filter(function(m){return m.t==='fdm';}))
-               +grp('Resina','#a78bfa','🧴',MATS.filter(function(m){return m.t==='resin';}));
+  function grp(title,color,icon,items,tracciato,vuoto){
+    return '<div style="font-size:10px;color:'+color+';font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">'+icon+' '+title+' ('+items.length+')</div>'
+      +(items.length?items.map(function(m){return riga(m,tracciato);}).join('')
+        :'<div style="color:#475569;font-size:12px;padding:8px">'+vuoto+'</div>');
+  }
+  var visibili=materialiVisibili();
+  var daInv=visibili.filter(function(m){return m.fonte!=='locale';});
+  var locali=visibili.filter(function(m){return m.fonte==='locale';});
+
+  root.innerHTML=
+     grp('Dal magazzino','#22c55e','📦',daInv,true,
+         'Nessun filamento a magazzino. Registrane l\'acquisto in Magazzino per avere il costo reale, spedizione compresa.')
+    +grp('Solo in questo preventivatore','#f59e0b','✎',locali,false,
+         'Nessuno: tutti i materiali che usi sono tracciati.')
+    +(locali.length
+      ? '<div style="margin-top:12px;padding:10px 12px;background:var(--bg-card2);border-radius:9px;border-left:3px solid var(--orange);font-size:10px;color:var(--text-muted);line-height:1.6">'
+        +'<b style="color:var(--orange)">'+locali.length+' material'+(locali.length===1?'e':'i')+' non a magazzino.</b> '
+        +'Il loro prezzo è quello che hai scritto tu: non comprende la spedizione e non cambia quando ricompri. '
+        +'Registrando l\'acquisto in Magazzino il costo diventa quello pagato davvero.'
+      +'</div>' : '');
 }
 function addMat(){
   var n=(el('p3d-mn')||{}).value.trim();

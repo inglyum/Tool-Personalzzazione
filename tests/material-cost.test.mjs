@@ -186,3 +186,60 @@ test('il caso di calibrazione: comprando a €15,99 il conto torna da solo', () 
   assert.ok(Math.abs(materiale290 - 4.50) < 0.15,
     'contro i €4,50 dello slicer restano 14 centesimi, non €2,46');
 });
+
+/* ── I materiali da stampa vengono dal registro ─────────────────────────── */
+
+test('senza IndexedDB la lista dei materiali è vuota, non inventata', async () => {
+  /* Un elenco di ripiego sarebbe la terza copia dopo averne ritirata una. */
+  const lista = await M.materialiPerStampa3D();
+  assert.equal(lista.length, 0);
+});
+
+test('riconosce filamenti e resine dal nome, dalla categoria o dall\'unità', async () => {
+  /* Un finto IDB: la funzione non deve sapere com'è fatto il magazzino, solo
+     interrogarlo. */
+  ctx.IDB = {
+    getAll: async (store) => (store !== 'items' ? [] : [
+      { id: 1, name: 'PLA+ Bambu Bianco', unit: 'bobina', costPrice: 24, quantity: 3 },
+      { id: 2, name: 'Resina ABS-Like', category: 'Stampa 3D', costPrice: 22, quantity: 1 },
+      { id: 3, name: 'Compensato Pioppo 30x30', unit: 'pz', costPrice: 1.2, quantity: 100 },
+      { id: 4, name: 'PETG HF', unit: 'bobina', costPrice: 28, quantity: 2 },
+      { id: 5, name: 'Vite M3', unit: 'pz', costPrice: 0.04, quantity: 300 },
+    ]),
+  };
+  const lista = await M.materialiPerStampa3D({ archivi: ['items'] });
+  const nomi = lista.map((m) => m.n).sort();
+  assert.equal(nomi.join(' · '), 'PETG HF · PLA+ Bambu Bianco · Resina ABS-Like',
+    'il compensato e le viti non sono filamenti');
+  assert.equal(lista.find((m) => m.n === 'Resina ABS-Like').t, 'resin');
+  assert.equal(lista.find((m) => m.n === 'PETG HF').t, 'fdm');
+  delete ctx.IDB;
+});
+
+test('un materiale senza costo non entra nella lista', async () => {
+  ctx.IDB = { getAll: async () => [{ id: 9, name: 'PLA senza prezzo', unit: 'bobina', quantity: 5 }] };
+  const lista = await M.materialiPerStampa3D({ archivi: ['items'] });
+  assert.equal(lista.length, 0, 'un materiale senza costo non ha niente da dire a un preventivo');
+  delete ctx.IDB;
+});
+
+test('lo stesso materiale in due archivi compare una volta sola', async () => {
+  ctx.IDB = {
+    getAll: async (store) => (store === 'items'
+      ? [{ id: 1, name: 'PLA Bianco', unit: 'bobina', costPrice: 24, quantity: 1 }]
+      : [{ id: 7, name: 'PLA Bianco', unit: 'bobina', costPrice: 19, quantity: 1 }]),
+  };
+  const lista = await M.materialiPerStampa3D({ archivi: ['items', 'gadgets'] });
+  assert.equal(lista.length, 1, `${lista.length} copie dello stesso filamento`);
+  delete ctx.IDB;
+});
+
+test('il costo dichiarato in anagrafica si distingue da quello a registro', async () => {
+  ctx.IDB = { getAll: async () => [{ id: 1, name: 'PLA Bianco', unit: 'bobina', costPrice: 24, quantity: 1 }] };
+  M.svuotaCache();
+  const lista = await M.materialiPerStampa3D({ archivi: ['items'] });
+  assert.equal(lista[0].fonte, 'anagrafica');
+  assert.equal(lista[0].confidence, 'declared',
+    'un prezzo scritto in anagrafica non è un prezzo pagato');
+  delete ctx.IDB;
+});
