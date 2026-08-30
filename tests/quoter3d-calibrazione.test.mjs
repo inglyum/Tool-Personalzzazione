@@ -102,15 +102,26 @@ test('la stessa stampa ha tre costi, tutti e tre veri', async (t) => {
 test('il confronto con lo slicer', async (t) => {
   const k = E.calibra(CALIBRAZIONE, { costo: RIFERIMENTO, sistema: 'Bambu Studio' });
 
-  await t.test('confronta tutti e tre i livelli', () => {
+  await t.test('confronta tutti i livelli', () => {
     assert.equal(k.confrontabile, true);
-    assert.equal(k.livelli.length, 3);
+    assert.equal(k.livelli.length, Object.keys(E.LIVELLI).length);
     k.livelli.forEach((l) => { assert.ok(l.delta != null && l.deltaPct != null); });
   });
 
   await t.test('individua il livello che risponde alla stessa domanda', () => {
-    assert.equal(k.corrispondente.id, 'stampa',
-      'il riferimento di uno slicer è un costo di stampa, non un costo aziendale');
+    /* Era «stampa» finché quello era il livello più basso. Con il livello
+       «materiale» il confronto diventa più preciso, non diverso: lo slicer di
+       riferimento dichiara un costo filamento, e adesso esiste un livello che
+       fa la stessa identica domanda. Il residuo scende da €2,71 a €2,46 —
+       cioè da «materiale più energia» a «solo materiale». */
+    assert.equal(k.corrispondente.id, 'materiale',
+      'un «costo filamento» dello slicer è un costo materiale, non un costo aziendale');
+  });
+
+  await t.test('e dice che la differenza è di listino, non di formula', () => {
+    assert.equal(k.causa.tipo, 'prezzo materiale');
+    vicino(k.causa.riferimentoPerKg, 15.517, 0.01);
+    vicino(k.causa.nostroPerKg, 24, 0.01);
   });
 
   await t.test('e il prezzo del materiale che il riferimento implica', () => {
@@ -126,6 +137,9 @@ test('il confronto con lo slicer', async (t) => {
     vicino(materiale, RIFERIMENTO, 0.01);
     const energia = r.perPezzo.voci.find((v) => v.id === 'energia').value;
     vicino(r.costoPezzo, RIFERIMENTO + energia, 0.01);
+    /* E al livello «materiale» coincide esattamente, senza resto. */
+    const solo = E.calcola({ ...CALIBRAZIONE, materialPricePerKg: k.materialeImplicito, livelloCosto: 'materiale' });
+    vicino(solo.costoPezzo, RIFERIMENTO, 0.01);
   });
 
   await t.test('nessun fattore di calibrazione, da nessuna parte', () => {

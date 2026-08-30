@@ -57,6 +57,11 @@
   var pos = function (v, d) { return Math.max(0, num(v, d)); };
 
   var frazione = function (v, d) { return Math.max(0, Math.min(1, num(v, d))); };
+  /** Un numero leggibile in una spiegazione: due decimali solo se servono. */
+  var fmt = function (v) {
+    var n = num(v, 0);
+    return (Math.round(n * 100) / 100).toString();
+  };
 
   /* ── Driver comuni ────────────────────────────────────────────────────────
      Scritti una volta e usati da ogni tecnologia. È la parte che non si
@@ -70,10 +75,54 @@
     return Math.max(0, pos(i.machinePrice) - pos(i.residualValue)) / vita;
   }
 
-  /** La potenza di targa non è quella assorbita: un riscaldatore lavora a
-      intermittenza. `dutyCycle` lo rappresenta e vale 1 se non dichiarato. */
+  /* ── L'energia, e come si sa di cosa si sta parlando ──────────────────────
+     La potenza di targa non è quella assorbita: un riscaldatore lavora a
+     intermittenza, e `dutyCycle` lo rappresenta. Ma un consumo stimato da una
+     targa e un consumo letto da un contatore sono due cose diverse, e finora
+     uscivano dallo stesso campo con lo stesso aspetto — 150 W × 9,95 h — senza
+     che niente dicesse quale delle due fosse.
+
+     La priorità è dichiarata e non negoziabile:
+
+       kWh misurati  →  potenza media  →  potenza di targa × ciclo di lavoro
+
+     Un dato misurato non ha bisogno del ciclo di lavoro: il contatore ha già
+     contato le pause. Applicarglielo lo abbasserebbe due volte. */
+  var MODI_ENERGIA = {
+    misurato: { id: 'misurato', label: 'kWh misurati', confidence: 'measured',
+      nota: 'Consumo letto da un contatore o da una presa intelligente.' },
+    medio: { id: 'medio', label: 'potenza media', confidence: 'verified',
+      nota: 'Consumo medio dichiarato per la macchina.' },
+    targa: { id: 'targa', label: 'potenza di targa', confidence: 'estimated',
+      nota: 'Consumo stimato dalla potenza massima — misura reale consigliata.' },
+    assente: { id: 'assente', label: 'nessun dato', confidence: 'missing',
+      nota: 'Nessun dato di consumo: l\'energia non è conteggiata.' },
+  };
+
+  /** kWh consumati e da quale fonte lo sappiamo. Non moltiplica per il prezzo:
+      quello è un altro dato, con un'altra fonte. */
+  function consumo(i, ore) {
+    if (pos(i.measuredEnergyKwh) > 0) {
+      return { kwh: pos(i.measuredEnergyKwh), modo: 'misurato',
+        detail: fmt(i.measuredEnergyKwh) + ' kWh misurati' };
+    }
+    if (pos(i.averagePowerW) > 0) {
+      var kwhM = (pos(i.averagePowerW) / 1000) * ore;
+      return { kwh: kwhM, modo: 'medio',
+        detail: fmt(i.averagePowerW) + ' W medi × ' + fmt(ore) + ' h' };
+    }
+    var targa = pos(i.ratedPowerW) > 0 ? pos(i.ratedPowerW) : pos(i.watt);
+    if (targa > 0) {
+      var ciclo = num(i.dutyCycle, 1) ? frazione(i.dutyCycle, 1) : 1;
+      return { kwh: (targa / 1000) * ore * ciclo, modo: 'targa',
+        detail: fmt(targa) + ' W di targa × ' + fmt(ore) + ' h'
+          + (ciclo < 1 ? ' × ciclo ' + fmt(ciclo) : '') };
+    }
+    return { kwh: 0, modo: 'assente', detail: 'nessun dato di consumo' };
+  }
+
   function energia(i, ore) {
-    return (pos(i.watt) / 1000) * ore * pos(i.kwhPrice) * (num(i.dutyCycle, 1) ? frazione(i.dutyCycle, 1) : 1);
+    return consumo(i, ore).kwh * pos(i.kwhPrice);
   }
 
   var oraLavoro = function (i) { return pos(i.laborPerHour); };
@@ -122,7 +171,7 @@
             detail: Math.round(grammi + supporti + spurgo) + ' g' +
               (supporti ? ' · supporti ' + Math.round(supporti) + ' g' : '') +
               (spurgo ? ' · spurgo ' + Math.round(spurgo) + ' g' : '') },
-          { id: 'energia', label: 'Energia', value: energia(i, ore), detail: num(i.watt) + ' W × ' + ore.toFixed(2) + ' h' },
+          { id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail },
           { id: 'macchina', label: 'Ammortamento macchina', value: oraMacchina(i) * ore,
             detail: pos(i.machineLifeHours) ? pos(i.machineLifeHours) + ' h di vita utile' : 'vita utile non indicata' },
           { id: 'manutenzione', label: 'Manutenzione e consumabili', value: pos(i.maintenancePerHour) * ore,
@@ -175,7 +224,7 @@
         return [
           { id: 'materiale', label: 'Materiale', value: materiale,
             detail: perFoglio > 0 ? perFoglio + ' pezzi per foglio (sfrido compreso)' : 'costo dichiarato per pezzo' },
-          { id: 'energia', label: 'Energia', value: energia(i, ore), detail: num(i.watt) + ' W × ' + ore.toFixed(2) + ' h' },
+          { id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail },
           { id: 'macchina', label: 'Ammortamento macchina', value: oraMacchina(i) * ore, detail: ore.toFixed(2) + ' h' },
           { id: 'manutenzione', label: 'Manutenzione', value: pos(i.maintenancePerHour) * ore,
             detail: 'ottiche, lenti, tubo' },
@@ -315,7 +364,7 @@
             perdibile: v.perdibile };
         });
         if (ore > 0) {
-          voci.push({ id: 'energia', label: 'Energia', value: energia(i, ore), detail: num(i.watt) + ' W × ' + ore.toFixed(2) + ' h' });
+          voci.push({ id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail });
           voci.push({ id: 'macchina', label: 'Ammortamento macchina', value: oraMacchina(i) * ore, detail: ore.toFixed(2) + ' h' });
           voci.push({ id: 'manutenzione', label: 'Manutenzione', value: pos(i.maintenancePerHour) * ore, detail: ore.toFixed(2) + ' h' });
         }
@@ -386,6 +435,18 @@
      Da qui in poi il livello si dichiara, e il risultato dice quale sta
      usando. */
   var LIVELLI = {
+    /* Il livello che mancava, e la ragione per cui il confronto con lo slicer
+       restava approssimativo: gli slicer che dichiarano un «costo materiale»
+       contano il filamento e basta. Finché il livello più basso includeva
+       l'energia, nessun numero rispondeva alla loro stessa domanda, e la
+       differenza veniva letta come un errore di formula invece che come una
+       differenza di prezzo al chilo. */
+    materiale: {
+      id: 'materiale', label: 'Costo materiale', breve: 'materiale',
+      spiega: 'Solo il materiale consumato, supporti e spurgo compresi. È il numero che dichiara uno slicer quando parla di «costo filamento».',
+      voci: ['materiale'],
+      manodopera: false, unaTantum: false, scarto: false, overhead: false,
+    },
     stampa: {
       id: 'stampa', label: 'Costo di stampa', breve: 'stampa',
       spiega: 'Materiale ed energia: quello che consuma la macchina mentre lavora. È il numero che mostrano gli slicer.',
@@ -541,7 +602,107 @@
       costoPezzo: costoPezzo,
       costoTotale: costoPezzo * qty,
       costoOrarioMacchina: oraMacchina(i),
+      /* Da dove viene l'energia e quanto ci si può contare. Un consumo
+         stimato da una targa vale quanto uno misurato solo finché nessuno
+         chiede quale dei due sia. */
+      energia: (function () {
+        var e = consumo(i, ore);
+        var m = MODI_ENERGIA[e.modo];
+        return { kwh: e.kwh, modo: e.modo, label: m.label,
+          confidence: m.confidence, nota: m.nota, detail: e.detail,
+          prezzoKwh: pos(i.kwhPrice) };
+      }()),
+      /* La provenienza di ogni voce, dichiarata voce per voce. `predefinito`
+         non è una vergogna: è un'informazione, e nasconderla è il modo in cui
+         un valore inserito una volta sopravvive per anni. */
+      provenienza: provenienza(i, vociPerPezzo.concat(vociUnaTantum)),
+      /* Le ipotesi su cui questo numero regge. Se una cade, il numero cade. */
+      assunzioni: assunzioni(i, ore, qty),
     };
+  }
+
+  /* ── Provenienza e confidenza ─────────────────────────────────────────────
+     Quattro gradi, in ordine di quanto si può difendere il numero davanti a
+     chi paga:
+
+       measured   letto da uno strumento
+       verified   dichiarato da una fonte identificabile (fornitore, scheda)
+       declared   inserito dall'utente, che sa cosa sta facendo
+       estimated  dedotto — plausibile, non verificato
+       missing    non c'è, e il costo esce più basso del vero
+
+     Il grado non si deduce dal valore: si deduce da **come è arrivato**. Un
+     €/kg giusto inserito a mano resta `declared`, e va bene così. */
+  var CONFIDENZE = ['measured', 'verified', 'declared', 'estimated', 'missing'];
+
+  var CAMPI_DI_VOCE = {
+    materiale: ['materialPricePerKg', 'spoolPrice', 'sheetPrice', 'blankPrice'],
+    energia: ['kwhPrice'],
+    macchina: ['machinePrice', 'machineLifeHours'],
+    manutenzione: ['maintenancePerHour'],
+    manodopera: ['laborPerHour'], finitura: ['laborPerHour'],
+    postProcesso: ['laborPerHour'], setup: ['laborPerHour'],
+    packaging: ['packagingPerUnit'],
+    scarto: ['failureRate'],
+  };
+
+  /** La confidenza di una fonte dichiarata. `fonti` è la mappa che la UI passa
+      quando sa da dove ha preso un numero. */
+  var CONF_DA_FONTE = {
+    misurato: 'measured', inventario: 'verified', registro: 'verified',
+    resolver: 'verified', fornitore: 'verified', macchina: 'verified',
+    impostazioni: 'declared', utente: 'declared', inserito: 'declared',
+    predefinito: 'estimated', stimato: 'estimated', mancante: 'missing',
+  };
+
+  function provenienza(i, voci) {
+    var fonti = i.fonti || {};
+    var out = [];
+    voci.forEach(function (v) {
+      var campi = CAMPI_DI_VOCE[v.id] || [];
+      var f = fonti[v.id];
+      if (!f) {
+        /* Nessuna fonte dichiarata: si guarda se i campi che alimentano la
+           voce sono stati almeno inseriti. */
+        var presenti = campi.filter(function (c) { return presente(i, c); });
+        f = campi.length === 0 ? 'utente' : (presenti.length ? 'inserito' : 'mancante');
+      }
+      var conf = CONF_DA_FONTE[f] || 'estimated';
+      /* L'energia sa dire di più di quanto sappia la mappa delle fonti. */
+      if (v.id === 'energia') {
+        var m = MODI_ENERGIA[consumo(i, pos(i.hours)).modo];
+        if (CONFIDENZE.indexOf(m.confidence) > CONFIDENZE.indexOf(conf)) conf = m.confidence;
+      }
+      out.push({ id: v.id, label: v.label, value: v.value,
+        source: f, sourceType: f, confidence: conf,
+        campi: campi, lastUpdated: (i.fontiAggiornate || {})[v.id] || null });
+    });
+    return out;
+  }
+
+  /** La confidenza complessiva è la peggiore delle sue parti: un preventivo
+      non è più solido della sua voce più incerta. */
+  function confidenzaComplessiva(prov) {
+    var peggio = 'measured';
+    (prov || []).forEach(function (p) {
+      if (p.value > 0 && CONFIDENZE.indexOf(p.confidence) > CONFIDENZE.indexOf(peggio)) peggio = p.confidence;
+    });
+    return peggio;
+  }
+
+  /* ── Le ipotesi ───────────────────────────────────────────────────────────
+     Non avvisi: cose vere che il conto dà per scontate e che chi legge deve
+     poter contestare. «Lo scarto è zero» è un'ipotesi, non un errore. */
+  function assunzioni(i, ore, qty) {
+    var a = [];
+    var e = consumo(i, ore);
+    if (e.modo === 'targa') a.push({ id: 'energia', testo: 'Il consumo è stimato dalla potenza di targa' + (num(i.dutyCycle, 1) < 1 ? ' con un ciclo di lavoro del ' + Math.round(frazione(i.dutyCycle, 1) * 100) + '%' : '') + '.' });
+    if (e.modo === 'assente' && pos(i.kwhPrice) > 0) a.push({ id: 'energia', testo: 'Nessun dato di consumo: l\'energia non è conteggiata.' });
+    if (!(pos(i.failureRate) > 0)) a.push({ id: 'scarto', testo: 'Nessuno scarto: si assume che ogni pezzo riesca al primo tentativo.' });
+    if (!(pos(i.residualValue) > 0) && pos(i.machinePrice) > 0) a.push({ id: 'macchina', testo: 'La macchina si assume senza valore residuo a fine vita.' });
+    if (!(pos(i.overheadPerHour) > 0) && !(pos(i.overheadPct) > 0)) a.push({ id: 'overhead', testo: 'Nessuna spesa generale ripartita su questo lavoro.' });
+    if (qty > 1) a.push({ id: 'setup', testo: 'L\'avviamento si paga una volta e si divide per ' + qty + ' pezzi.' });
+    return a;
   }
 
   /* ── Prezzo ───────────────────────────────────────────────────────────────
@@ -1080,9 +1241,65 @@
       warnings: avvisi(c.costoPezzo, p, i),
       recommendations: consigli(c.costoPezzo, opzioniPrezzo),
 
+      /* ── Il conto difendibile ──────────────────────────────────────────
+         Quattro numeri invece di uno, con accanto la loro provenienza. Un
+         preventivo che mostra «€ 18,68» e basta non si può difendere né
+         davanti al cliente né davanti a chi porta i libri: la domanda «di
+         cosa è fatto» non ha una risposta, e la domanda «da dove viene» non
+         ha nemmeno un posto dove essere fatta. */
+      costLevels: livelliDi(i),
+      costLevel: c.livello,
+      energyMode: c.energia,
+      sources: c.provenienza,
+      confidence: confidenzaComplessiva(c.provenienza),
+      assunzioni: c.assunzioni,
+      recommendedPrices: prezziConsigliati(c.costoPezzo, opzioniPrezzo),
+      comparisonWithSlicer: (pos(i.slicerTotalCost) > 0 || pos(i.slicerMaterialCost) > 0)
+        ? calibra(i, { costo: pos(i.slicerTotalCost) || pos(i.slicerMaterialCost),
+                       sistema: 'slicer',
+                       cosaInclude: pos(i.slicerTotalCost) > 0 ? 'totale dichiarato' : 'solo materiale' })
+        : null,
+
       /* Nomi storici. */
       voci: righe, costo: c, prezzo: p, validazione: val,
     };
+  }
+
+  /** Tutti i livelli in un colpo solo, per la tabella che li mette in fila.
+      Il costo non cambia: cambia quante voci entrano nel totale. */
+  function livelliDi(i) {
+    return Object.keys(LIVELLI).map(function (k) {
+      var r = calcola(Object.assign({}, i, { livelloCosto: k }));
+      if (r.vuoto) return null;
+      return { id: k, label: LIVELLI[k].label, spiega: LIVELLI[k].spiega,
+        costoPezzo: r.costoPezzo, costoTotale: r.costoTotale };
+    }).filter(Boolean);
+  }
+
+  /* ── Le tre posizioni ─────────────────────────────────────────────────────
+     Minimo, consigliato, premium. Il minimo non è il prezzo più basso che si
+     riesce a fare: è quello **sotto il quale il lavoro non va accettato**, e
+     la differenza è tutta nella parola «non». Se lo si tratta come un punto di
+     partenza per trattare, non serve a niente.
+
+     Tutte e tre passano da `prezzo()` con una strategia a margine: nessuna è
+     un moltiplicatore, e i tre margini sono configurabili perché sono una
+     decisione commerciale, non una costante di natura. */
+  function prezziConsigliati(costo, opzioni) {
+    var o = opzioni || {};
+    var minimo = num(o.margineMinimoPct, MARGINE_MINIMO);   // già in percentuale
+    var target = num(o.marginePct, 40);
+    var premium = num(o.marginePremiumPct, Math.min(85, target + 20));
+    var fai = function (id, label, m, nota) {
+      var p = prezzo(costo, Object.assign({}, o, { strategia: 'margine', marginePct: m, scontoPct: 0 }));
+      return { id: id, label: label, marginePct: m, netto: p.netto, lordo: p.lordo,
+        iva: p.iva, profitto: p.netto - costo, nota: nota };
+    };
+    return [
+      fai('minimo', 'Prezzo minimo', minimo, 'Sotto questo prezzo il lavoro non va accettato.'),
+      fai('consigliato', 'Prezzo consigliato', target, 'Il margine che hai deciso di puntare.'),
+      fai('premium', 'Prezzo premium', premium, 'Per chi compra il risultato, non l\'ora di macchina.'),
+    ];
   }
 
   /* ── Calibrazione ──────────────────────────────────────────────────────────
@@ -1146,6 +1363,36 @@
          del materiale è diverso. */
       materialeImplicito: pos(ingresso && ingresso.grams) > 0
         ? (costoRif / (pos(ingresso.grams) / 1000)) : null,
+      /* La causa, scomposta. Senza questa riga il confronto dice «siamo più
+         cari del 60%» e lascia credere a un errore di formula, quando la
+         differenza è che i due conti valutano il filamento a prezzi diversi.
+         È la domanda vera: non «perché sbagliamo», ma «cosa stiamo
+         confrontando». */
+      causa: (function () {
+        if (!vicino) return null;
+        var g = pos(ingresso && ingresso.grams) / 1000;
+        var mat = livelli.filter(function (l) { return l.id === 'materiale'; })[0];
+        if (!(g > 0) || !mat) return null;
+        var nostroKg = mat.costo / g;
+        var loroKg = costoRif / g;
+        /* Se il riferimento è ricostruibile come **solo materiale** a un altro
+           prezzo al chilo, la differenza è di listino, non di metodo. */
+        if (vicino.id === 'materiale' || vicino.id === 'stampa') {
+          return {
+            tipo: 'prezzo materiale',
+            nostroPerKg: nostroKg, riferimentoPerKg: loroKg,
+            differenzaPerKg: nostroKg - loroKg,
+            testo: 'Il riferimento vale il materiale ' + (Math.round(loroKg * 100) / 100)
+              + ' €/kg, questo conto ' + (Math.round(nostroKg * 100) / 100)
+              + ' €/kg: la differenza è di listino, non di formula.',
+          };
+        }
+        return {
+          tipo: 'livello di costo',
+          testo: 'Il riferimento risponde alla domanda di «' + vicino.label
+            + '»: i livelli superiori aggiungono voci che quel numero non contiene.',
+        };
+      }()),
     };
   }
 
@@ -1167,6 +1414,11 @@
     LIVELLO_PREDEFINITO: LIVELLO_PREDEFINITO,
     tecnologie: function () { return Object.keys(PROFILI); },
     calibra: calibra,
+    MODI_ENERGIA: MODI_ENERGIA,
+    CONFIDENZE: CONFIDENZE,
+    consumo: consumo,
+    livelliDi: livelliDi,
+    prezziConsigliati: prezziConsigliati,
     calcola: calcola,
     prezzo: prezzo,
     scaglioni: scaglioni,
