@@ -166,6 +166,26 @@ const esito = await page.evaluate(async () => {
   const tiers = testo('p3d-tiers');
   dico('le politiche di prezzo sono disegnate', tiers.length > 40);
 
+  /* ── Il prezzo del materiale dichiara la propria provenienza ─────────────
+     Su un'installazione senza acquisti a registro la risposta giusta è
+     «non verificato», non un silenzio: il €24/kg predefinito è esattamente
+     il numero che ha prodotto tutta la differenza con lo slicer. */
+  const vista = document.querySelector('#view-print3d')?.textContent || '';
+  dico('il prezzo del materiale dice da dove viene',
+    /Costo reale dal magazzino|Prezzo materiale non verificato|Registro di magazzino in lettura/.test(vista));
+  const MC = window.InglyMaterialCost;
+  dico('il modulo dei costi materiali è nel bundle', !!MC);
+  if (MC) {
+    /* Senza registro non si inventa un costo: si dice che non c'è. */
+    const vuoto = MC.perPreventivo({ movimenti: [], itemKey: 'mai-comprato' });
+    dico('un materiale mai acquistato non riceve un costo di ripiego',
+      vuoto.disponibile === false && vuoto.costoUnitario === null);
+    /* E il costo reale comprende la spedizione. */
+    const r = MC.costoReale({ imponibile: 20, spedizione: 7, quantita: 1, unit: 'bobina' });
+    dico('il costo reale comprende la spedizione (20 € + 7 € = 27 €/kg)',
+      Math.abs(r.costoUnitario - 27) < 0.001);
+  }
+
   /* La prova che lo slider adesso comanda: si cambia e il prezzo cambia. */
   const modulo = window.InglyQuoter3DView;
   dico('il modulo della vista è nel bundle', !!modulo);

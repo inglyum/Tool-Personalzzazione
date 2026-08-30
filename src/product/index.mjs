@@ -59,6 +59,7 @@ export const PRODUCT_FILES = [
   /* Il resolver: legge il registro, non il listino. Dopo il registro e prima
      di chiunque chieda un costo. */
   'inventory-cost-resolver.js',
+  'material-cost.js',
   /* La vista del registro: dopo il registro e dopo ui.js. */
   'inventory-view.js',
   /* I template di preventivo: puri, dopo l'adapter di cui usano lo stato. */

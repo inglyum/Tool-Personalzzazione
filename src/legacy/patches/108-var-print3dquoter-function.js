@@ -65,6 +65,8 @@ var IVA_ON=true, DISC=0;
    sposta nessun prezzo, rende solo visibile quello che c'era. */
 var MARG=(1-1/3.5)*100;
 var MODO='completo';
+var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
+var _registroLetto=false;
 var R=null;
 var CALIB_RIF=0;
 var SK='p3dq_v4';
@@ -218,8 +220,9 @@ function render(){
       +'<div class="p3-ct c" id="p3d-mat-title">'+(isFdm?'🧵 FILAMENTO':'🧴 RESINA')+'</div>'
       +'<div class="p3-fg"><label class="p3-fl">DAL MAGAZZINO <button onclick="Print3DQuoter.openMat()" style="background:none;border:none;color:#a78bfa;cursor:pointer;font-size:10px;font-weight:700">+ Gestisci</button></label>'
         +'<select class="p3-fc" id="p3d-mat" onchange="Print3DQuoter.pickMat(this.value)"><option value="">— Scegli materiale —</option>'+matOpts+'</select></div>'
+      +bandaMateriale()
       +'<div class="p3-g2">'
-        +'<div class="p3-fg"><label class="p3-fl" id="p3d-mp-l">'+(isFdm?'€/kg':'€/L')+'</label><input class="p3-fc" id="p3d-mkg" type="number" step="0.5" value="24" oninput="Print3DQuoter.calc()"></div>'
+        +'<div class="p3-fg"><label class="p3-fl" id="p3d-mp-l">'+(isFdm?'€/kg':'€/L')+'</label><input class="p3-fc" id="p3d-mkg" type="number" step="0.5" value="24" oninput="Print3DQuoter.setPrezzoMat(this.value)"></div>'
         +'<div class="p3-fg"><label class="p3-fl" id="p3d-mu-l">UNITÀ ('+(isFdm?'g':'ml')+')</label><input class="p3-fc" id="p3d-mu" type="number" step="100" value="1000" oninput="Print3DQuoter.calc()"></div>'
       +'</div>'
     +'</div>'
@@ -346,6 +349,47 @@ function render(){
   +'</div>'; // close p3-grid
 
   setTimeout(function(){calc();},10);
+  /* Il registro si rilegge quando la sezione si apre, non a ogni tasto. */
+  if(!_registroLetto){ _registroLetto=true; aggiornaRegistro(); }
+}
+
+/* ── Da dove viene il prezzo del materiale ─────────────────────────────────
+   Tre stati, e nessuno è muto. Il terzo — «non verificato» — è quello che il
+   preventivatore ha avuto per anni senza dirlo: un numero digitato una volta
+   che nessuno ha più messo in discussione perché niente lo segnalava. */
+function bandaMateriale(){
+  var MC=(typeof window!=='undefined') && window.InglyMaterialCost;
+  var stato=MC && typeof MC.statoCache==='function' ? MC.statoCache() : {pronta:false};
+  var box=function(colore,icona,titolo,sotto){
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;'
+      +'background:var(--bg-card2);border-left:3px solid '+colore+';margin-bottom:10px">'
+      +'<span style="font-size:13px;line-height:1.2">'+icona+'</span>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:'+colore+'">'+titolo+'</div>'
+      +'<div style="font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:2px">'+sotto+'</div></div></div>';
+  };
+
+  if(MAT_REG && MAT_REG.disponibile){
+    var st=MAT_REG.storico||{};
+    var extra=st.disponibile
+      ? 'ultimo '+eur(st.ultimo)+' · medio '+eur(st.medio)+' · minimo '+eur(st.minimo)+' su '+st.acquisti+' acquisti'
+      : '';
+    return box('var(--green,#22c55e)','✅','Costo reale dal magazzino — '+eur(MAT_REG.costoUnitario)+'/'+(MAT_REG.unita==='l'?'L':'kg'),
+      'Politica «'+MAT_REG.politica+'», spedizione compresa. '+extra);
+  }
+  if(!stato.pronta){
+    return box('var(--text-dim)','⏳','Registro di magazzino in lettura',
+      'Il prezzo qui sotto è quello del campo finché il registro non risponde.');
+  }
+  return box('var(--orange)','⚠️','Prezzo materiale non verificato',
+    'Nessun acquisto a registro per questo materiale: il costo qui sotto è quello che hai scritto tu. '
+    +'Registra l\'acquisto con il suo importo per avere il costo reale, spedizione compresa.');
+}
+
+/** Scrivere il prezzo a mano è legittimo, e disattiva la lettura dal registro:
+    un numero digitato non può continuare a essere presentato come verificato. */
+function setPrezzoMat(v){
+  if(MAT_REG && MAT_REG.disponibile && Math.abs(parseFloat(v)-MAT_REG.costoUnitario)>0.005) MAT_REG=null;
+  calc();
 }
 
 function setType(t){T=t;render();}
@@ -380,7 +424,39 @@ function pickMach(id){
 }
 function pickMat(id){
   var m=MATS.find(function(x){return x.id===id;});if(!m)return;
-  sv('p3d-mkg',m.p);sv('p3d-mu',m.u);calc();
+  /* Il prezzo digitato è un punto di partenza, non una verità: se il registro
+     di magazzino sa quanto è stato **pagato** davvero, quello vince. L'audit
+     di Fase 1 ha misurato che l'intera differenza con lo slicer sul caso di
+     calibrazione — € 2,46 su € 2,46 — era il prezzo del filamento: € 24,00/kg
+     scritto in un campo contro € 15,52/kg effettivi. */
+  MAT_REG=costoDalRegistro(m);
+  sv('p3d-mkg', MAT_REG && MAT_REG.disponibile ? (Math.round(MAT_REG.costoUnitario*100)/100) : m.p);
+  sv('p3d-mu',m.u);
+  render();
+}
+
+/** Il costo di un materiale a registro, se c'è. Mai un valore di ripiego. */
+function costoDalRegistro(m){
+  var MC=(typeof window!=='undefined') && window.InglyMaterialCost;
+  if(!MC || !m) return null;
+  /* I materiali importati dal magazzino portano il loro id preceduto da «g»
+     (vedi InglySync.importMaterials): è l'unico aggancio esistente fra le due
+     liste, e finché il magazzino separato `p3dq_v4` non viene ritirato è
+     l'unico modo onesto di collegarle. */
+  var id = /^g/.test(String(m.id)) ? String(m.id).slice(1) : String(m.id);
+  var e = MC.dallaCache(id, { articolo:{ unit: m.t==='resin' ? 'bottiglia' : 'bobina' } });
+  return (e && e.disponibile) ? e : e;
+}
+
+/** Il registro si legge una volta per apertura di sezione, non a ogni tasto. */
+function aggiornaRegistro(){
+  var MC=(typeof window!=='undefined') && window.InglyMaterialCost;
+  if(!MC || typeof MC.aggiornaCache!=='function') return;
+  MC.aggiornaCache().then(function(){
+    var sel=(el('p3d-mat')||{}).value;
+    if(sel){ var m=MATS.find(function(x){return x.id===sel;}); if(m) MAT_REG=costoDalRegistro(m); }
+    render();
+  }).catch(function(){});
 }
 function addExtra(){
   var opts=EXT_PRE.map(function(p,i){return (i+1)+'. '+p.n+' (€'+p.c+')';}).join('\n');
@@ -418,8 +494,12 @@ function ingresso(){
    verità permanente. */
 function fonti(){
   var scelto=(el('p3d-mat')||{}).value;
+  /* «Selezionato dal menu» non vuol dire «verificato»: la lista dei materiali
+     del quoter è una copia in localStorage. Solo il registro può dire
+     «inventario», e se non lo dice il numero resta di chi lo ha digitato. */
+  var daRegistro = MAT_REG && MAT_REG.disponibile;
   return {
-    materiale: scelto ? 'inventario' : 'utente',
+    materiale: daRegistro ? 'registro' : (scelto ? 'utente' : 'utente'),
     energia:'utente', macchina:'utente', manutenzione:'utente',
     manodopera:'utente', postProcesso:'utente', setup:'utente',
   };
@@ -672,7 +752,8 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,
   doPdf:doPdf,doWa:doWa,sendQ:sendQ,openMat:openMat,closeMat:closeMat,
   addMat:addMat,editMat:editMat,delMat:delMat,
-  setModo:setModo,setMargine:setMargine,setCalib:setCalib,
+  setModo:setModo,setMargine:setMargine,setCalib:setCalib,setPrezzoMat:setPrezzoMat,
+  aggiornaRegistro:aggiornaRegistro,
   /* Letto da patch 109 per «→ Catalogo», che prima lo cercava e non lo
      trovava: `_state` non è mai stato esportato, e il pulsante salvava a
      costo 0 un prodotto il cui prezzo leggeva per scraping di una dimensione
