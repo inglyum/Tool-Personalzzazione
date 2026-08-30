@@ -319,7 +319,9 @@ const esito = await page.evaluate(async () => {
   dico('il preventivo ha due righe', T.righe === 2);
   /* Il totale grande a schermo. */
   const testoVista = document.querySelector('#view-print3d')?.textContent.replace(/\s+/g, ' ') || '';
-  const grande = (testoVista.match(/TOTALE (?:IVA INCLUSA|SENZA IVA)\s*€\s*([\d.,]+)/i) || [0, '0'])[1];
+  /* L'intestazione adesso porta l'aliquota — «TOTALE IVA 22% INCLUSA» — perché
+     l'aliquota è configurabile e dirla è il punto. */
+  const grande = (testoVista.match(/TOTALE (?:IVA[^€]*INCLUSA|NON IMPONIBILE[^€]*|SENZA IVA)\s*€\s*([\d.,]+)/i) || [0, '0'])[1];
   const grandeNum = parseFloat(String(grande).replace(/\.(?=\d{3})/g, '').replace(',', '.')) || 0;
   dico('il totale a schermo è quello della funzione unica',
     Math.abs(grandeNum - T.lordo) < 0.02, `schermo €${grandeNum.toFixed(2)} · funzione €${T.lordo.toFixed(2)}`);
@@ -393,6 +395,53 @@ const esito = await page.evaluate(async () => {
   Print3DQuoter.togglePerche();
   await new Promise((r) => setTimeout(r, 300));
   dico('si richiude', !document.getElementById('p3d-perche'));
+
+  /* ── L'aliquota IVA è configurabile ─────────────────────────────────────
+     Compariva come letterale in dieci file. I valori coincidevano, quindi non
+     era un difetto di calcolo: era che chi vende al 10% o al 4% non aveva modo
+     di dirlo. */
+  const F = window.InglyFisco;
+  dico('il modulo fiscale è nel bundle', !!F);
+  if (F) {
+    dico('il predefinito è 22, così nessun preventivo esistente si muove', F.aliquota() === 22);
+
+    Print3DQuoter.clearLines();
+    sv('p3d-g', 290); sv('p3d-h', 9.95); sv('p3d-qty', 1);
+    Print3DQuoter.setMargine(40);
+    Print3DQuoter.setIva(true);
+    Print3DQuoter.setDisc(0);
+    await new Promise((r) => setTimeout(r, 300));
+    Print3DQuoter.addLine();
+    await new Promise((r) => setTimeout(r, 300));
+
+    const a22 = Print3DQuoter._totali();
+    F.imposta(10);
+    Print3DQuoter.calc();
+    await new Promise((r) => setTimeout(r, 300));
+    const a10 = Print3DQuoter._totali();
+
+    dico('cambiando aliquota il netto non si muove',
+      Math.abs(a22.netto - a10.netto) < 0.001);
+    dico(`e l'IVA sì (22% €${a22.iva.toFixed(2)} → 10% €${a10.iva.toFixed(2)})`,
+      Math.abs(a10.iva - a22.netto * 0.10) < 0.01 && a10.iva < a22.iva);
+    dico("l'etichetta segue l'aliquota", a10.etichettaIva === 'IVA 10%');
+
+    F.imposta(0);
+    Print3DQuoter.calc();
+    await new Promise((r) => setTimeout(r, 300));
+    const a0 = Print3DQuoter._totali();
+    dico('a zero il lordo è il netto, e si chiama «non imponibile»',
+      Math.abs(a0.lordo - a0.netto) < 0.001 && a0.etichettaIva === 'Non imponibile');
+
+    F.imposta(22);
+    Print3DQuoter.calc();
+    Print3DQuoter.clearLines();
+    await new Promise((r) => setTimeout(r, 300));
+    dico("l'aliquota torna al predefinito", F.aliquota() === 22);
+
+    /* Lo scorporo non è una sottrazione. */
+    dico('scorporare 122 € dà 100 €, non 95,16 €', Math.abs(F.scorpora(122) - 100) < 0.01);
+  }
 
   /* Nessuna duplicazione introdotta. */
   const ids = [...document.querySelectorAll('[id]')].map((e) => e.id).filter(Boolean);

@@ -184,11 +184,11 @@ function render(){
       +'<div class="p3-sr"><span style="color:var(--text-muted)">Subtotale netto</span><span style="font-weight:700;color:#fff">'+eur(totN)+'</span></div>'
       +(forzate?'<div class="p3-sr"><span style="color:var(--orange)">✏️ Prezzi forzati a mano</span><span style="font-weight:700;color:var(--orange)">'+forzate+'</span></div>':'')
       +'<div class="p3-sr"><span style="color:var(--text-muted)">Margine medio</span><span style="font-weight:700;color:'+(mg>=30?'var(--green)':'var(--red)')+'">'+mg.toFixed(1)+'%</span></div>'
-      +(IVA_ON?'<div class="p3-sr"><span style="color:var(--text-muted)">IVA (22%)</span><span style="font-weight:700;color:#fff">'+eur(vatAmt)+'</span></div>':'')
+      +(IVA_ON?'<div class="p3-sr"><span style="color:var(--text-muted)">'+(TOT.etichettaIva||'IVA')+'</span><span style="font-weight:700;color:#fff">'+eur(vatAmt)+'</span></div>':'')
       +'<div class="p3-tbox">'
-        +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">'+(IVA_ON?'TOTALE IVA INCLUSA':'TOTALE SENZA IVA')+'</div>'
+        +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">'+(IVA_ON?('TOTALE '+(TOT.etichettaIva||'IVA').toUpperCase()+' INCLUSA'):'TOTALE SENZA IVA')+'</div>'
         +'<div style="font-size:28px;font-weight:900;color:#22d3ee;line-height:1">'+eur(gross)+'</div>'
-        +'<div style="font-size:11px;color:var(--text-muted);margin-top:5px">'+(discAmt>0.005?'Sconto '+DISC+'% applicato · ':'')+(IVA_ON?'IVA 22% inclusa':'Prezzi netti')+'</div>'
+        +'<div style="font-size:11px;color:var(--text-muted);margin-top:5px">'+(discAmt>0.005?'Sconto '+DISC+'% applicato · ':'')+(IVA_ON?((TOT.etichettaIva||'IVA')+' inclusa'):'Prezzi netti')+'</div>'
       +'</div></div>';
   }
 
@@ -355,7 +355,7 @@ function render(){
       +'<div class="p3-ct">🧾 IVA &amp; SCONTO</div>'
       +'<div class="p3-fg"><label class="p3-fl">IVA</label>'
         +'<div class="p3-iva-btns">'
-          +'<button id="p3d-iva-yes" class="p3-iva-btn" onclick="Print3DQuoter.setIva(true)" style="background:var(--primary);color:#fff;flex:1">+IVA 22%</button>'
+          +'<button id="p3d-iva-yes" class="p3-iva-btn" onclick="Print3DQuoter.setIva(true)" style="background:var(--primary);color:#fff;flex:1">+'+((typeof window!=='undefined'&&window.InglyFisco)?window.InglyFisco.etichetta():'IVA 22%')+'</button>'
           +'<button id="p3d-iva-no"  class="p3-iva-btn" onclick="Print3DQuoter.setIva(false)" style="background:var(--bg-card2);color:var(--text-muted);border:1px solid var(--border2);flex:1">Senza IVA</button>'
         +'</div>'
       +'</div>'
@@ -520,6 +520,12 @@ function bandaEnergia(){
    garanzia. La prima volta che una delle tre avesse smesso di somigliare
    alle altre, il cliente avrebbe ricevuto un PDF con un totale diverso da
    quello che l'utente aveva visto e approvato. */
+/** L'aliquota configurata, con il 22% come ripiego storico. */
+function aliquotaIva(){
+  var F=(typeof window!=='undefined') && window.InglyFisco;
+  return F?F.aliquota():22;
+}
+
 function totali(){
   var costo=0, netto=0, listino=0, forzate=0;
   LINES.forEach(function(l){
@@ -529,12 +535,17 @@ function totali(){
     if(l.manuale) forzate++;
   });
   var sconto=listino-netto;
-  var iva=IVA_ON?netto*0.22:0;
+  /* L'aliquota è quella configurata in Impostazioni, non un 22 scritto qui.
+     Il predefinito resta 22, quindi nessun preventivo esistente si muove. */
+  var F=(typeof window!=='undefined') && window.InglyFisco;
+  var pct=F?F.aliquota():22;
+  var iva=IVA_ON?(F?F.su(netto):netto*0.22):0;
   return {
     costo:costo, listino:listino, sconto:sconto, netto:netto, iva:iva,
     lordo:netto+iva,
     margine: netto>0 ? ((netto-costo)/netto*100) : 0,
     forzate:forzate, righe:LINES.length,
+    aliquota:pct, etichettaIva: F?F.etichetta():'IVA 22%',
   };
 }
 
@@ -562,7 +573,7 @@ function pannelloPerche(){
   var MOT=(typeof window!=='undefined') && window.InglyCostEngine;
   if(!MOT || typeof MOT.explain!=='function') return '';
   var x;
-  try{ x=MOT.explain(ingresso(), {marginePct:MARG, ivaPct:IVA_ON?22:0, scontoPct:DISC}); }
+  try{ x=MOT.explain(ingresso(), {marginePct:MARG, ivaPct:IVA_ON?aliquotaIva():0, scontoPct:DISC}); }
   catch(e){ return ''; }
   if(!x || x.vuoto) return '';
 
@@ -860,7 +871,7 @@ function calc(){
   R = V ? V.calcola(ing, {
     modalita: MODO,
     marginePct: MARG,
-    ivaPct: IVA_ON?22:0,
+    ivaPct: IVA_ON?aliquotaIva():0,
     scontoPct: DISC,
     quantita: [1,5,10,25,50,100],
     fonti: fonti(),
@@ -981,7 +992,7 @@ function doPdf(){
     +(discAmt>0.005?'<div class="tr"><span>Listino</span><span>'+eur(listino)+'</span></div>'
       +'<div class="tr"><span>Sconto '+DISC+'%</span><span style="color:#ef4444">-'+eur(discAmt)+'</span></div>':'')
     +'<div class="tr"><span>Subtotale</span><span>'+eur(totN)+'</span></div>'
-    +(IVA_ON?'<div class="tr"><span>IVA 22%</span><span>'+eur(vatAmt)+'</span></div>':'')
+    +(IVA_ON?'<div class="tr"><span>'+(TOT.etichettaIva||'IVA')+'</span><span>'+eur(vatAmt)+'</span></div>':'')
     +'<div class="grand">TOTALE: '+eur(gross)+(IVA_ON?' (IVA incl.)':' (senza IVA)')+'</div></div>'
     +(notes?'<div style="margin-top:24px;padding:12px;background:#f0f9ff;border-radius:8px;font-size:12px;color:#6b7280"><strong>Note:</strong> '+notes+'</div>':'')
     +'<div class="footer">Generato da INGLY OS · Smart Quoter 3D · '+new Date().toLocaleString('it-IT')+'</div>'
@@ -998,7 +1009,7 @@ function doWa(){
   var msg='🖨️ *Preventivo Stampa 3D*\n\n*'+name+'*\n\n'+lines
     +(listino-totN>0.005?'\n\nListino: '+eur(listino)+'\nSconto '+DISC+'%: -'+eur(listino-totN):'')
     +'\nSubtotale: '+eur(totN)
-    +'\n*TOTALE: '+eur(gross)+'*'+(IVA_ON?' (IVA 22% inclusa)':' (senza IVA)')
+    +'\n*TOTALE: '+eur(gross)+'*'+(IVA_ON?(' ('+(TOT.etichettaIva||'IVA')+' inclusa)'):' (senza IVA)')
     +'\n📅 '+new Date().toLocaleDateString('it-IT');
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }

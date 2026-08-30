@@ -443,7 +443,9 @@ const Quoter={
       strategia: 'ricarico',
       markup: 1 + markupPct / 100,
       discountPct: parseFloat(eid('qr-discount')?.value || 0) || 0,
-      vatPct: this._ivaMode !== false ? 22 : 0,
+      /* L'aliquota configurata, non un 22 scritto qui: chi vende al 10% o al
+         4% deve poterlo dire una volta sola, in Impostazioni. */
+      vatPct: this._ivaMode !== false ? (window.InglyFisco ? window.InglyFisco.aliquota() : 22) : 0,
       setupCost: e.setupCost != null ? e.setupCost : this._getExtraCosts?.() || 0,
       shippingCost: e.shippingCost || 0,
       shippingCharged: e.shippingCharged || 0,
@@ -1084,7 +1086,7 @@ const Quoter={
       `Ciao ${data.clientName||''}! 👋`,
       ``,
       `📋 *Preventivo: ${data.title||'—'}*`,
-      `💶 Totale: *${fmtCur(data.grossPrice||0)}*`+(data.ivaMode!==false?' (IVA 22% inclusa)':' (IVA esclusa)'),
+      `💶 Totale: *${fmtCur(data.grossPrice||0)}*`+(data.ivaMode!==false?(' ('+(window.InglyFisco?window.InglyFisco.etichetta():'IVA 22%')+' inclusa)'):' (IVA esclusa)'),
       linesSummary?`\n📦 Voci:\n${linesSummary}`:'',
       ``,
       `✅ Valido 14 giorni. Rispondi qui per confermare!`,
@@ -1347,7 +1349,7 @@ const Quoter={
             <span class="val">${fmtCur(netAfterDiscount)}</span>
           </div>
           <div class="sum-row">
-            <span class="lbl">IVA 22%</span>
+            <span class="lbl">${window.InglyFisco?window.InglyFisco.etichetta():'IVA 22%'}</span>
             <span class="val">${fmtCur(vat22)}</span>
           </div>
           <div class="sum-row">
@@ -1423,7 +1425,7 @@ const Quoter={
     if(_pdf.indisponibile){ toast('Motore di costo non disponibile: PDF non generato','error'); win.close(); return; }
     const subTotalNet=_pdf.subtotalNet;
     const finalNet=_pdf.subtotalNet;
-    const vatRate=withIVA?0.22:0;
+    const vatRate=withIVA?((window.InglyFisco?window.InglyFisco.aliquota():22)/100):0;
     const vat=_pdf.vat;
     const gross=_pdf.totalGross;
     const _pdfRiga={}; _pdf.lines.forEach(r=>{ _pdfRiga[r.id]=r; });
@@ -1585,7 +1587,7 @@ const Quoter={
           <span class="val">${fmtCur(finalNet)}</span>
         </div>
         ${withIVA?`<div class="totals-row">
-          <span class="lbl">IVA 22%</span>
+          <span class="lbl">${window.InglyFisco?window.InglyFisco.etichetta():'IVA 22%'}</span>
           <span class="val">${fmtCur(vat)}</span>
         </div>`:
         `<div class="totals-row">

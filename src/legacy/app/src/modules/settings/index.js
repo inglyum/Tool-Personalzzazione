@@ -2602,6 +2602,12 @@ const Settings={
     if (!cfg.key) cfg.key = 'main';
     await IDB.put('settings',cfg);
     await logAction('settings','main','updated');
+    /* L'aliquota IVA vive qui e viene letta da InglyFisco, che la distribuisce
+       a tutti i preventivatori. Senza questo avviso resterebbe in cache quella
+       vecchia fino al ricaricamento della pagina, e l'utente vedrebbe la
+       propria modifica ignorata. */
+    try{ window.dispatchEvent(new CustomEvent('ingly:settings-saved',{detail:{key:'main'}})); }catch(e){}
+    if(window.InglyFisco && typeof window.InglyFisco.carica==='function') window.InglyFisco.carica();
     toast('Impostazioni salvate!');
     await this.renderGoals(cfg);
   },
