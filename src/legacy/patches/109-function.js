@@ -172,14 +172,26 @@ if(typeof Bus !== 'undefined'){
    ═══════════════════════════════════════════════════════════════ */
 function enhance3DQuoterActions(){
   var root = document.getElementById('view-print3d');
-  if(!root || root._enhanced) return;
-  root._enhanced = true;
+  if(!root) return;
+  /* La guardia era `root._enhanced`, una proprietà dell'elemento che
+     `innerHTML` non cancella — mentre i pulsanti, che stanno nell'HTML, sì.
+     Dopo il primo `render()` la guardia diceva «già fatto» e i due pulsanti
+     non tornavano più. Adesso la guardia è il pulsante stesso: se non c'è nel
+     DOM, si rimette. */
+  if(root.querySelector('._sync-actions')) return;
 
-  // Aggiungi pulsanti extra nella card AZIONI del 3D quoter
-  var actCard = root.querySelector('.p3-card .p3-ct');
-  if(actCard && actCard.textContent.indexOf('AZIONI') !== -1){
+  /* `querySelector` restituisce il **primo** `.p3-ct` della vista, che è
+     «⚙️ CONFIGURA STAMPA»: il controllo su 'AZIONI' era quindi sempre falso e
+     i due pulsanti non sono mai stati iniettati, in nessuna condizione. Si
+     cerca la card giusta, non la prima. */
+  var actCard = null;
+  Array.prototype.slice.call(root.querySelectorAll('.p3-card .p3-ct')).forEach(function(t){
+    if(!actCard && t.textContent.indexOf('AZIONI') !== -1) actCard = t;
+  });
+  if(actCard){
     var parent = actCard.parentElement;
     var btnDiv = document.createElement('div');
+    btnDiv.className = '_sync-actions';
     btnDiv.style.cssText = 'display:flex;gap:6px;margin-top:7px';
     btnDiv.innerHTML = 
       '<button class="btn btn-secondary btn-sm" style="flex:1;justify-content:center;color:#a78bfa;border-color:#a78bfa40" onclick="InglySync.saveToCatalog()" title="Salva il prodotto corrente nel Catalogo">'
@@ -202,16 +214,22 @@ window.InglySync = {
     var nameEl = document.getElementById('p3d-name');
     var name = nameEl ? nameEl.value : '';
     if(!name){ name = prompt('Nome prodotto per il catalogo:','Stampa 3D'); if(!name) return; }
-    var costPpz = typeof Print3DQuoter !== 'undefined' ? Print3DQuoter._state && Print3DQuoter._state.cost || 0 : 0;
-    // Try to get from internal state if exposed
-    if(!costPpz && typeof Print3DQuoter !== 'undefined'){
-      var ci = document.getElementById('p3d-mc');
-      costPpz = 0; // we'll let user fill in catalog
+    /* Costo e prezzo si chiedono al preventivatore, non si leggono dal DOM.
+       Qui c'erano due letture, entrambe ferme a zero da sempre:
+       `Print3DQuoter._state` non era esportato, e il selettore del prezzo
+       cercava `.tier-price` (classe inesistente) o un `font-size:22px` che
+       dentro `#view-print3d` non c'è — lo scaglione è disegnato a 20px.
+       Un prezzo letto per scraping di una dimensione di carattere si rompe al
+       primo restyling, e infatti si era già rotto: ogni prodotto salvato in
+       catalogo da questo pulsante aveva costo 0 e prezzo 0. */
+    var st = (typeof Print3DQuoter !== 'undefined' && typeof Print3DQuoter._state === 'function')
+      ? Print3DQuoter._state() : null;
+    if(!st || !(st.cost > 0)){
+      if(typeof window.showToast === 'function')
+        window.showToast('Configura una stampa (grammi e ore) prima di salvarla in catalogo','warning');
+      return;
     }
-    var saleEl = document.querySelector('#view-print3d .p3-tier .tier-price, #view-print3d .p3-tier div[style*="font-size:22px"]');
-    var saleText = saleEl ? saleEl.textContent.replace('€','').replace(',','.').trim() : '0';
-    var salePrice = parseFloat(saleText) || 0;
-    add3DProductToCatalog(name, costPpz, salePrice, 'Stampato in 3D — FDM/Resina');
+    add3DProductToCatalog(name, st.cost, st.price, 'Stampato in 3D — FDM/Resina');
   },
 
   // Importa filamenti dal magazzino gadgets nel selettore 3D

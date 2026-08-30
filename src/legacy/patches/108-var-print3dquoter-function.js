@@ -51,8 +51,22 @@ var EXT_PRE=[
   {n:'Inserti filettati',c:2.5},{n:'Post-curing resina',c:1},
 ];
 
-var T='fdm',MATS=[],LINES=[],EXTRAS=[],SAVED=[],COST=0,PRICES={p1:0,p2:0,p3:0};
+var T='fdm',MATS=[],LINES=[],EXTRAS=[],SAVED=[],COST=0,PRICE=0;
 var IVA_ON=true, DISC=0;
+
+/* ── Un solo comando del margine ────────────────────────────────────────────
+   Prima ce n'erano due che non si parlavano: tre campi moltiplicatore
+   (×3,5 / ×2,8 / ×2,2) che facevano il prezzo, e uno slider «margine minimo»
+   che non faceva niente. Adesso il margine è uno solo e comanda.
+
+   Il valore iniziale è il margine equivalente al vecchio ×3,5 — cioè
+   71,43%. Non è una scelta nuova: è quello che il preventivatore ha sempre
+   applicato allo scaglione singolo. Metterlo in chiaro come margine non
+   sposta nessun prezzo, rende solo visibile quello che c'era. */
+var MARG=(1-1/3.5)*100;
+var MODO='completo';
+var R=null;
+var CALIB_RIF=0;
 var SK='p3dq_v4';
 
 function persist(){try{localStorage.setItem(SK,JSON.stringify({mats:MATS,saved:SAVED}));}catch(e){}}
@@ -76,9 +90,18 @@ function showToastP(msg,type){
   setTimeout(function(){t.style.animation='toastOut .3s ease forwards';setTimeout(function(){t.remove();},300);},2800);
 }
 
+/* Le modalità sono quelle del motore, lette da lì: un elenco parallelo di
+   etichette è il primo passo verso due sistemi che possiedono lo stesso
+   concetto. */
+function MODI_(){
+  var V=(typeof window!=='undefined') && window.InglyQuoter3DView;
+  return (V && V.MODALITA) || [{id:'completo',label:'Business',sotto:'quanto devi rientrare'}];
+}
+
 function render(){
   hydrate();
   var root=el('view-print3d');if(!root)return;
+  var MODI=MODI_();
   var isFdm=T==='fdm';
   var machOpts=(MACH[T]||[]).map(function(m){return '<option value="'+m.id+'">'+m.n+' ('+m.w+'W · €'+m.c+')</option>';}).join('');
   var matOpts=MATS.filter(function(m){return m.t===T;}).map(function(m){return '<option value="'+m.id+'">'+m.n+' (€'+m.p+'/'+(m.t==='resin'?'L':'kg')+' · '+m.u+(m.t==='resin'?'ml':'g')+')</option>';}).join('');
@@ -108,25 +131,30 @@ function render(){
           +'<button class="act-btn act-del" onclick="Print3DQuoter.rmLine('+l.id+')">🗑️</button>'
         +'</td></tr>';
     }).join('');
-    // Calcola con IVA e sconto
-    var discAmt=totN*(DISC/100);
-    var afterDisc=totN-discAmt;
-    var vatAmt=IVA_ON?afterDisc*0.22:0;
-    var gross=afterDisc+vatAmt;
+    /* Lo sconto è già dentro `ppz` — è il prezzo che l'utente ha visto e
+       accettato. Qui veniva applicato una seconda volta, sulla somma delle
+       righe: il totale scendeva di uno sconto che era già stato fatto. */
+    var listino=LINES.reduce(function(a,l){return a+(l.ppzListino||l.ppz)*l.qty;},0);
+    var discAmt=listino-totN;
+    var vatAmt=IVA_ON?totN*0.22:0;
+    var gross=totN+vatAmt;
     var mg=totN>0?((totN-totC)/totN*100):0;
+    var forzate=LINES.filter(function(l){return l.manuale;}).length;
     linesHtml='<table><thead><tr>'
       +'<th>Descrizione</th><th style="text-align:center">Qtà</th><th style="text-align:right">Costo/pz</th><th style="text-align:right">Prezzo/pz</th><th style="text-align:right">Subtot.</th><th></th>'
       +'</tr></thead><tbody>'+rows+'</tbody></table>'
       +'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
       +'<div class="p3-sr"><span style="color:var(--text-muted)">Costo Vivo</span><span style="font-weight:700;color:#fff">'+eur(totC)+'</span></div>'
+      +(discAmt>0.005?'<div class="p3-sr"><span style="color:var(--text-muted)">Listino</span><span style="font-weight:700;color:#fff">'+eur(listino)+'</span></div>'
+        +'<div class="p3-sr"><span style="color:var(--text-muted)">Sconto ('+DISC+'%) già applicato</span><span style="font-weight:700;color:var(--red)">-'+eur(discAmt)+'</span></div>':'')
       +'<div class="p3-sr"><span style="color:var(--text-muted)">Subtotale netto</span><span style="font-weight:700;color:#fff">'+eur(totN)+'</span></div>'
-      +(DISC>0?'<div class="p3-sr"><span style="color:var(--text-muted)">Sconto ('+DISC+'%)</span><span style="font-weight:700;color:var(--red)">-'+eur(discAmt)+'</span></div>':'')
+      +(forzate?'<div class="p3-sr"><span style="color:var(--orange)">✏️ Prezzi forzati a mano</span><span style="font-weight:700;color:var(--orange)">'+forzate+'</span></div>':'')
       +'<div class="p3-sr"><span style="color:var(--text-muted)">Margine medio</span><span style="font-weight:700;color:'+(mg>=30?'var(--green)':'var(--red)')+'">'+mg.toFixed(1)+'%</span></div>'
       +(IVA_ON?'<div class="p3-sr"><span style="color:var(--text-muted)">IVA (22%)</span><span style="font-weight:700;color:#fff">'+eur(vatAmt)+'</span></div>':'')
       +'<div class="p3-tbox">'
         +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">'+(IVA_ON?'TOTALE IVA INCLUSA':'TOTALE SENZA IVA')+'</div>'
         +'<div style="font-size:28px;font-weight:900;color:#22d3ee;line-height:1">'+eur(gross)+'</div>'
-        +'<div style="font-size:11px;color:var(--text-muted);margin-top:5px">'+(DISC>0?'Sconto '+DISC+'% applicato · ':'')+(IVA_ON?'IVA 22% inclusa':'Prezzi netti')+'</div>'
+        +'<div style="font-size:11px;color:var(--text-muted);margin-top:5px">'+(discAmt>0.005?'Sconto '+DISC+'% applicato · ':'')+(IVA_ON?'IVA 22% inclusa':'Prezzi netti')+'</div>'
       +'</div></div>';
   }
 
@@ -223,24 +251,57 @@ function render(){
       +'<div class="p3-ct" style="display:flex;align-items:center;justify-content:space-between"><span>📋 VOCI IN PREVENTIVO 3D</span><button class="btn btn-danger btn-sm" onclick="Print3DQuoter.clearLines()">🗑️ Svuota</button></div>'
       +linesHtml
     +'</div>'
+    // ── B · la risposta, prima di tutto il resto ─────────────────────
+    +'<div class="p3-card cyan"><div class="p3-ct c" id="p3d-hero-t">📊 IL CONTO</div>'
+      +'<div id="p3d-hero"><div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div></div>'
+      +'<div id="p3d-avvisi"></div>'
+    +'</div>'
+    // ── C · dove vanno i soldi ────────────────────────────────────────
     +'<div class="p3-card"><div class="p3-ct">🔢 DETTAGLIO COSTI — live</div><div id="p3d-bk"><div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div></div></div>'
+    // ── E · le quantità: l'avviamento si divide, il pezzo no ──────────
+    +'<div class="p3-card"><div class="p3-ct">📦 QUANTITÀ — quanto conviene stampare</div><div id="p3d-scaglioni"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div></div></div>'
+    // ── F · calibrazione contro un riferimento esterno ────────────────
+    +'<div class="p3-card"><div class="p3-ct" style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+      +'<span>🎯 CONFRONTA CON LO SLICER</span>'
+      +'<span style="display:flex;align-items:center;gap:5px;text-transform:none;letter-spacing:0"><span style="font-size:10px;font-weight:400;color:var(--text-dim)">costo indicato €</span>'
+      +'<input class="p3-fc" id="p3d-calib" type="number" step="0.01" min="0" value="'+(CALIB_RIF||'')+'" placeholder="4.50" oninput="Print3DQuoter.setCalib(this.value)" style="width:78px;padding:3px 6px;font-size:12px;text-align:right"></span>'
+      +'</div>'
+      +'<div id="p3d-calib-out"><div style="font-size:11px;color:var(--text-dim)">Inserisci il costo che ti dice lo slicer (o un altro preventivatore) per capire a quale domanda stava rispondendo.</div></div>'
+    +'</div>'
   +'</div>'
 
   // ─── COL 3 ───────────────────────────────────────────────────
   +'<div class="p3-col">'
     // Prezzi
     +'<div class="p3-card cyan">'
-      +'<div class="p3-ct c">💰 PREZZI DI VENDITA</div>'
-      +'<div class="p3-g3" style="margin-bottom:12px">'
-        +'<div><label style="font-size:9px;color:#22d3ee;display:block;margin-bottom:3px;font-weight:700">× SINGOLO<br><span style="opacity:.6;font-weight:400">1–5 pz</span></label><input class="p3-fc" id="p3d-m1" type="number" step="0.1" value="3.5" oninput="Print3DQuoter.calc()" style="font-size:16px;font-weight:900;color:#22d3ee;text-align:center;padding:7px 4px"></div>'
-        +'<div><label style="font-size:9px;color:var(--primary);display:block;margin-bottom:3px;font-weight:700">× SERIE<br><span style="opacity:.6;font-weight:400">6–30 pz</span></label><input class="p3-fc" id="p3d-m2" type="number" step="0.1" value="2.8" oninput="Print3DQuoter.calc()" style="font-size:16px;font-weight:900;color:var(--primary);text-align:center;padding:7px 4px"></div>'
-        +'<div><label style="font-size:9px;color:var(--orange);display:block;margin-bottom:3px;font-weight:700">× STOCK<br><span style="opacity:.6;font-weight:400">30+ pz</span></label><input class="p3-fc" id="p3d-m3" type="number" step="0.1" value="2.2" oninput="Print3DQuoter.calc()" style="font-size:16px;font-weight:900;color:var(--orange);text-align:center;padding:7px 4px"></div>'
+      +'<div class="p3-ct c">🎚️ MODALITÀ — a quale domanda rispondi</div>'
+      +'<div style="display:grid;grid-template-columns:repeat('+MODI.length+',1fr);gap:6px">'+MODI.map(function(m){
+          var on=MODO===m.id;
+          return '<button onclick="Print3DQuoter.setModo(\''+m.id+'\')" style="padding:8px 5px;border-radius:var(--radius-sm);cursor:pointer;text-align:center;transition:.15s;'
+            +'border:1.5px solid '+(on?'#22d3ee':'var(--border2)')+';background:'+(on?'#22d3ee18':'transparent')+';color:'+(on?'#22d3ee':'var(--text-dim)')+'">'
+            +'<span style="font-size:11px;font-weight:800">'+m.label+'</span>'
+            +'<span style="display:block;font-size:8px;opacity:.7;font-weight:400;line-height:1.3;margin-top:2px">'+m.sotto+'</span>'
+            +'</button>';
+        }).join('')+'</div>'
+      /* Un solo comando del margine. Il numero che si legge qui è il numero
+         che il motore usa: non c'è più un secondo posto dove il prezzo si
+         forma. Il cursore e la casella scrivono la stessa variabile. */
+      +'<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+        +'<label style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+          +'<span>Margine applicato</span>'
+          +'<span style="display:flex;align-items:center;gap:4px">'
+            +'<input class="p3-fc" id="p3d-margin-num" type="number" step="0.1" min="0" max="95" value="'+MARG.toFixed(1)+'" oninput="Print3DQuoter.setMargine(this.value)" style="width:64px;padding:3px 6px;font-size:12px;font-weight:800;color:var(--green);text-align:right">'
+            +'<span style="color:var(--green);font-weight:700">%</span>'
+          +'</span>'
+        +'</label>'
+        +'<input type="range" id="p3d-margin" min="5" max="90" step="1" value="'+Math.round(MARG)+'" oninput="Print3DQuoter.setMargine(this.value)" style="width:100%;accent-color:var(--green)">'
+        +'<div class="p3-ht" id="p3d-ml">Il margine chiesto è il margine ottenuto: prezzo = costo ÷ (1 − margine).</div>'
       +'</div>'
+    +'</div>'
+    // Le quattro politiche del motore — informative, non un secondo comando
+    +'<div class="p3-card">'
+      +'<div class="p3-ct">🎯 POLITICHE DI PREZZO</div>'
       +'<div id="p3d-tiers"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere i prezzi</div></div>'
-      +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
-        +'<label style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;margin-bottom:4px"><span>Margine minimo target</span><span id="p3d-ml" style="color:var(--green);font-weight:700">40%</span></label>'
-        +'<input type="range" id="p3d-margin" min="10" max="80" step="5" value="40" oninput="Print3DQuoter.updML();Print3DQuoter.calc()" style="width:100%;accent-color:var(--green)">'
-      +'</div>'
     +'</div>'
     // IVA + Sconto
     +'<div class="p3-card">'
@@ -329,107 +390,131 @@ function addExtra(){
 }
 function rmE(i){EXTRAS.splice(i,1);render();}
 function upE(i,k,v){if(EXTRAS[i])EXTRAS[i][k]=(k==='c'?parseFloat(v)||0:v);calc();}
-function updML(){var v=(el('p3d-margin')||{value:40}).value;st('p3d-ml',v+'%');}
+
+/* Un solo ingresso, letto una volta sola. Prima gli stessi campi venivano
+   letti due volte con due nomi diversi — una per il costo, una per il prezzo —
+   ed è il modo in cui due sistemi finiscono per possedere lo stesso numero. */
+function ingresso(){
+  return {
+    tecnologia:'print3d',
+    qty:Math.max(1,gv('p3d-qty',1)),
+    grams:gv('p3d-g',0), supportGrams:gv('p3d-sup',0),
+    spoolPrice:gv('p3d-mkg',24), spoolGrams:gv('p3d-mu',1000),
+    hours:gv('p3d-h',0),
+    watt:gv('p3d-watt',150), kwhPrice:gv('p3d-kwh',.28), dutyCycle:gv('p3d-duty',1),
+    machinePrice:gv('p3d-mc',400), machineLifeHours:gv('p3d-lh',2000),
+    maintenancePerHour:gv('p3d-mnt',0),
+    washCureMin:gv('p3d-wash',0), laborPerHour:gv('p3d-lr',15),
+    setupMin:gv('p3d-setup',0), finishMin:gv('p3d-lm',0),
+    failureRate:gv('p3d-fail',0),
+    extras:EXTRAS.map(function(e){ return { label:e.n, cost:parseFloat(e.c)||0 }; }),
+  };
+}
+
+/* Le fonti dei numeri: dichiarate da chi li ha presi, mai dedotte. Il prezzo
+   del materiale è «inventario» solo se arriva davvero dal magazzino — cioè se
+   una voce è selezionata nel menu. Altrimenti è quello che c'è nel campo, e
+   dirlo è l'unico modo perché un valore digitato una volta non diventi una
+   verità permanente. */
+function fonti(){
+  var scelto=(el('p3d-mat')||{}).value;
+  return {
+    materiale: scelto ? 'inventario' : 'utente',
+    energia:'utente', macchina:'utente', manutenzione:'utente',
+    manodopera:'utente', postProcesso:'utente', setup:'utente',
+  };
+}
+
+function setModo(m){ MODO=m; render(); }
+
+/* Cursore e casella scrivono la stessa variabile e si risincronizzano a
+   vicenda: due controlli, un solo valore. */
+function setMargine(v){
+  var n=parseFloat(v);
+  if(!isFinite(n)) return;
+  MARG=Math.max(0,Math.min(95,n));
+  var r=el('p3d-margin'); if(r && Math.round(MARG)!==parseFloat(r.value)) r.value=Math.round(MARG);
+  var b=el('p3d-margin-num'); if(b && document.activeElement!==b) b.value=MARG.toFixed(1);
+  calc();
+}
+
+function setCalib(v){ CALIB_RIF=parseFloat(v)||0; calc(); }
 
 function calc(){
-  /* La matematica sta in `InglyPrint3D.cost` — una funzione pura, provata da
-     tests/print3d-cost.test.mjs. Qui si leggono i campi e si disegna il
-     risultato: due mestieri separati, che prima erano lo stesso. */
-  var qty=Math.max(1,gv('p3d-qty',1));
-  var minM=gv('p3d-margin',40);
-  var m1=gv('p3d-m1',3.5),m2=gv('p3d-m2',2.8),m3=gv('p3d-m3',2.2);
-  var mu=gv('p3d-mu',1000), mpkg=gv('p3d-mkg',24);
+  /* Una sola chiamata, a una sola vista, che chiede a un solo motore.
+     Qui c'erano due percorsi verso lo stesso `InglyCostEngine` — l'adapter
+     `InglyPrint3D.cost` per il costo e tre moltiplicatori scritti a mano per
+     il prezzo — e il secondo non era d'accordo con lo slider che diceva di
+     comandarlo. Adesso il percorso è uno. */
+  var V=(typeof window!=='undefined') && window.InglyQuoter3DView;
+  var ing=ingresso();
+  var qty=ing.qty;
 
-  var R = window.InglyPrint3D.cost({
-    grams: gv('p3d-g',0),
-    supportGrams: gv('p3d-sup',0),
-    spoolPrice: mpkg, spoolGrams: mu,
-    hours: gv('p3d-h',0),
-    watt: gv('p3d-watt',150), kwhPrice: gv('p3d-kwh',.28), dutyCycle: gv('p3d-duty',1),
-    machinePrice: gv('p3d-mc',400), machineLifeHours: gv('p3d-lh',2000),
-    maintenancePerHour: gv('p3d-mnt',0),
-    washCureMin: gv('p3d-wash',0), laborPerHour: gv('p3d-lr',15),
-    setupMin: gv('p3d-setup',0), finishMin: gv('p3d-lm',0), qty: qty,
-    failureRate: gv('p3d-fail',0),
-    extras: EXTRAS.map(function(e){ return { label:e.n, cost:parseFloat(e.c)||0 }; }),
-  });
+  R = V ? V.calcola(ing, {
+    modalita: MODO,
+    marginePct: MARG,
+    ivaPct: IVA_ON?22:0,
+    scontoPct: DISC,
+    quantita: [1,5,10,25,50,100],
+    fonti: fonti(),
+  }) : { indisponibile:true, motivo:'Vista preventivatore non disponibile' };
 
-  var total=R.costo;
+  var ok = R && !R.indisponibile;
+  COST  = ok ? R.costo  : 0;
+  PRICE = ok ? R.prezzo : 0;
 
-  /* ── Il prezzo lo fa il motore ─────────────────────────────────────────────
-     Qui c'era `PRICES = {p1: total*3.5, p2: total*2.8, p3: total*2.2}`: tre
-     moltiplicatori applicati nella vista. Lo slider «margine» esisteva, andava
-     dal 10 all'80%, ed era usato **solo per un avviso** — non comandava
-     niente. Chi impostava il 40% otteneva un margine del 71,4%: su un costo di
-     18,68 €, un prezzo di 65,38 € invece di 31,13 €. Il 110% in più di quanto
-     avesse chiesto, senza che nulla lo dicesse.
+  var t=el('p3d-hero-t');
+  if(t) t.textContent = ok ? ('📊 IL CONTO — '+R.modalitaLabel) : '📊 IL CONTO';
 
-     Ora il margine chiesto è il margine ottenuto. I tre scaglioni conservano
-     il proprio posizionamento — singolo, serie, stock — ma come **margini**,
-     non come moltiplicatori: chi vendeva a ×3,5 sul singolo vendeva al 71,4%
-     di margine, ed è quello che lo scaglione dichiara adesso.
+  var h=el('p3d-hero'); if(h) h.innerHTML = V ? V.hero(R) : '';
 
-     I moltiplicatori restano leggibili nei campi, e la loro conversione in
-     margine è dichiarata a schermo: nessun numero si muove in silenzio. */
-  var MOT = (typeof window!=='undefined') && window.InglyCostEngine;
-  var margineDa = function(molt){ return molt>0 ? (1 - 1/molt) * 100 : 0; };
-  var prezzoDa = function(margine){
-    if(!MOT) return null;
-    return MOT.prezzo(total, { strategia:'margine', marginePct:margine, ivaPct:0 }).netto;
-  };
-  var MARGINI = { p1: margineDa(m1), p2: margineDa(m2), p3: margineDa(m3) };
-  COST=total;
-  PRICES = MOT
-    ? { p1: prezzoDa(MARGINI.p1), p2: prezzoDa(MARGINI.p2), p3: prezzoDa(MARGINI.p3) }
-    : { p1: null, p2: null, p3: null };
-
-  var ICONE={materiale:'🧵',energia:'⚡',ammortamento:'🏭',manutenzione:'🔧',
-             postProcesso:'🚿',manodopera:'👤',scarto:'📉',extra:'✨'};
-  var COLORI={materiale:'#22d3ee',energia:'var(--primary)',ammortamento:'var(--purple)',
-              manutenzione:'#94a3b8',postProcesso:'#38bdf8',manodopera:'var(--green)',
-              scarto:'var(--orange)',extra:'#f472b6'};
+  /* Gli avvisi del motore: non decorano, dicono quando un prezzo non sta in
+     piedi. Nasconderli è come spegnere una spia. */
+  var av=el('p3d-avvisi');
+  if(av){
+    var lista = ok ? (R.avvisi||[]) : [];
+    av.innerHTML = lista.length ? '<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">'+lista.map(function(a){
+      var testo = (a && (a.messaggio||a.testo||a.label)) || String(a);
+      var grave = a && (a.livello==='errore'||a.gravita==='errore');
+      return '<div style="font-size:11px;padding:7px 9px;border-radius:8px;background:var(--bg-card2);border-left:3px solid '
+        +(grave?'var(--red)':'var(--orange)')+';color:var(--text-muted)">'+(grave?'⛔ ':'⚠️ ')+testo+'</div>';
+    }).join('')+'</div>' : '';
+  }
 
   var bk=el('p3d-bk');
   if(bk){
-    if(total<=0){bk.innerHTML='<div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div>';}
-    else{
-      bk.innerHTML=R.voci.map(function(v){
-        return '<div class="p3-bkr"><span style="color:#94a3b8">'+(ICONE[v.id]||'•')+' '+v.label
-          +'<span style="display:block;font-size:9px;color:#64748b">'+v.detail+'</span></span>'
-          +'<span style="font-weight:700;font-size:12px;color:'+(COLORI[v.id]||'#94a3b8')+'">'+eur(v.value)+'</span></div>';
-      }).join('')+'<div class="p3-bkt"><span style="color:#fff">🔢 COSTO / PZ</span><span style="color:#22d3ee">'+eur(total)+'</span></div>'
-        +'<div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.5">Con margine del '+minM+'% il prezzo è <b style="color:#22d3ee">'+eur(R.prezzoDaMargine(minM))+'</b> — un ricarico ×'+(total>0?(R.prezzoDaMargine(minM)/total).toFixed(2):'—')+', non ×'+(1+minM/100).toFixed(2)+'. Il margine chiesto è il margine ottenuto.</div>';
-    }
+    bk.innerHTML = (ok && V) ? V.dettaglio(R)
+      : '<div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">'+((R&&R.motivo)||'Inserisci grammi e ore per vedere il calcolo')+'</div>';
+  }
+
+  var sc=el('p3d-scaglioni');
+  if(sc){
+    var tab = (ok && V) ? V.quantita(R) : '';
+    sc.innerHTML = tab || '<div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div>';
   }
 
   var tc=el('p3d-tiers');
   if(tc){
-    if(total<=0){tc.innerHTML='<div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere i prezzi</div>';}
-    else{
-      var disc=DISC/100;
-      tc.innerHTML=[
-        {l:'🔵 SINGOLO',sub:'1–5 pz', p:PRICES.p1,m:m1,mg:MARGINI.p1,col:'#22d3ee', bc:'#22d3ee'},
-        {l:'🟡 SERIE',  sub:'6–30 pz',p:PRICES.p2,m:m2,mg:MARGINI.p2,col:'var(--primary)',bc:'#6366f1'},
-        {l:'🟠 STOCK',  sub:'30+ pz', p:PRICES.p3,m:m3,mg:MARGINI.p3,col:'var(--orange)',bc:'#f97316'},
-      ].map(function(t){
-        if(t.p==null) return '<div class="p3-tier" style="border-color:'+t.bc+'40"><div style="flex:1;font-size:11px;color:var(--text-dim)">'+t.l+' — motore di costo non disponibile</div></div>';
-        var mg=t.mg,ok=mg>=minM;
-        var pAfterDisc=t.p*(1-disc);
-        var pFinal=IVA_ON?pAfterDisc*1.22:pAfterDisc;
-        return '<div class="p3-tier" style="border-color:'+t.bc+'40;background:#0a1520">'
-          +'<div style="flex:1">'
-            +'<div style="font-size:11px;font-weight:700;color:'+t.col+'">'+t.l+' <span style="font-size:9px;font-weight:400;opacity:.6">'+t.sub+'</span></div>'
-            +'<div style="font-size:10px;color:#475569;margin-top:2px">Margine <span style="color:'+(ok?'var(--green)':'var(--red)')+'">'+mg.toFixed(1)+'%'+(ok?' ✓':' ⚠️')+'</span> <span title="Il campo ×'+t.m+' vale un margine del '+mg.toFixed(1)+'%: il prezzo lo fa il margine, non il moltiplicatore" style="opacity:.6">(dal campo ×'+t.m+')</span>'
-              +(DISC>0?' · Sconto '+DISC+'%':'')
-            +'</div>'
-          +'</div>'
-          +'<div style="text-align:right">'
-            +'<div style="font-size:20px;font-weight:900;color:#fff">'+eur(pFinal)+'</div>'
-            +'<div style="font-size:10px;color:#64748b">'+(IVA_ON?'IVA incl.':'netto')+' · ×'+qty+': '+eur(pFinal*qty)+'</div>'
-          +'</div>'
-          +'</div>';
-      }).join('');
+    var pol = (ok && V) ? V.strategie(R) : '';
+    tc.innerHTML = pol
+      ? pol+'<div class="p3-ht" style="margin-top:8px">Sono i margini che il motore consiglia. Il prezzo in alto usa il tuo: '+MARG.toFixed(1)+'%.</div>'
+      : '<div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere i prezzi</div>';
+  }
+
+  var co=el('p3d-calib-out');
+  if(co){
+    var MOT=(typeof window!=='undefined') && window.InglyCostEngine;
+    if(CALIB_RIF>0 && MOT && V){
+      co.innerHTML=V.calibrazione(MOT.calibra(ing,{costo:CALIB_RIF,sistema:'slicer'}));
+    }else{
+      co.innerHTML='<div style="font-size:11px;color:var(--text-dim)">Inserisci il costo che ti dice lo slicer (o un altro preventivatore) per capire a quale domanda stava rispondendo.</div>';
     }
+  }
+
+  var ml=el('p3d-ml');
+  if(ml && ok){
+    ml.textContent='Prezzo '+eur(R.prezzo)+' su un costo di '+eur(R.costo)
+      +' — un ricarico ×'+(R.costo>0?(R.prezzo/R.costo).toFixed(2):'—')+'. Per '+qty+' pz: '+eur(R.prezzo*qty)+' netti.';
   }
 }
 
@@ -437,15 +522,23 @@ function addLine(){
   var name=(el('p3d-name')||{}).value||('Stampa 3D '+T.toUpperCase());
   var qty=Math.max(1,gv('p3d-qty',1));
   if(COST<=0){showToastP('⚠️ Inserisci grammi e ore di stampa prima','warning');return;}
-  LINES.push({id:Date.now(),n:name,qty:qty,cpz:COST,ppz:PRICES.p1,t:T});
-  showToastP('✅ Aggiunto: '+name+' — '+eur(PRICES.p1)+'/pz','success');
+  /* `ppz` è il netto già scontato — lo stesso numero che si legge a schermo.
+     Prima la riga registrava il prezzo di listino mentre lo scaglione ne
+     mostrava un altro con IVA: due colonne, sulla stessa schermata, diverse
+     del 22% senza che nulla lo dicesse. */
+  var listino = DISC>0 ? PRICE/(1-DISC/100) : PRICE;
+  LINES.push({id:Date.now(),n:name,qty:qty,cpz:COST,ppz:PRICE,ppzListino:listino,
+              marg:MARG,modo:MODO,manuale:false,t:T});
+  showToastP('✅ Aggiunto: '+name+' — '+eur(PRICE)+'/pz netti','success');
   render();
 }
 function rmLine(id){LINES=LINES.filter(function(l){return l.id!==id;});render();}
 function editLine(id){
   var l=LINES.find(function(x){return x.id===id;});if(!l)return;
   var np=parseFloat(prompt('Modifica prezzo/pz per "'+l.n+'" (attuale: '+eur(l.ppz)+'):',l.ppz.toFixed(2)));
-  if(!isNaN(np)&&np>0){l.ppz=np;render();showToastP('✏️ Prezzo aggiornato','info');}
+  /* Un prezzo scritto a mano resta un prezzo scritto a mano: la riga lo
+     dichiara, così il margine medio non lo conta come se fosse calcolato. */
+  if(!isNaN(np)&&np>0){l.ppz=np;l.ppzListino=np;l.manuale=true;render();showToastP('✏️ Prezzo forzato a mano','info');}
 }
 function clearLines(){if(!LINES.length||confirm('Svuotare tutte le voci?')){LINES=[];render();}}
 function doSave(){
@@ -467,10 +560,10 @@ function doPdf(){
   var client=(el('p3d-client')||{}).value||'';
   var notes=(el('p3d-notes')||{}).value||'';
   var totN=LINES.reduce(function(a,l){return a+l.ppz*l.qty;},0);
-  var discAmt=totN*(DISC/100);
-  var afterDisc=totN-discAmt;
-  var vatAmt=IVA_ON?afterDisc*0.22:0;
-  var gross=afterDisc+vatAmt;
+  var listino=LINES.reduce(function(a,l){return a+(l.ppzListino||l.ppz)*l.qty;},0);
+  var discAmt=listino-totN;   // già scontato nelle righe: qui si dichiara, non si riapplica
+  var vatAmt=IVA_ON?totN*0.22:0;
+  var gross=totN+vatAmt;
   var tbody=LINES.map(function(l){return '<tr><td>'+l.n+' '+(l.t==='resin'?'🧴':'🧵')+'</td><td align="center">'+l.qty+'</td><td align="right">'+eur(l.ppz)+'</td><td align="right"><strong>'+eur(l.ppz*l.qty)+'</strong></td></tr>';}).join('');
   var w=window.open('','_blank','width=800,height=1000');if(!w){showToastP('Popup bloccato','warning');return;}
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+name+'</title>'
@@ -479,8 +572,9 @@ function doPdf(){
     +'<p style="color:#6b7280">'+(client?'<strong>Cliente:</strong> '+client+' &nbsp;·&nbsp; ':'')+new Date().toLocaleDateString('it-IT')+' &nbsp;·&nbsp; <strong>'+name+'</strong></p>'
     +'<table><thead><tr><th>Prodotto</th><th>Qtà</th><th>Prezzo/pz</th><th>Subtotale</th></tr></thead><tbody>'+tbody+'</tbody></table>'
     +'<div style="margin-top:20px;border-top:2px solid #e5e7eb;padding-top:12px">'
+    +(discAmt>0.005?'<div class="tr"><span>Listino</span><span>'+eur(listino)+'</span></div>'
+      +'<div class="tr"><span>Sconto '+DISC+'%</span><span style="color:#ef4444">-'+eur(discAmt)+'</span></div>':'')
     +'<div class="tr"><span>Subtotale</span><span>'+eur(totN)+'</span></div>'
-    +(DISC>0?'<div class="tr"><span>Sconto '+DISC+'%</span><span style="color:#ef4444">-'+eur(discAmt)+'</span></div>':'')
     +(IVA_ON?'<div class="tr"><span>IVA 22%</span><span>'+eur(vatAmt)+'</span></div>':'')
     +'<div class="grand">TOTALE: '+eur(gross)+(IVA_ON?' (IVA incl.)':' (senza IVA)')+'</div></div>'
     +(notes?'<div style="margin-top:24px;padding:12px;background:#f0f9ff;border-radius:8px;font-size:12px;color:#6b7280"><strong>Note:</strong> '+notes+'</div>':'')
@@ -493,12 +587,12 @@ function doWa(){
   if(!LINES.length){showToastP('⚠️ Nessuna voce','warning');return;}
   var name=(el('p3d-name')||{}).value||'Stampa 3D';
   var totN=LINES.reduce(function(a,l){return a+l.ppz*l.qty;},0);
-  var afterDisc=totN*(1-DISC/100);
-  var gross=IVA_ON?afterDisc*1.22:afterDisc;
+  var listino=LINES.reduce(function(a,l){return a+(l.ppzListino||l.ppz)*l.qty;},0);
+  var gross=IVA_ON?totN*1.22:totN;
   var lines=LINES.map(function(l){return '• '+l.n+' ×'+l.qty+' = '+eur(l.ppz*l.qty);}).join('\n');
   var msg='🖨️ *Preventivo Stampa 3D*\n\n*'+name+'*\n\n'+lines
-    +'\n\nSubtotale: '+eur(totN)
-    +(DISC>0?'\nSconto '+DISC+'%: -'+eur(totN*(DISC/100)):'')
+    +(listino-totN>0.005?'\n\nListino: '+eur(listino)+'\nSconto '+DISC+'%: -'+eur(listino-totN):'')
+    +'\nSubtotale: '+eur(totN)
     +'\n*TOTALE: '+eur(gross)+'*'+(IVA_ON?' (IVA 22% inclusa)':' (senza IVA)')
     +'\n📅 '+new Date().toLocaleDateString('it-IT');
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
@@ -506,16 +600,30 @@ function doWa(){
 
 function sendQ(){
   if(!LINES.length){showToastP('⚠️ Nessuna voce','warning');return;}
-  if(typeof Quoter!=='undefined'&&typeof Quoter.addLine==='function'){
-    LINES.forEach(function(l){Quoter.addLine({desc:l.n,qty:l.qty,price:l.ppz});});
-    showToastP('✅ Inviato allo Smart Quoter ('+LINES.length+' voci)','success');
-    if(typeof App!=='undefined')App.navigate('quoter');
-  }else{showToastP('Apri prima lo Smart Quoter dalla sidebar','warning');}
+  /* Qui si chiamava `Quoter.addLine(oggetto)`. `Quoter.addLine` è dichiarata
+     senza parametri: legge i campi del proprio form (`ql-cat`, `ql-resource`,
+     `ql-unit-cost`). L'oggetto veniva ignorato, il form era vuoto, e la
+     funzione usciva subito con «Seleziona una categoria» — mentre il
+     preventivatore 3D annunciava «✅ Inviato». Nessuna riga è mai arrivata.
+
+     La firma giusta era accanto: `addLineFromCalc(d)`, che accetta anche
+     `unitCost`. Il vecchio percorso buttava via il costo comunque, e una riga
+     senza costo arriva all'ordine senza `costBreakdown`. */
+  var Q=(typeof Quoter!=='undefined')?Quoter:(typeof window!=='undefined'?window.Quoter:null);
+  if(!Q||typeof Q.addLineFromCalc!=='function'){
+    showToastP('Apri prima lo Smart Quoter dalla sidebar','warning');return;
+  }
+  LINES.forEach(function(l){
+    Q.addLineFromCalc({ name:l.n, category:'Stampa 3D', unit:'pz',
+                        qty:l.qty, unitCost:l.cpz });
+  });
+  showToastP('✅ Inviate allo Smart Quoter '+LINES.length+' voci con il loro costo','success');
+  if(typeof App!=='undefined')App.navigate('quoter');
 }
 
 function reset(){
   if(!confirm('Resettare tutto il preventivo 3D?'))return;
-  LINES=[];EXTRAS=[];COST=0;PRICES={p1:0,p2:0,p3:0};IVA_ON=true;DISC=0;
+  LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=(1-1/3.5)*100;
   render();showToastP('🔄 Reset completato','info');
 }
 
@@ -563,5 +671,12 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   addLine:addLine,rmLine:rmLine,editLine:editLine,clearLines:clearLines,
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,
   doPdf:doPdf,doWa:doWa,sendQ:sendQ,openMat:openMat,closeMat:closeMat,
-  addMat:addMat,editMat:editMat,delMat:delMat,updML:updML,};
+  addMat:addMat,editMat:editMat,delMat:delMat,
+  setModo:setModo,setMargine:setMargine,setCalib:setCalib,
+  /* Letto da patch 109 per «→ Catalogo», che prima lo cercava e non lo
+     trovava: `_state` non è mai stato esportato, e il pulsante salvava a
+     costo 0 un prodotto il cui prezzo leggeva per scraping di una dimensione
+     di carattere che nel frattempo era cambiata. */
+  _state:function(){ return { cost:COST, price:PRICE, margine:MARG, modo:MODO, lines:LINES.slice(), mats:MATS.slice() }; },
+};
 })();

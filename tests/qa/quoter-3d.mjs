@@ -57,11 +57,26 @@ const esito = await page.evaluate(async () => {
   Print3DQuoter.calc();
   await new Promise((s) => setTimeout(s, 500));
 
-  const dettaglio = document.getElementById('p3d-bk')?.textContent || '';
-  dico('il dettaglio dei costi viene disegnato', dettaglio.length > 60);
-
+  const testo = (id) => document.getElementById(id)?.textContent || '';
   const leggiEuro = (s) => parseFloat(String(s).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')) || 0;
-  const costoSchermo = leggiEuro((dettaglio.match(/COSTO \/ PZ\s*€?\s*[\d.,]+/i) || [''])[0]);
+
+  /* ── Le sezioni sono montate, non solo calcolate ────────────────────────
+     È la differenza che questa fase doveva chiudere: il modulo produceva le
+     sezioni ed era provato da 44 test, ma nella pagina non c'erano. */
+  dico('B · il conto è in pagina', testo('p3d-hero').length > 40);
+  dico('C · il dettaglio dei costi è in pagina', testo('p3d-bk').length > 60);
+  dico('E · gli scaglioni di quantità sono in pagina', /Costo\/pz/i.test(testo('p3d-scaglioni')));
+  dico('F · il confronto con lo slicer è in pagina', !!document.getElementById('p3d-calib'));
+  dico('G · le tre modalità sono in pagina', !!document.getElementById('p3d-margin-num')
+    && /Hobby[\s\S]*Maker[\s\S]*Business/.test(document.querySelector('#view-print3d')?.textContent || ''));
+
+  /* ── Una sola UI proprietaria ────────────────────────────────────────────
+     I tre campi moltiplicatore e la vecchia striscia `.p3-tier` non devono
+     sopravvivere accanto alla nuova vista: sostituita, non affiancata. */
+  dico('i tre campi moltiplicatore sono stati ritirati',
+    !document.getElementById('p3d-m1') && !document.getElementById('p3d-m2') && !document.getElementById('p3d-m3'));
+  dico('la vecchia striscia degli scaglioni non è rimasta accanto',
+    document.querySelectorAll('#view-print3d .p3-tier').length === 0);
 
   /* Lo stesso conto, chiesto al motore direttamente. */
   const atteso = E.calcola({
@@ -70,14 +85,17 @@ const esito = await page.evaluate(async () => {
     machinePrice: 400, machineLifeHours: 2000, maintenancePerHour: 0.12,
     failureRate: 7, laborPerHour: 18, setupMin: 15, finishMin: 10, washCureMin: 0,
   });
+
+  const hero = testo('p3d-hero');
+  const costoSchermo = leggiEuro((hero.match(/Costo business[^\d]*([\d.,]+)/i) || [''])[0]);
   dico('il costo a schermo è quello del motore (' + costoSchermo.toFixed(2) + ' vs ' + atteso.costoPezzo.toFixed(2) + ')',
     vicino(costoSchermo, atteso.costoPezzo, 0.05));
 
-  /* I tre scaglioni: il prezzo deve venire dal margine, non dal moltiplicatore. */
-  const tiers = document.getElementById('p3d-tiers')?.textContent || '';
-  dico('gli scaglioni vengono disegnati', /SINGOLO/.test(tiers));
+  /* Il costo di stampa accanto a quello pieno: la domanda che il vecchio
+     preventivatore non diceva di stare rispondendo. */
+  dico('il costo di stampa si vede accanto', /Costo di stampa/i.test(hero));
 
-  const m1 = parseFloat(document.getElementById('p3d-m1')?.value) || 3.5;
+  const m1 = 3.5;   // il moltiplicatore che il preventivatore applicava allo scaglione singolo
   const margineDaMolt = (1 - 1 / m1) * 100;
   const prezzoAtteso = E.prezzo(atteso.costoPezzo, { strategia: 'margine', marginePct: margineDaMolt, ivaPct: 0 }).netto;
   const prezzoVecchio = atteso.costoPezzo * m1;
@@ -86,10 +104,67 @@ const esito = await page.evaluate(async () => {
   dico('e il prezzo dal margine coincide con il vecchio ricarico (nessun numero si è mosso)',
     vicino(prezzoAtteso, prezzoVecchio, 0.02));
 
-  /* Il margine mostrato accanto allo scaglione deve essere quello vero. */
-  const margineMostrato = parseFloat((tiers.match(/Margine\s*([\d.,]+)%/) || [0, '0'])[1].replace(',', '.'));
+  /* La prova che il montaggio non ha spostato prezzi: il prezzo consigliato a
+     schermo, con il margine iniziale, è quello che il vecchio ×3,5 dava. */
+  const prezzoSchermo = leggiEuro((hero.match(/Prezzo consigliato[^\d]*([\d.,]+)/i) || [''])[0]);
+  dico('il prezzo a schermo è quello di prima (' + prezzoSchermo.toFixed(2) + ' vs ×3,5 = ' + prezzoVecchio.toFixed(2) + ')',
+    vicino(prezzoSchermo, prezzoVecchio, 0.05));
+
+  const margineMostrato = parseFloat((hero.match(/margine\s*([\d.,]+)%/i) || [0, '0'])[1].replace(',', '.'));
   dico('il margine mostrato è quello reale (' + margineMostrato.toFixed(1) + '%)',
     vicino(margineMostrato, margineDaMolt, 0.15));
+
+  /* ── Un solo comando del margine ─────────────────────────────────────────
+     Cursore e casella scrivono lo stesso valore, e il valore comanda. */
+  Print3DQuoter.setMargine(40);
+  await new Promise((s) => setTimeout(s, 250));
+  const hero40 = testo('p3d-hero');
+  const marg40 = parseFloat((hero40.match(/margine\s*([\d.,]+)%/i) || [0, '0'])[1].replace(',', '.'));
+  const prezzo40 = leggiEuro((hero40.match(/Prezzo consigliato[^\d]*([\d.,]+)/i) || [''])[0]);
+  dico('chiedendo il 40% a schermo si ottiene il 40% (' + marg40.toFixed(1) + '%)', vicino(marg40, 40, 0.15));
+  dico('e il prezzo è costo ÷ (1 − margine), non costo × 1,4',
+    vicino(prezzo40, atteso.costoPezzo / 0.6, 0.05));
+  dico('il cursore segue la casella', parseFloat(document.getElementById('p3d-margin')?.value) === 40);
+
+  /* ── La riga registra quello che si vede ─────────────────────────────────
+     Prima lo scaglione mostrava il prezzo con IVA e la riga ne salvava un
+     altro senza: due colonne diverse del 22% sulla stessa schermata. */
+  Print3DQuoter.clearLines();
+  Print3DQuoter.addLine();
+  await new Promise((s) => setTimeout(s, 250));
+  const riga = (typeof Print3DQuoter._state === 'function') ? Print3DQuoter._state().lines[0] : null;
+  dico('la riga aggiunta esiste', !!riga);
+  if (riga) {
+    dico('e registra il prezzo netto che era a schermo', vicino(riga.ppz, prezzo40, 0.05));
+    dico('e registra anche il costo', vicino(riga.cpz, atteso.costoPezzo, 0.05));
+    dico('e dichiara con quale margine e quale modalità', vicino(riga.marg, 40, 0.001) && riga.modo === 'completo');
+  }
+
+  /* ── La catena verso il preventivo ───────────────────────────────────────
+     `Quoter.addLine` è dichiarata senza parametri: il vecchio `sendQ` le
+     passava un oggetto che veniva ignorato, e nessuna riga arrivava mai. */
+  const Q = window.Quoter;
+  dico('lo Smart Quoter espone la firma con il costo', !!(Q && typeof Q.addLineFromCalc === 'function'));
+  if (Q && typeof Q.addLineFromCalc === 'function') {
+    const ricevute = [];
+    const vero = Q.addLineFromCalc.bind(Q);
+    Q.addLineFromCalc = (d) => { ricevute.push(d); };
+    try { Print3DQuoter.sendQ(); } catch (e) { out.errori.push('sendQ: ' + e.message); }
+    Q.addLineFromCalc = vero;
+    dico('«→ Quoter» consegna davvero la riga', ricevute.length === 1);
+    dico('e le consegna il costo, non solo il prezzo',
+      ricevute.length === 1 && vicino(ricevute[0].unitCost, atteso.costoPezzo, 0.05));
+  }
+
+  /* ── Il ponte con il catalogo legge lo stato, non il DOM ─────────────────
+     Leggeva `Print3DQuoter._state` (mai esportato) e un `font-size:22px` che
+     non esiste: ogni prodotto salvato aveva costo 0 e prezzo 0. */
+  const st = (typeof Print3DQuoter._state === 'function') ? Print3DQuoter._state() : null;
+  dico('il preventivatore espone costo e prezzo a chi glieli chiede',
+    !!st && st.cost > 0 && st.price > 0);
+
+  const tiers = testo('p3d-tiers');
+  dico('le politiche di prezzo sono disegnate', tiers.length > 40);
 
   /* La prova che lo slider adesso comanda: si cambia e il prezzo cambia. */
   const modulo = window.InglyQuoter3DView;
@@ -103,7 +178,7 @@ const esito = await page.evaluate(async () => {
     dico('chiedendo il 40% si ottiene il 40%', vicino(a40.marginePct, 40, 0.001));
     dico('chiedendo il 60% si ottiene il 60%', vicino(a60.marginePct, 60, 0.001));
     dico('e il prezzo cambia di conseguenza', a60.prezzo > a40.prezzo * 1.4);
-    dico('il costo di stampa si vede accanto a quello pieno', vicino(a40.costoStampa, 7.21, 0.05) && vicino(a40.costo, 18.68, 0.05));
+    dico('il caso di calibrazione resta agganciato (7,21 stampa · 18,68 pieno)', vicino(a40.costoStampa, 7.21, 0.05) && vicino(a40.costo, 18.68, 0.05));
     dico('le quattro politiche sono calcolate', a40.strategie.length === 4);
     dico('e ognuna ottiene il margine che dichiara',
       a40.strategie.every((s) => vicino(s.marginePct, s.marginTarget, 0.001)));
