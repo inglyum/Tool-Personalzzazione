@@ -199,10 +199,79 @@ const esito = await page.evaluate(async () => {
     dico('chiedendo il 60% si ottiene il 60%', vicino(a60.marginePct, 60, 0.001));
     dico('e il prezzo cambia di conseguenza', a60.prezzo > a40.prezzo * 1.4);
     dico('il caso di calibrazione resta agganciato (7,21 stampa · 18,68 pieno)', vicino(a40.costoStampa, 7.21, 0.05) && vicino(a40.costo, 18.68, 0.05));
-    dico('le quattro politiche sono calcolate', a40.strategie.length === 4);
+    dico('le cinque posizioni di prezzo sono calcolate',
+      a40.strategie.length === Object.keys(E.POLITICHE).length && a40.strategie.some((s) => s.id === 'b2b'));
     dico('e ognuna ottiene il margine che dichiara',
       a40.strategie.every((s) => vicino(s.marginePct, s.marginTarget, 0.001)));
   }
+
+  /* ── L'import dallo slicer non conta i supporti due volte ────────────────
+     Il difetto che questa card esiste per togliere: uno slicer dichiara un
+     peso totale che comprende già supporti e spurgo, e chi lo copia nel campo
+     «materiale» compilando anche «supporti» li paga due volte. */
+  dico('la card di import dallo slicer è in pagina',
+    /IMPORTA DALLO SLICER/.test(document.querySelector('#view-print3d')?.textContent || ''));
+
+  Print3DQuoter.svuotaSlicer();
+  Print3DQuoter.setSlicer('pesoTotale', 300);
+  Print3DQuoter.setSlicer('supporti', 40);
+  Print3DQuoter.setSlicer('purge', 10);
+  Print3DQuoter.setSlicer('ore', 9.95);
+  Print3DQuoter.setSlicer('includeTutto', true);
+  await new Promise((r) => setTimeout(r, 350));
+  const gIncluso = window.InglyCostEngine.calcola(Print3DQuoter._ingresso());
+  const matIncluso = gIncluso.perPezzo.voci.find((x) => x.id === 'materiale').value;
+  const costoIncluso = Print3DQuoter._state().cost;
+
+  Print3DQuoter.setSlicer('includeTutto', false);
+  await new Promise((r) => setTimeout(r, 350));
+  const gEscluso = window.InglyCostEngine.calcola(Print3DQuoter._ingresso());
+  const matEscluso = gEscluso.perPezzo.voci.find((x) => x.id === 'materiale').value;
+  const costoEscluso = Print3DQuoter._state().cost;
+
+  dico('con «il totale comprende già i supporti» si contano 300 g, non 350',
+    Math.abs(matIncluso - 0.300 * 24) < 0.01, `€${matIncluso.toFixed(3)}`);
+  dico('togliendo la spunta si contano 350 g e il costo sale',
+    Math.abs(matEscluso - 0.350 * 24) < 0.01 && costoEscluso > costoIncluso,
+    `${costoIncluso.toFixed(2)} → ${costoEscluso.toFixed(2)}`);
+  Print3DQuoter.svuotaSlicer();
+  await new Promise((r) => setTimeout(r, 300));
+
+  /* ── Le quattro letture dell'energia ─────────────────────────────────── */
+  dico('la banda dell\'energia è in pagina',
+    /DA DOVE VIENE IL CONSUMO/.test(document.querySelector('#view-print3d')?.textContent || ''));
+  sv('p3d-avgw', 90); sv('p3d-kwhm', 1.2);
+  const leggiEnergia = async (modo) => {
+    Print3DQuoter.setEnergia(modo);
+    await new Promise((r) => setTimeout(r, 300));
+    return window.InglyCostEngine.calcola(Print3DQuoter._ingresso()).energia;
+  };
+  const eTarga = await leggiEnergia('targa');
+  const eMedio = await leggiEnergia('medio');
+  const eMis = await leggiEnergia('misurato');
+  dico('«Targa» usa la potenza massima e si dichiara stimata',
+    eTarga.modo === 'targa' && eTarga.confidence === 'estimated');
+  dico('«Medio» usa i watt medi e sale a verificato',
+    eMedio.modo === 'medio' && eMedio.confidence === 'verified');
+  dico('«Misurato» usa i kWh contati', eMis.modo === 'misurato' && Math.abs(eMis.kwh - 1.2) < 0.001);
+  dico('e le tre letture danno tre numeri, non lo stesso ripetuto',
+    new Set([eTarga.kwh.toFixed(4), eMis.kwh.toFixed(4)]).size === 2);
+  await leggiEnergia('auto');
+
+  /* ── Il ridisegno non cancella quello che l'utente ha scritto ──────────
+     `render()` ricostruisce la pagina da una stringa con i valori scritti a
+     mano: senza il salvataggio dei campi, cambiare modalità riportava grammi
+     e ore ai valori di partenza. */
+  sv('p3d-g', 417); sv('p3d-h', 6.25);
+  Print3DQuoter.setModo('macchina');
+  await new Promise((r) => setTimeout(r, 300));
+  const gDopo = parseFloat(document.getElementById('p3d-g')?.value);
+  const hDopo = parseFloat(document.getElementById('p3d-h')?.value);
+  dico('cambiare modalità non cancella i campi compilati',
+    gDopo === 417 && hDopo === 6.25, `g=${gDopo} h=${hDopo}`);
+  Print3DQuoter.setModo('completo');
+  sv('p3d-g', 290); sv('p3d-h', 9.95);
+  await new Promise((r) => setTimeout(r, 300));
 
   /* Nessuna duplicazione introdotta. */
   const ids = [...document.querySelectorAll('[id]')].map((e) => e.id).filter(Boolean);

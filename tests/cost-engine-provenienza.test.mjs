@@ -183,3 +183,36 @@ test('senza un riferimento slicer il confronto è nullo, non inventato', () => {
   const x = E.explain({ ...BASE, watt: 150 }, { marginePct: 40 });
   assert.equal(x.comparisonWithSlicer, null);
 });
+
+/* ── Le cinque posizioni commerciali ────────────────────────────────────── */
+
+test('le cinque posizioni esistono e sono ordinate per margine', () => {
+  const p = E.politiche();
+  assert.equal(p.length, 5);
+  assert.equal(p.map((x) => x.id).join(','), 'competitive,b2b,standard,premium,luxury');
+  const m = p.map((x) => x.marginTarget);
+  for (let i = 1; i < m.length; i++) assert.ok(m[i] > m[i - 1], `${m[i - 1]} → ${m[i]}`);
+});
+
+test('il B2B è un margine, non uno sconto', () => {
+  /* Uno sconto percentuale nasconde il punto in cui il volume smette di
+     compensare il margine più basso; un margine lo tiene sotto gli occhi. */
+  const b = E.politiche().find((x) => x.id === 'b2b');
+  assert.ok(b.marginTarget > 0 && b.marginTarget < 40);
+  assert.ok(b.floorMargin >= E.MARGINE_MINIMO);
+});
+
+test('i margini sono riconfigurabili e il pavimento resta', () => {
+  const p = E.politiche({ standard: 55, b2b: { marginTarget: 22, label: 'Rivenditori' } });
+  assert.equal(p.find((x) => x.id === 'standard').marginTarget, 55);
+  assert.equal(p.find((x) => x.id === 'b2b').label, 'Rivenditori');
+  /* Nessuna configurazione può portare una politica sotto il minimo. */
+  const sotto = E.politiche({ competitive: 2 });
+  assert.equal(sotto.find((x) => x.id === 'competitive').marginTarget, E.MARGINE_MINIMO);
+});
+
+test('una configurazione parziale non azzera le altre', () => {
+  const p = E.politiche({ luxury: 80 });
+  assert.equal(p.find((x) => x.id === 'standard').marginTarget, E.POLITICHE.standard.marginTarget);
+  assert.equal(p.find((x) => x.id === 'luxury').marginTarget, 80);
+});

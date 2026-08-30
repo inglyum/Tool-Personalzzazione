@@ -103,11 +103,14 @@ test('le tre modalità rispondono a tre domande', async (t) => {
 /* ═══════════════════════════════════════════════════════════════════════════
    3. LE QUATTRO OFFERTE
    ═══════════════════════════════════════════════════════════════════════════ */
-test('le quattro politiche puntano a un margine', async (t) => {
+test('le cinque posizioni di prezzo puntano a un margine', async (t) => {
   const r = V.calcola(CASO, { modalita: 'macchina', marginePct: 40 });
 
   await t.test('ce ne sono quattro, e una è consigliata', () => {
-    assert.equal(r.strategie.length, 4);
+    /* Competitivo, B2B, Standard, Premium, Luxury: cinque posizioni
+       commerciali, non cinque moltiplicatori. */
+    assert.equal(r.strategie.length, Object.keys(E.POLITICHE).length);
+    assert.ok(r.strategie.some((s) => s.id === 'b2b'), 'il B2B è una posizione, non uno sconto');
     assert.equal(r.strategie.filter((s) => s.raccomandata).length, 1);
     assert.equal(r.strategie.find((s) => s.raccomandata).id, 'standard');
   });

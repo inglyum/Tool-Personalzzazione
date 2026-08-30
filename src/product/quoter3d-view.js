@@ -243,8 +243,11 @@
 
     /* Le quattro politiche, ognuna con il suo margine obiettivo. Un
        moltiplicatore non compare da nessuna parte. */
-    var strategieCalcolate = Object.keys(E.POLITICHE).map(function (k) {
-      var pol = E.POLITICHE[k];
+    /* Le cinque posizioni, con i margini che l'azienda ha configurato: chi
+       lavora su commesse lunghe e chi vende in fiera non hanno lo stesso
+       «standard», e un margine scritto nel motore non è configurabile. */
+    var strategieCalcolate = (E.politiche ? E.politiche(o.margini) : Object.keys(E.POLITICHE).map(function (k) { return E.POLITICHE[k]; })).map(function (pol) {
+      var k = pol.id;
       var pr = E.prezzo(c.costoPezzo, Object.assign({}, opzPrezzo, { marginePct: pol.marginTarget }));
       return {
         id: k, label: pol.label, marginTarget: pol.marginTarget,

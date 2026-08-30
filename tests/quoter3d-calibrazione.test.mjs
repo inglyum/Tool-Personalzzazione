@@ -257,7 +257,7 @@ test('prezzo da margine, non da moltiplicatore', async (t) => {
     assert.notEqual(Math.round(p.marginePct), 40);
   });
 
-  await t.test('le quattro politiche puntano a un margine, non a un moltiplicatore', () => {
+  await t.test('le cinque posizioni puntano a un margine, non a un moltiplicatore', () => {
     for (const [id, pol] of Object.entries(E.POLITICHE)) {
       const p = E.prezzo(100, { strategia: 'margine', marginePct: pol.marginTarget, ivaPct: 0 });
       vicino(p.marginePct, pol.marginTarget, 0.0001, id);

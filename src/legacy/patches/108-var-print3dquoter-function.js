@@ -67,6 +67,10 @@ var MARG=(1-1/3.5)*100;
 var MODO='completo';
 var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
 var _registroLetto=false;
+/* I dati che arrivano dallo slicer, tenuti separati da quelli digitati: è la
+   distinzione che permette di non contarli due volte. */
+var SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
+var ENE='auto';   // auto · misurato · medio · targa
 var R=null;
 var CALIB_RIF=0;
 var SK='p3dq_v4';
@@ -100,9 +104,42 @@ function MODI_(){
   return (V && V.MODALITA) || [{id:'completo',label:'Business',sotto:'quanto devi rientrare'}];
 }
 
+/* ── Quello che l'utente ha scritto sopravvive al ridisegno ────────────────
+   `render()` ricostruisce la pagina da una stringa in cui i valori sono
+   scritti a mano — `value="20"`, `value="1.5"` — quindi ogni ridisegno
+   riportava i campi ai valori di partenza. Finché a ridisegnare erano solo
+   «FDM/Resina» e «IVA sì/no» il danno passava inosservato; adesso ridisegnano
+   anche la modalità, la banda dell'energia e la scelta del materiale, e
+   perdere i grammi e le ore a ogni tocco renderebbe il preventivatore
+   inservibile.
+
+   Si salva quello che c'è, si ridisegna, si rimette. Non è un rimedio
+   elegante: quello sarebbe non ricostruire la pagina intera. È però onesto e
+   verificabile, e il collaudo lo verifica. */
+function _valoriCorrenti(root){
+  var v={};
+  try{
+    root.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(e){
+      if(!e.id) return;
+      v[e.id] = (e.type==='checkbox'||e.type==='radio') ? e.checked : e.value;
+    });
+  }catch(err){}
+  return v;
+}
+function _ripristina(root,v){
+  try{
+    root.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(e){
+      if(!(e.id in v)) return;
+      if(e.type==='checkbox'||e.type==='radio') e.checked=v[e.id];
+      else if(v[e.id]!=='' && v[e.id]!=null) e.value=v[e.id];
+    });
+  }catch(err){}
+}
+
 function render(){
   hydrate();
   var root=el('view-print3d');if(!root)return;
+  var _prima=_valoriCorrenti(root);
   var MODI=MODI_();
   var isFdm=T==='fdm';
   var machOpts=(MACH[T]||[]).map(function(m){return '<option value="'+m.id+'">'+m.n+' ('+m.w+'W · €'+m.c+')</option>';}).join('');
@@ -190,6 +227,8 @@ function render(){
 
   // ─── COL 1 ───────────────────────────────────────────────────
   +'<div class="p3-col">'
+    // ── Importa dallo slicer ────────────────────────────────────────
+    +cardSlicer()
     // Tipo + macchina
     +'<div class="p3-card cyan">'
       +'<div class="p3-ct c">⚙️ CONFIGURA STAMPA</div>'
@@ -202,7 +241,9 @@ function render(){
         +'<div class="p3-ht" id="p3d-mach-hint"></div></div>'
       +'<div class="p3-g2">'
         +'<div class="p3-fg"><label class="p3-fl">⚡ CONSUMO (W)</label><input class="p3-fc" id="p3d-watt" type="number" step="10" value="'+(isFdm?'150':'40')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'FDM: 120–350W':'Resina: 25–60W')+'</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">💡 €/kWh</label><input class="p3-fc" id="p3d-kwh" type="number" step="0.01" value="0.28" oninput="Print3DQuoter.calc()"><div class="p3-ht">Media IT: 0.24–0.32</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">💡 €/kWh</label><input class="p3-fc" id="p3d-kwh" type="number" step="0.01" value="0.28" oninput="Print3DQuoter.calc()"><div class="p3-ht">Dalla tua bolletta, non dalla media</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">📊 W MEDI (misurati)</label><input class="p3-fc" id="p3d-avgw" type="number" step="5" value="" placeholder="—" oninput="Print3DQuoter.calc()"><div class="p3-ht">Se li conosci, battono la targa</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">🔋 kWh MISURATI</label><input class="p3-fc" id="p3d-kwhm" type="number" step="0.01" value="" placeholder="—" oninput="Print3DQuoter.calc()"><div class="p3-ht">Da presa intelligente o contatore</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🏭 COSTO MACCHINA €</label><input class="p3-fc" id="p3d-mc" type="number" step="50" value="'+(isFdm?'400':'250')+'" oninput="Print3DQuoter.calc()"></div>'
         +'<div class="p3-fg"><label class="p3-fl">⏳ VITA UTILE (h)</label><input class="p3-fc" id="p3d-lh" type="number" step="100" value="'+(isFdm?'2000':'2500')+'" oninput="Print3DQuoter.calc()"></div>'
         /* Le quattro voci che mancavano al conto: senza di queste il costo
@@ -214,6 +255,7 @@ function render(){
         +'<div class="p3-fg"><label class="p3-fl">🧱 SUPPORTI (g)</label><input class="p3-fc" id="p3d-sup" type="number" step="1" value="0" oninput="Print3DQuoter.calc()"><div class="p3-ht">Finiscono nel cestino, si pagano al chilo</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">'+(isFdm?'🪣 POST-PROCESSO (min)':'🚿 LAVAGGIO + CURA (min)')+'</label><input class="p3-fc" id="p3d-wash" type="number" step="5" value="'+(isFdm?'0':'20')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'Rimozione supporti, carteggiatura':'La stampa non è finita quando si ferma')+'</div></div>'
       +'</div>'
+      +bandaEnergia()
     +'</div>'
     // Materiale
     +'<div class="p3-card cyan">'
@@ -348,6 +390,7 @@ function render(){
   +'</div>'
   +'</div>'; // close p3-grid
 
+  _ripristina(root,_prima);
   setTimeout(function(){calc();},10);
   /* Il registro si rilegge quando la sezione si apre, non a ogni tasto. */
   if(!_registroLetto){ _registroLetto=true; aggiornaRegistro(); }
@@ -390,6 +433,82 @@ function bandaMateriale(){
 function setPrezzoMat(v){
   if(MAT_REG && MAT_REG.disponibile && Math.abs(parseFloat(v)-MAT_REG.costoUnitario)>0.005) MAT_REG=null;
   calc();
+}
+
+/* ── La card dello slicer ──────────────────────────────────────────────────
+   Non aggiunge precisione al calcolo: toglie un errore. Il peso che uno
+   slicer dichiara comprende quasi sempre supporti e spurgo, e chi lo copia
+   nel campo «materiale» compilando anche «supporti» li paga due volte. La
+   casella «il totale comprende già supporti e spurgo» è l'unica riga di
+   questa card che conta davvero. */
+function cardSlicer(){
+  var attivo=SLICER.pesoTotale>0||SLICER.ore>0||SLICER.costo>0;
+  var p=pesi();
+  var campo=function(id,etichetta,valore,passo,nota){
+    return '<div class="p3-fg"><label class="p3-fl">'+etichetta+'</label>'
+      +'<input class="p3-fc" type="number" step="'+passo+'" value="'+(valore>0?valore:'')+'" placeholder="—" '
+      +'oninput="Print3DQuoter.setSlicer(\''+id+'\',this.value)">'
+      +(nota?'<div class="p3-ht">'+nota+'</div>':'')+'</div>';
+  };
+  return '<div class="p3-card'+(attivo?' cyan':'')+'">'
+    +'<div class="p3-ct'+(attivo?' c':'')+'" style="display:flex;align-items:center;justify-content:space-between">'
+      +'<span>📥 IMPORTA DALLO SLICER</span>'
+      +(attivo?'<button class="btn btn-secondary btn-sm" onclick="Print3DQuoter.svuotaSlicer()">✕ Svuota</button>':'')
+    +'</div>'
+    +'<div class="p3-g2">'
+      +campo('pesoTotale','⚖️ PESO TOTALE (g)',SLICER.pesoTotale,'1','Quello che dice lo slicer')
+      +campo('ore','⏱️ TEMPO (h)',SLICER.ore,'0.25','')
+      +campo('supporti','🧱 SUPPORTI (g)',SLICER.supporti,'1','')
+      +campo('purge','🗑️ SPURGO / AMS (g)',SLICER.purge,'1','')
+      +campo('kwh','🔋 ENERGIA (kWh)',SLICER.kwh,'0.01','Se lo slicer la dichiara')
+      +campo('costo','💶 COSTO DICHIARATO (€)',SLICER.costo,'0.01','Per il confronto, non per il calcolo')
+    +'</div>'
+    +'<label style="display:flex;align-items:flex-start;gap:7px;margin-top:8px;cursor:pointer">'
+      +'<input type="checkbox" '+(SLICER.includeTutto?'checked':'')+' onchange="Print3DQuoter.setSlicer(\'includeTutto\',this.checked)" style="margin-top:2px;accent-color:#22d3ee">'
+      +'<span style="font-size:10px;color:var(--text-muted);line-height:1.45">Il peso totale comprende già supporti e spurgo'
+      +'<br><span style="color:var(--text-dim)">Se è così, vengono sottratti invece che sommati: è il doppio conteggio più comune.</span></span>'
+    +'</label>'
+    +(attivo
+      ? '<div style="margin-top:9px;padding:8px 10px;background:var(--bg-card2);border-radius:8px;font-size:10px;color:var(--text-muted);line-height:1.6">'
+        +'Il conto userà <b style="color:var(--text)">'+Math.round(p.modello)+' g</b> di modello'
+        +(p.supporti>0?' + <b style="color:var(--text)">'+Math.round(p.supporti)+' g</b> di supporti':'')
+        +(p.purge>0?' + <b style="color:var(--text)">'+Math.round(p.purge)+' g</b> di spurgo':'')
+        +' = <b style="color:#22d3ee">'+Math.round(p.modello+p.supporti+p.purge)+' g</b> in tutto.'
+        +'</div>'
+      : '<div class="p3-ht" style="margin-top:8px">Lascia vuoto per usare i campi qui sotto.</div>')
+  +'</div>';
+}
+
+/* ── La banda dell'energia ─────────────────────────────────────────────────
+   Quattro pulsanti che rispondono a una domanda sola: quanto cambierebbe il
+   conto se il consumo lo misurassi davvero. Finché non c'era modo di
+   chiederlo, non c'era ragione di misurare. */
+function bandaEnergia(){
+  var MODI=[
+    {id:'auto',    lab:'Auto',      sotto:'il meglio che c\'è'},
+    {id:'misurato',lab:'Misurato',  sotto:'kWh contati'},
+    {id:'medio',   lab:'Medio',     sotto:'W medi'},
+    {id:'targa',   lab:'Targa',     sotto:'W massimi'},
+  ];
+  var r=R&&!R.indisponibile?R:null;
+  var e=r&&r._costo&&r._costo.energia ? r._costo.energia : null;
+  var colore = e ? ({measured:'var(--green,#22c55e)',verified:'var(--green,#22c55e)',estimated:'var(--orange)',missing:'var(--red)'}[e.confidence]||'var(--text-muted)') : 'var(--text-muted)';
+  return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
+    +'<label class="p3-fl">⚡ DA DOVE VIENE IL CONSUMO</label>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:6px">'
+    +MODI.map(function(m){
+      var on=ENE===m.id;
+      return '<button onclick="Print3DQuoter.setEnergia(\''+m.id+'\')" style="padding:6px 3px;border-radius:6px;cursor:pointer;text-align:center;'
+        +'border:1.5px solid '+(on?'#22d3ee':'var(--border2)')+';background:'+(on?'#22d3ee18':'transparent')+';color:'+(on?'#22d3ee':'var(--text-dim)')+'">'
+        +'<span style="font-size:10px;font-weight:800;display:block">'+m.lab+'</span>'
+        +'<span style="font-size:8px;opacity:.7">'+m.sotto+'</span></button>';
+    }).join('')
+    +'</div>'
+    +(e
+      ? '<div style="font-size:10px;color:'+colore+';line-height:1.45">'+e.detail
+        +' → <b>'+eur(e.kwh*e.prezzoKwh)+'</b><br><span style="color:var(--text-muted)">'+e.nota+'</span></div>'
+      : '<div class="p3-ht">Inserisci le ore per vedere quale dato viene usato.</div>')
+  +'</div>';
 }
 
 function setType(t){T=t;render();}
@@ -471,13 +590,22 @@ function upE(i,k,v){if(EXTRAS[i])EXTRAS[i][k]=(k==='c'?parseFloat(v)||0:v);calc(
    letti due volte con due nomi diversi — una per il costo, una per il prezzo —
    ed è il modo in cui due sistemi finiscono per possedere lo stesso numero. */
 function ingresso(){
+  var e=energiaScelta();
+  var m=pesi();
   return {
     tecnologia:'print3d',
     qty:Math.max(1,gv('p3d-qty',1)),
-    grams:gv('p3d-g',0), supportGrams:gv('p3d-sup',0),
+    grams:m.modello, supportGrams:m.supporti, purgeGrams:m.purge,
+    measuredEnergyKwh:e.measuredEnergyKwh, averagePowerW:e.averagePowerW, ratedPowerW:e.ratedPowerW,
+    slicerMaterialCost:SLICER.costo>0?SLICER.costo:undefined,
     spoolPrice:gv('p3d-mkg',24), spoolGrams:gv('p3d-mu',1000),
-    hours:gv('p3d-h',0),
-    watt:gv('p3d-watt',150), kwhPrice:gv('p3d-kwh',.28), dutyCycle:gv('p3d-duty',1),
+    hours: SLICER.ore>0 ? SLICER.ore : gv('p3d-h',0),
+    /* `watt` è il campo storico e resta il ripiego della targa. Quando si
+       forza una lettura diversa non va passato: il motore lo userebbe come
+       ultima risorsa, e la scelta dell'utente verrebbe scavalcata in
+       silenzio. */
+    watt: (ENE==='auto'||ENE==='targa') ? gv('p3d-watt',150) : undefined,
+    kwhPrice:gv('p3d-kwh',.28), dutyCycle:gv('p3d-duty',1),
     machinePrice:gv('p3d-mc',400), machineLifeHours:gv('p3d-lh',2000),
     maintenancePerHour:gv('p3d-mnt',0),
     washCureMin:gv('p3d-wash',0), laborPerHour:gv('p3d-lr',15),
@@ -485,6 +613,55 @@ function ingresso(){
     failureRate:gv('p3d-fail',0),
     extras:EXTRAS.map(function(e){ return { label:e.n, cost:parseFloat(e.c)||0 }; }),
   };
+}
+
+/* ── I pesi, contati una volta sola ────────────────────────────────────────
+   Il doppio conteggio più comune di tutti, e il più difficile da vedere: gli
+   slicer dichiarano quasi sempre un **peso totale** che comprende già
+   supporti e spurgo. Chi lo copia nel campo «materiale» e poi compila anche
+   il campo «supporti» paga i supporti due volte, e il preventivo esce più
+   alto del vero senza che niente sembri strano.
+
+   Qui la regola è dichiarata: se lo slicer ha detto «totale», i supporti si
+   **sottraggono** invece di sommarsi. */
+function pesi(){
+  if(SLICER.pesoTotale>0){
+    if(SLICER.includeTutto){
+      var modello = SLICER.pesoModello>0 ? SLICER.pesoModello
+        : Math.max(0, SLICER.pesoTotale - SLICER.supporti - SLICER.purge);
+      return { modello:modello, supporti:SLICER.supporti, purge:SLICER.purge, fonte:'slicer' };
+    }
+    return { modello:SLICER.pesoTotale, supporti:SLICER.supporti, purge:SLICER.purge, fonte:'slicer' };
+  }
+  return { modello:gv('p3d-g',0), supporti:gv('p3d-sup',0), purge:0, fonte:'manuale' };
+}
+
+/* ── L'energia, e quale delle tre si sta usando ────────────────────────────
+   `auto` lascia decidere al motore, che ha la priorità dichiarata: kWh
+   misurati, poi potenza media, poi targa. Le altre tre forzano una lettura, e
+   servono a rispondere alla domanda «quanto cambierebbe se lo misurassi». */
+function energiaScelta(){
+  var targa=gv('p3d-watt',150);
+  var media=gv('p3d-avgw',0);
+  var kwh=SLICER.kwh>0 ? SLICER.kwh : gv('p3d-kwhm',0);
+  if(ENE==='misurato') return { measuredEnergyKwh:kwh>0?kwh:undefined, averagePowerW:undefined, ratedPowerW:undefined };
+  if(ENE==='medio')    return { measuredEnergyKwh:undefined, averagePowerW:media>0?media:undefined, ratedPowerW:undefined };
+  if(ENE==='targa')    return { measuredEnergyKwh:undefined, averagePowerW:undefined, ratedPowerW:targa };
+  return { measuredEnergyKwh:kwh>0?kwh:undefined,
+           averagePowerW:media>0?media:undefined,
+           ratedPowerW:targa };
+}
+
+function setEnergia(m){ ENE=m; render(); }
+
+function setSlicer(k,v){
+  SLICER[k]= (k==='includeTutto') ? !!v : (parseFloat(v)||0);
+  render();
+}
+
+function svuotaSlicer(){
+  SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
+  render();
 }
 
 /* Le fonti dei numeri: dichiarate da chi li ha presi, mai dedotte. Il prezzo
@@ -753,7 +930,11 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   doPdf:doPdf,doWa:doWa,sendQ:sendQ,openMat:openMat,closeMat:closeMat,
   addMat:addMat,editMat:editMat,delMat:delMat,
   setModo:setModo,setMargine:setMargine,setCalib:setCalib,setPrezzoMat:setPrezzoMat,
+  setEnergia:setEnergia,setSlicer:setSlicer,svuotaSlicer:svuotaSlicer,
   aggiornaRegistro:aggiornaRegistro,
+  /* Letto dal collaudo per verificare l'ingresso senza ricostruirlo: un
+     collaudo che ricopia la lettura dei campi prova la propria copia. */
+  _ingresso:ingresso,
   /* Letto da patch 109 per «→ Catalogo», che prima lo cercava e non lo
      trovava: `_state` non è mai stato esportato, e il pulsante salvava a
      costo 0 un prodotto il cui prezzo leggeva per scraping di una dimensione

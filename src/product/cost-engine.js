@@ -39,11 +39,37 @@
      assenza a far nascere ricarichi diversi in schermate diverse. */
   var POLITICHE = {
     competitive: { id: 'competitive', label: 'Competitivo', marginTarget: 25, maxDiscount: 10, floorMargin: 12, recommended: false },
+    /* Il B2B non è «uno sconto ai rivenditori»: è un margine più basso su
+       volumi più alti, e va detto come margine perché resti visibile quando
+       smette di essere sostenibile. Uno sconto percentuale nasconde il punto
+       in cui il volume non compensa più. */
+    b2b:         { id: 'b2b',         label: 'B2B',         marginTarget: 30, maxDiscount: 20, floorMargin: 15, recommended: false },
     standard:    { id: 'standard',    label: 'Standard',    marginTarget: 40, maxDiscount: 15, floorMargin: 20, recommended: true },
     premium:     { id: 'premium',     label: 'Premium',     marginTarget: 55, maxDiscount: 20, floorMargin: 30, recommended: false },
     luxury:      { id: 'luxury',      label: 'Luxury',      marginTarget: 70, maxDiscount: 25, floorMargin: 45, recommended: false },
   };
   var MARGINE_MINIMO = 10;   // % — nessuna politica scende sotto
+
+  /* I cinque margini sono una decisione commerciale, non una costante di
+     natura: chi lavora su commesse lunghe e chi vende in fiera non hanno lo
+     stesso «standard». Si possono riconfigurare, e il pavimento resta. */
+  function politiche(override) {
+    var o = override || {};
+    return Object.keys(POLITICHE).map(function (k) {
+      var base = POLITICHE[k];
+      var mod = o[k];
+      if (mod == null) return base;
+      var m = typeof mod === 'number' ? { marginTarget: mod } : mod;
+      return {
+        id: base.id, label: m.label || base.label,
+        marginTarget: Math.max(MARGINE_MINIMO, num(m.marginTarget, base.marginTarget)),
+        maxDiscount: num(m.maxDiscount, base.maxDiscount),
+        floorMargin: Math.max(MARGINE_MINIMO, num(m.floorMargin, base.floorMargin)),
+        recommended: m.recommended != null ? !!m.recommended : base.recommended,
+        personalizzata: true,
+      };
+    });
+  }
 
   var num = function (v, d) {
     var n = parseFloat(v);
@@ -1399,6 +1425,7 @@
   global.InglyCostEngine = {
     version: VERSIONE,
     POLITICHE: POLITICHE,
+    politiche: politiche,
     MARGINE_MINIMO: MARGINE_MINIMO,
     avvisi: avvisi,
     consigli: consigli,
