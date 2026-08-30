@@ -63,6 +63,8 @@ export const PRODUCT_FILES = [
   'inventory-view.js',
   /* I template di preventivo: puri, dopo l'adapter di cui usano lo stato. */
   'quote-templates.js',
+  /* La vista del preventivatore 3D: dopo il motore, di cui è solo la faccia. */
+  'quoter3d-view.js',
   'first-run.js',
 ];
 

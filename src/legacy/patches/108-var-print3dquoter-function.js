@@ -355,7 +355,33 @@ function calc(){
   });
 
   var total=R.costo;
-  COST=total;PRICES={p1:total*m1,p2:total*m2,p3:total*m3};
+
+  /* ── Il prezzo lo fa il motore ─────────────────────────────────────────────
+     Qui c'era `PRICES = {p1: total*3.5, p2: total*2.8, p3: total*2.2}`: tre
+     moltiplicatori applicati nella vista. Lo slider «margine» esisteva, andava
+     dal 10 all'80%, ed era usato **solo per un avviso** — non comandava
+     niente. Chi impostava il 40% otteneva un margine del 71,4%: su un costo di
+     18,68 €, un prezzo di 65,38 € invece di 31,13 €. Il 110% in più di quanto
+     avesse chiesto, senza che nulla lo dicesse.
+
+     Ora il margine chiesto è il margine ottenuto. I tre scaglioni conservano
+     il proprio posizionamento — singolo, serie, stock — ma come **margini**,
+     non come moltiplicatori: chi vendeva a ×3,5 sul singolo vendeva al 71,4%
+     di margine, ed è quello che lo scaglione dichiara adesso.
+
+     I moltiplicatori restano leggibili nei campi, e la loro conversione in
+     margine è dichiarata a schermo: nessun numero si muove in silenzio. */
+  var MOT = (typeof window!=='undefined') && window.InglyCostEngine;
+  var margineDa = function(molt){ return molt>0 ? (1 - 1/molt) * 100 : 0; };
+  var prezzoDa = function(margine){
+    if(!MOT) return null;
+    return MOT.prezzo(total, { strategia:'margine', marginePct:margine, ivaPct:0 }).netto;
+  };
+  var MARGINI = { p1: margineDa(m1), p2: margineDa(m2), p3: margineDa(m3) };
+  COST=total;
+  PRICES = MOT
+    ? { p1: prezzoDa(MARGINI.p1), p2: prezzoDa(MARGINI.p2), p3: prezzoDa(MARGINI.p3) }
+    : { p1: null, p2: null, p3: null };
 
   var ICONE={materiale:'🧵',energia:'⚡',ammortamento:'🏭',manutenzione:'🔧',
              postProcesso:'🚿',manodopera:'👤',scarto:'📉',extra:'✨'};
@@ -372,7 +398,7 @@ function calc(){
           +'<span style="display:block;font-size:9px;color:#64748b">'+v.detail+'</span></span>'
           +'<span style="font-weight:700;font-size:12px;color:'+(COLORI[v.id]||'#94a3b8')+'">'+eur(v.value)+'</span></div>';
       }).join('')+'<div class="p3-bkt"><span style="color:#fff">🔢 COSTO / PZ</span><span style="color:#22d3ee">'+eur(total)+'</span></div>'
-        +'<div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.5">Con margine del '+minM+'% il prezzo sarebbe <b style="color:#22d3ee">'+eur(R.prezzoDaMargine(minM))+'</b> — un ricarico ×'+(total>0?(R.prezzoDaMargine(minM)/total).toFixed(2):'—')+', non ×'+(1+minM/100).toFixed(2)+'.</div>';
+        +'<div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.5">Con margine del '+minM+'% il prezzo è <b style="color:#22d3ee">'+eur(R.prezzoDaMargine(minM))+'</b> — un ricarico ×'+(total>0?(R.prezzoDaMargine(minM)/total).toFixed(2):'—')+', non ×'+(1+minM/100).toFixed(2)+'. Il margine chiesto è il margine ottenuto.</div>';
     }
   }
 
@@ -382,17 +408,18 @@ function calc(){
     else{
       var disc=DISC/100;
       tc.innerHTML=[
-        {l:'🔵 SINGOLO',sub:'1–5 pz', p:PRICES.p1,m:m1,col:'#22d3ee', bc:'#22d3ee'},
-        {l:'🟡 SERIE',  sub:'6–30 pz',p:PRICES.p2,m:m2,col:'var(--primary)',bc:'#6366f1'},
-        {l:'🟠 STOCK',  sub:'30+ pz', p:PRICES.p3,m:m3,col:'var(--orange)',bc:'#f97316'},
+        {l:'🔵 SINGOLO',sub:'1–5 pz', p:PRICES.p1,m:m1,mg:MARGINI.p1,col:'#22d3ee', bc:'#22d3ee'},
+        {l:'🟡 SERIE',  sub:'6–30 pz',p:PRICES.p2,m:m2,mg:MARGINI.p2,col:'var(--primary)',bc:'#6366f1'},
+        {l:'🟠 STOCK',  sub:'30+ pz', p:PRICES.p3,m:m3,mg:MARGINI.p3,col:'var(--orange)',bc:'#f97316'},
       ].map(function(t){
-        var mg=t.p>0?((t.p-total)/t.p*100):0,ok=mg>=minM;
+        if(t.p==null) return '<div class="p3-tier" style="border-color:'+t.bc+'40"><div style="flex:1;font-size:11px;color:var(--text-dim)">'+t.l+' — motore di costo non disponibile</div></div>';
+        var mg=t.mg,ok=mg>=minM;
         var pAfterDisc=t.p*(1-disc);
         var pFinal=IVA_ON?pAfterDisc*1.22:pAfterDisc;
         return '<div class="p3-tier" style="border-color:'+t.bc+'40;background:#0a1520">'
           +'<div style="flex:1">'
             +'<div style="font-size:11px;font-weight:700;color:'+t.col+'">'+t.l+' <span style="font-size:9px;font-weight:400;opacity:.6">'+t.sub+'</span></div>'
-            +'<div style="font-size:10px;color:#475569;margin-top:2px">×'+t.m+' · Margine <span style="color:'+(ok?'var(--green)':'var(--red)')+'">'+mg.toFixed(0)+'%'+(ok?' ✓':' ⚠️')+'</span>'
+            +'<div style="font-size:10px;color:#475569;margin-top:2px">Margine <span style="color:'+(ok?'var(--green)':'var(--red)')+'">'+mg.toFixed(1)+'%'+(ok?' ✓':' ⚠️')+'</span> <span title="Il campo ×'+t.m+' vale un margine del '+mg.toFixed(1)+'%: il prezzo lo fa il margine, non il moltiplicatore" style="opacity:.6">(dal campo ×'+t.m+')</span>'
               +(DISC>0?' · Sconto '+DISC+'%':'')
             +'</div>'
           +'</div>'
