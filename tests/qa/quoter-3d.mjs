@@ -273,6 +273,29 @@ const esito = await page.evaluate(async () => {
   sv('p3d-g', 290); sv('p3d-h', 9.95);
   await new Promise((r) => setTimeout(r, 300));
 
+  /* ── Il costo orario della macchina, non tre numeri di listino ─────────
+     Il suggerimento diceva «250W · €299 · 3000h»: tre cifre da cui nessuno
+     poteva ricavare quanto costa un'ora di quella macchina. */
+  const MK = window.InglyMachineCost;
+  dico('il motore dei costi macchina è nel bundle', !!MK);
+  if (MK) {
+    Print3DQuoter.pickMach('bambu-p1s');
+    await new Promise((r) => setTimeout(r, 300));
+    const hint = document.getElementById('p3d-mach-hint')?.textContent || '';
+    dico('la macchina dichiara il proprio costo orario', /\/h/.test(hint) && /corrente/.test(hint));
+    /* E le quattro voci non si contengono a vicenda. */
+    const c = MK.daCatalogo({ price: 2499, life_h: 6000, kw: 0.120, maint: 0.06 }, { kwhPrice: 0.28 });
+    dico('le quattro voci del costo orario si sommano esattamente',
+      Math.abs(c.machineCostPerHour - (c.energyCostPerHour + c.depreciationCostPerHour
+        + c.maintenanceCostPerHour + c.consumablesCostPerHour)) < 1e-9);
+    /* La potenza ottica non è l'assorbimento: 20 W di diodo, 80 W dalla presa. */
+    const n = MK.normalizza({ power_w: 20, kw: 0.080 });
+    dico('la potenza del laser non viene scambiata per assorbimento',
+      n.averagePowerW === 80 && n.laserPowerW === 20);
+    sv('p3d-g', 290); sv('p3d-h', 9.95);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
   /* Nessuna duplicazione introdotta. */
   const ids = [...document.querySelectorAll('[id]')].map((e) => e.id).filter(Boolean);
   const dupli = ids.filter((x, i) => ids.indexOf(x) !== i);

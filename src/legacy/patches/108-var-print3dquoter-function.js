@@ -534,8 +534,29 @@ function setDisc(v){
 function pickMach(id){
   var m=(MACH[T]||[]).find(function(x){return x.id===id;});if(!m)return;
   var s=el('p3d-mach');if(s)s.value=id;
-  var h=el('p3d-mach-hint');if(h)h.textContent=m.n+' — '+m.w+'W · €'+m.c+' · '+m.l+'h vita utile';
   sv('p3d-watt',m.w);sv('p3d-mc',m.c);sv('p3d-lh',m.l);
+  /* Il costo orario lo calcola il motore macchine, che sa distinguere le
+     quattro voci — corrente, ammortamento, manutenzione, consumabili — e sa
+     dire se il consumo è misurato o dedotto dalla targa. Il suggerimento qui
+     sotto era «250W · €299 · 3000h»: tre numeri di listino da cui nessuno
+     poteva ricavare quanto costa un'ora. */
+  var h=el('p3d-mach-hint');
+  if(h){
+    var MK=(typeof window!=='undefined') && window.InglyMachineCost;
+    if(MK){
+      var c=MK.daCatalogo({ id:m.id, name:m.n, price:m.c, life_h:m.l, w:m.w,
+                            dutyCycle:gv('p3d-duty',1), maint:gv('p3d-mnt',0) },
+                          { kwhPrice:gv('p3d-kwh',0.28) });
+      h.innerHTML=m.n+' — <b style="color:#22d3ee">'+eur(c.machineCostPerHour)+'/h</b>'
+        +' <span style="opacity:.7">(corrente '+eur(c.energyCostPerHour)
+        +' · usura '+eur(c.depreciationCostPerHour)
+        +' · manutenzione '+eur(c.maintenanceCostPerHour)+')</span>'
+        +(c.energia.confidence==='estimated'
+          ? '<br><span style="color:var(--orange)">⚠️ '+c.energia.nota+'</span>' : '');
+    } else {
+      h.textContent=m.n+' — '+m.w+'W · €'+m.c+' · '+m.l+'h vita utile';
+    }
+  }
   document.querySelectorAll('#view-print3d .p3-mb').forEach(function(b){b.classList.remove('sel');});
   var idx=(MACH[T]||[]).findIndex(function(x){return x.id===id;});
   var btns=document.querySelectorAll('#view-print3d .p3-mb');if(btns[idx])btns[idx].classList.add('sel');
