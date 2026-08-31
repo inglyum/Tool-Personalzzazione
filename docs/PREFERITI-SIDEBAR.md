@@ -128,3 +128,17 @@ voce di menu.
 all'avvio          voci 112 · scorciatoie 0
 dopo 5 cicli       voci 112 · scorciatoie 5 · ripetute 0 · orfane 0
 ```
+
+
+## Esito
+
+```
+npm run verify   217 file JS · 0 errori
+npm test        1089 test · 1089 pass · 0 fail
+npm run qa        25 suite · 496 controlli · 0 fail · 0 errori JavaScript
+```
+
+Zero memorie duplicate dei preferiti, zero sezioni preferiti duplicate a
+schermo.
+
+**FAVORITES SIDEBAR — COMPLETE**
