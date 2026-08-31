@@ -1333,7 +1333,7 @@ const Quoter={
         <div class="summary-title">💰 Riepilogo Economico</div>
         <div class="summary-body">
           <div class="sum-row">
-            <span class="lbl">Costo Vivo Totale</span>
+            <span class="lbl">Costo totale del lavoro</span>
             <span class="val" style="color:#fbbf24">${fmtCur(totalCost)}</span>
           </div>
           <div class="sum-row">

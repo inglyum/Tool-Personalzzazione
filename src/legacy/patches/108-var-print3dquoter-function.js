@@ -168,6 +168,37 @@ var MULTIMAT=[];
    differenza fra un pezzo e cento. */
 var PIATTI=[];
 
+/* ── La macchina: quella del progetto o quella di INGLY ────────────────────
+   Un 3MF dichiara la stampante per cui è stato affettato. Usare in silenzio
+   quella scelta a schermo darebbe un numero plausibile e sbagliato — un
+   progetto affettato per una A1 mini preventivato con i costi di una X1C — e
+   niente lo direbbe. Quindi: due modalità dichiarate, e la macchina importata
+   sempre mostrata accanto a quella in uso.
+
+   `progetto` non vuol dire «usa i costi del file»: il file dichiara un
+   modello, non un prezzo d'acquisto né una vita utile. Vuol dire «cerca
+   quella macchina fra le tue e usala»; se non c'è, lo si dice invece di
+   ripiegare in silenzio. */
+var MACCHINA_MODO='ingly';    // 'progetto' · 'ingly'
+var MACCHINA_IMPORTATA=null;  // il modello dichiarato dal file, se c'è
+
+/* ── Il consuntivo ─────────────────────────────────────────────────────────
+   Quel che il lavoro è costato davvero, inserito a lavoro finito. Sta in una
+   chiave sua e **non tocca mai lo snapshot**: il preventivo consegnato al
+   cliente non cambia perché il consuntivo dice un'altra cosa — è tutto il
+   motivo per cui lo snapshot è congelato.
+
+   La chiave è l'id della riga, che è già unico e già salvato con essa. */
+var CONSUNTIVO_K='p3d_consuntivo_v1';
+function consuntivi(){
+  try{ return JSON.parse(localStorage.getItem(CONSUNTIVO_K)||'{}')||{}; }catch(e){ return {}; }
+}
+function salvaConsuntivo(id,dati){
+  var tutti=consuntivi();
+  tutti[String(id)]=Object.assign({}, tutti[String(id)], dati, { quando:new Date().toISOString() });
+  try{ localStorage.setItem(CONSUNTIVO_K, JSON.stringify(tutti)); }catch(e){}
+}
+
 function persist(){try{localStorage.setItem(SK,JSON.stringify({mats:MATS,saved:SAVED}));}catch(e){}}
 function hydrate(){
   try{
@@ -360,6 +391,7 @@ function render(){
     +barraModalita()
     // ── Importa dallo slicer ────────────────────────────────────────
     +cardSlicer()
+    +cardMacchina()
     +cardPiatti()
     // Tipo + macchina
     +'<div class="p3-card cyan">'
@@ -470,6 +502,8 @@ function render(){
     +'<div class="p3-card"><div class="p3-ct">📦 QUANTITÀ — quanto conviene stampare</div><div id="p3d-scaglioni"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div></div></div>'
     // ── Le posizioni di prezzo, una card per politica ────────────────
     +'<div class="p3-card"><div class="p3-ct">💶 POSIZIONI DI PREZZO</div><div id="p3d-politiche"><div class="p3-ht">Inserisci i dati per vedere le posizioni.</div></div></div>'
+    // ── Preventivato contro reale ────────────────────────────────────
+    +cardConsuntivo()
     // ── La distinta base ─────────────────────────────────────────────
     +((MODALITA==='professionale') ? cardBom() : '')
     // ── F · calibrazione contro un riferimento esterno ────────────────
@@ -655,6 +689,9 @@ function leggiFile(inp){
     SLICER.includeTutto=r.comprendeTutto!==false;
     if(r.materiali&&r.materiali.length) MULTIMAT=r.dettaglioMateriali||[];
     PIATTI=(r.piatti||[]).slice();
+    MACCHINA_IMPORTATA = r.stampante || null;
+    /* Importare non sostituisce: la modalità resta quella scelta, e la card
+       mostra le due macchine una accanto all'altra. */
     if(!PROGETTO.nome) PROGETTO.nome=String(f.name).replace(/\.[^.]+$/,'');
     render();
     var g=(r.grafie||{});
@@ -757,7 +794,21 @@ function bandaEnergia(){
     +'</div>'
     +(e
       ? '<div style="font-size:10px;color:'+colore+';line-height:1.45">'+e.detail
-        +' → <b>'+eur(e.kwh*e.prezzoKwh)+'</b><br><span style="color:var(--text-muted)">'+e.nota+'</span></div>'
+        +' → <b>'+eur(e.kwh*e.prezzoKwh)+'</b><br><span style="color:var(--text-muted)">'+e.nota+'</span>'
+        /* Le due metà, dette separate. Il costo dell'energia è `kWh × €/kWh`,
+           e la sua fiducia è la peggiore delle due: chi misura il consumo con
+           una presa intelligente e poi scrive il prezzo a mano vedeva il
+           preventivo restare «dichiarato» senza capire perché. Adesso lo
+           legge, e sa quale delle due metà conviene migliorare. */
+        +(function(){
+          var pr=(r&&r._costo&&r._costo.provenienza||[]).filter(function(x){return x.id==='energia';})[0];
+          if(!pr||!pr.confidenzaConsumo) return '';
+          var lab={measured:'misurato',verified:'verificato',declared:'dichiarato',estimated:'stimato',missing:'assente'};
+          return '<div style="margin-top:3px;color:var(--text-dim)">consumo <b>'+(lab[pr.confidenzaConsumo]||pr.confidenzaConsumo)
+            +'</b> · prezzo <b>'+(lab[pr.confidenzaPrezzo]||pr.confidenzaPrezzo)+'</b>'
+            +' → la voce vale <b>'+(lab[pr.confidence]||pr.confidence)+'</b>, la peggiore delle due</div>';
+        })()
+        +'</div>'
       : '<div class="p3-ht">Inserisci le ore per vedere quale dato viene usato.</div>')
   +'</div>';
 }
@@ -854,13 +905,23 @@ function pannelloPerche(){
   });
   var conf=function(id){ var c=CONF_ETICHETTA[id]||CONF_ETICHETTA.declared; return c; };
 
+  /* Il conto con i numeri dentro, non la formula simbolica. «grammi ÷ 1000 ×
+     €/kg» dice come si calcola; «290 g × € 15,99/kg = € 4,64» dice da dove
+     viene **questo** numero — ed è l'unica versione che l'utente può rifare a
+     mente per accorgersi di aver sbagliato un campo. La formula resta sotto,
+     più piccola, per chi vuole la regola. */
   var riga=function(r){
     var c=conf(r.confidence);
     return '<tr style="border-bottom:1px solid var(--border)">'
       +'<td style="padding:7px 8px;font-size:11px;color:var(--text)">'+r.label+'</td>'
       +'<td style="padding:7px 8px;text-align:right;font-size:12px;font-weight:800;white-space:nowrap">'+eur(r.value||r.result||0)+'</td>'
-      +'<td style="padding:7px 8px;font-size:10px;color:var(--text-muted);font-family:ui-monospace,monospace">'+(r.formula||'—')+'</td>'
-      +'<td style="padding:7px 8px;font-size:10px;color:var(--text-dim)">'+(r.detail||r.input||'—')+'</td>'
+      +'<td style="padding:7px 8px;font-size:10px;font-family:ui-monospace,monospace">'
+        +(r.conti
+          ? '<span style="color:var(--text)">'+esc3(r.conti)+'</span>'
+            +'<div style="font-size:9px;color:var(--text-dim);margin-top:2px">'+esc3(r.formula||'')+'</div>'
+          : '<span style="color:var(--text-muted)">'+esc3(r.formula||'—')+'</span>')
+      +'</td>'
+      +'<td style="padding:7px 8px;font-size:10px;color:var(--text-dim)">'+esc3(r.detail||r.input||'—')+'</td>'
       +'<td style="padding:7px 8px;font-size:9px;white-space:nowrap"><span style="color:'+c.col+';font-weight:700">'+c.lab+'</span></td>'
       +'</tr>';
   };
@@ -870,7 +931,7 @@ function pannelloPerche(){
   return '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">'
       +'<thead><tr style="border-bottom:1px solid var(--border2)">'
-      +['Voce','Valore','Formula','Dato usato','Fiducia'].map(function(h,i){
+      +['Voce','Costo','Il conto','Dato usato','Fiducia'].map(function(h,i){
         return '<th style="padding:6px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);text-align:'+(i===1?'right':'left')+'">'+h+'</th>';
       }).join('')+'</tr></thead><tbody>'+righe.map(riga).join('')+'</tbody></table></div>'
 
@@ -1022,19 +1083,65 @@ function cardBom(){
   +'</div>';
 }
 
-/** Le righe della distinta: una funzione, tre sorgenti già esistenti. */
+/* ── La distinta base ──────────────────────────────────────────────────────
+   La distinta **legge il dettaglio dei costi**, non lo rifà. È la differenza
+   fra una distinta e una seconda contabilità: se calcolasse i grammi per il
+   prezzo al chilo per conto suo, uno spreco percentuale o un secondo
+   materiale la farebbero divergere dal dettaglio senza che nulla lo dica —
+   e sarebbero due numeri diversi per la stessa cosa, nella stessa schermata.
+
+   Quindi: i totali di gruppo vengono dalle voci del motore; le righe di
+   dettaglio dicono **come** quel totale è composto. */
 function bom(){
-  var m=pesi();
   var q=Math.max(1,gv('p3d-qty',1));
-  var prezzoKg=gv('p3d-mkg',24), unita=gv('p3d-mu',1000)||1000;
-  var righe=[];
-  if(m.totale>0){
-    righe.push({ gruppo:'Materiale', n:(el('p3d-mat')&&el('p3d-mat').selectedOptions&&el('p3d-mat').selectedOptions[0]?el('p3d-mat').selectedOptions[0].textContent.replace(/^[^ ]+ /,''):(T==='resin'?'Resina':'Filamento')),
-      q:Math.round(m.totale*100)/100, u:(T==='resin'?'ml':'g'), costo:(m.totale/unita)*prezzoKg });
+  var voci={};
+  if(R && !R.indisponibile && R._costo && R._costo.perPezzo){
+    (R._costo.perPezzo.voci||[]).forEach(function(v){ voci[v.id]=v.value; });
   }
-  HARDWARE.forEach(function(h){ righe.push({ gruppo:'Componenti', n:h.n, q:h.q, u:'pz', costo:(+h.q||0)*(+h.c||0) }); });
-  IMBALLO.forEach(function(x){ righe.push({ gruppo:'Confezione', n:x.n, q:x.q, u:'pz', costo:(+x.q||0)*(+x.c||0) }); });
-  return { righe:righe, qty:q, totale:righe.reduce(function(a,r){ return a+r.costo; },0) };
+  var righe=[];
+
+  /* Materiale: il totale è quello del motore, spreco compreso; il dettaglio
+     elenca i materiali dichiarati, o l'unico se non ce n'è più d'uno. */
+  var totMat=+voci.materiale||0;
+  if(totMat>0){
+    if(MULTIMAT.length){
+      var mm=costoMultiMateriale();
+      MULTIMAT.forEach(function(m){
+        var gr=Math.max(0,parseFloat(m.grammi)||0); if(!(gr>0)) return;
+        var pk=Math.max(0,parseFloat(m.prezzoKg)||0);
+        /* La quota di spreco si ripartisce sulle righe in proporzione, così la
+           somma resta esattamente il totale del motore. */
+        var quota = mm.costo>0 ? ((gr/1000)*pk)/mm.costo : 0;
+        righe.push({ gruppo:'Materiale', n:m.tipo||'Materiale', q:gr, u:(T==='resin'?'ml':'g'), costo: totMat*quota });
+      });
+    } else {
+      var pp=pesi();
+      var nome=(el('p3d-mat')&&el('p3d-mat').selectedOptions&&el('p3d-mat').selectedOptions[0]&&el('p3d-mat').value)
+        ? el('p3d-mat').selectedOptions[0].textContent.replace(/^[^ ]+ /,'')
+        : (T==='resin'?'Resina':'Filamento');
+      righe.push({ gruppo:'Materiale', n:nome, q:Math.round(pp.totale*100)/100, u:(T==='resin'?'ml':'g'), costo: totMat });
+    }
+  }
+
+  /* Componenti e confezione: stessa regola. Il totale è del motore, le righe
+     dicono di che cosa è fatto. */
+  var perGruppo=function(gruppo, elenco, totale){
+    if(!(totale>0)) return;
+    var lordo=elenco.reduce(function(a,x){ return a+(+x.q||0)*(+x.c||0); },0);
+    elenco.forEach(function(x){
+      var v=(+x.q||0)*(+x.c||0);
+      righe.push({ gruppo:gruppo, n:x.n, q:+x.q||0, u:'pz', costo: lordo>0 ? totale*(v/lordo) : 0 });
+    });
+    /* Una quota che il motore conta ma nessuna riga spiega — per esempio la
+       confezione dichiarata come importo al pezzo invece che a righe. */
+    if(lordo<=0) righe.push({ gruppo:gruppo, n:'dichiarato al pezzo', q:1, u:'', costo: totale });
+  };
+  perGruppo('Componenti', HARDWARE, +voci.hardware||0);
+  perGruppo('Confezione', IMBALLO, +voci.packaging||0);
+
+  var totale=(+voci.materiale||0)+(+voci.hardware||0)+(+voci.packaging||0);
+  return { righe:righe, qty:q, totale:totale,
+           voci:{ materiale:+voci.materiale||0, hardware:+voci.hardware||0, packaging:+voci.packaging||0 } };
 }
 
 function disegnaBom(){
@@ -1058,6 +1165,216 @@ function disegnaBom(){
     +(b.qty>1?'<div style="display:flex;justify-content:space-between;margin-top:2px;font-size:11px">'
       +'<span style="color:var(--text-muted)">Per '+b.qty+' pezzi</span>'
       +'<span style="font-weight:800;color:#22d3ee">'+eur(b.totale*b.qty)+'</span></div>':'');
+}
+
+/* ── Preventivato contro reale ─────────────────────────────────────────────
+   La domanda che chiude il cerchio, e senza la quale ogni preventivo ripete
+   gli errori del precedente con la stessa sicurezza.
+
+   Tre regole che questa card rispetta e che sono il motivo per cui è scritta
+   così e non in modo più comodo:
+
+   1. **Il preventivo originale non si tocca.** Il preventivato viene dallo
+      snapshot congelato della riga; il consuntivo sta in un'altra chiave.
+      Nessun campo di questa card scrive nello snapshot.
+   2. **Il confronto lo fa `InglyScostamento`**, che è puro e collaudato.
+      Qui si raccolgono i numeri e si disegnano: nessuna sottrazione a mano.
+   3. **Niente si aggiorna da solo.** Quando il consuntivo suggerisce che una
+      stima è sbagliata — un tasso di fallimento, un tempo di post-processo —
+      la card lo **propone**. Cambiare i dati senza consenso vorrebbe dire che
+      un preventivo fatto domani parte da numeri che nessuno ha approvato. */
+function cardConsuntivo(){
+  if(!LINES.length) return '';
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">📊 PREVENTIVATO VS REALE</div>'
+    +'<div id="p3d-consuntivo"></div>'
+  +'</div>';
+}
+
+var VOCI_CONSUNTIVO=[
+  { id:'materiale',   lab:'Materiale',    unita:'€' },
+  { id:'energia',     lab:'Energia',      unita:'€' },
+  { id:'macchina',    lab:'Tempo macchina', unita:'h' },
+  { id:'manodopera',  lab:'Manodopera',   unita:'€' },
+];
+
+/** Il preventivato di una riga, dalle voci congelate nello snapshot. */
+function previstoDi(l){
+  var v=(l && l.snapshot && l.snapshot.voci) || {};
+  var somma=function(){ var t=0; for(var i=0;i<arguments.length;i++) t+=(+v[arguments[i]]||0); return t; };
+  return {
+    materiale: somma('materiale'),
+    energia:   somma('energia'),
+    macchina:  (l.snapshot && l.snapshot.ingresso && +l.snapshot.ingresso.hours) || 0,
+    manodopera: somma('setup','finitura','postProcesso','unaTantumPerPezzo'),
+    costo:     (l.snapshot && +l.snapshot.trueCost) || +l.cpz || 0,
+    prezzo:    (l.snapshot && +l.snapshot.netPrice) || +l.ppz || 0,
+    quantita:  Math.max(1,+l.qty||1),
+  };
+}
+
+function disegnaConsuntivo(){
+  var n=el('p3d-consuntivo'); if(!n) return;
+  var S=(typeof window!=='undefined') && window.InglyScostamento;
+  if(!S){ n.innerHTML='<div class="p3-ht">Modulo di confronto non caricato.</div>'; return; }
+  var tutti=consuntivi();
+
+  n.innerHTML=LINES.map(function(l){
+    var prev=previstoDi(l);
+    var reale=tutti[String(l.id)]||{};
+    var costoReale = reale.costo!=null && reale.costo!=='' ? +reale.costo : null;
+    var c=S.confronta(
+      { costo:prev.costo, prezzo:prev.prezzo, quantita:prev.quantita },
+      costoReale!=null ? { costo:costoReale, prezzo:(reale.prezzo!=null&&reale.prezzo!==''?+reale.prezzo:undefined), quantita:prev.quantita } : {}
+    );
+
+    var campo=function(v){
+      var val=reale[v.id];
+      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">'
+        +'<span style="flex:1;font-size:10px;color:var(--text-muted)">'+v.lab+'</span>'
+        +'<span style="font-size:10px;color:var(--text-dim);width:64px;text-align:right">prev. '
+          +(v.unita==='h' ? (Math.round((prev[v.id]||0)*100)/100)+' h' : eur(prev[v.id]||0))+'</span>'
+        +'<input class="p3-fc" type="number" step="0.01" min="0" style="width:78px;text-align:right;font-size:11px;padding:4px 6px" '
+          +'placeholder="reale" value="'+(val==null?'':val)+'" '
+          +'oninput="Print3DQuoter.setConsuntivo('+l.id+',\''+v.id+'\',this.value)">'
+        +'<span style="font-size:9px;color:var(--text-dim);width:12px">'+v.unita+'</span></div>';
+    };
+
+    var semaforo=function(){
+      if(!c.disponibile) return { c:'var(--text-dim)', i:'⚪', t:'consuntivo non registrato' };
+      var p=Math.abs(c.scostamento.costoPct||0);
+      if(c.verdetto.colore==='rosso') return { c:'var(--red)', i:'🔴', t:c.verdetto.label };
+      if(p>5) return { c:'var(--orange)', i:'🟡', t:c.verdetto.label };
+      return { c:'var(--green,#22c55e)', i:'🟢', t:c.verdetto.label };
+    }();
+
+    var confronto = c.disponibile
+      ? '<div style="display:grid;grid-template-columns:1fr auto auto;gap:3px 10px;font-size:10px;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)">'
+        +'<span style="color:var(--text-muted)"></span><span style="color:var(--text-dim);text-align:right">previsto</span><span style="color:var(--text-dim);text-align:right">reale</span>'
+        +['costo','ricavo','profitto'].map(function(k){
+          return '<span style="color:var(--text-muted)">'+k.charAt(0).toUpperCase()+k.slice(1)+'</span>'
+            +'<span style="text-align:right;color:var(--text)">'+eur(c.preventivato[k])+'</span>'
+            +'<span style="text-align:right;font-weight:700;color:var(--text)">'+eur(c.reale[k])+'</span>';
+        }).join('')
+        +'<span style="color:var(--text-muted)">Margine</span>'
+        +'<span style="text-align:right;color:var(--text)">'+(c.preventivato.margine!=null?c.preventivato.margine.toFixed(1)+'%':'—')+'</span>'
+        +'<span style="text-align:right;font-weight:700;color:var(--text)">'+(c.reale.margine!=null?c.reale.margine.toFixed(1)+'%':'—')+'</span>'
+        +'</div>'
+        +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:var(--text-muted)">'
+          +'<span>scostamento <b style="color:'+semaforo.c+'">'+(c.scostamento.costo>=0?'+':'')+eur(c.scostamento.costo)+'</b></span>'
+          +'<span><b style="color:'+semaforo.c+'">'+(c.scostamento.costoPct!=null?((c.scostamento.costoPct>=0?'+':'')+c.scostamento.costoPct.toFixed(1)+'%'):'—')+'</b></span>'
+          +'<span style="color:var(--text-dim)">'+c.scostamento.convenzione+'</span>'
+        +'</div>'
+        +proposta(l,c)
+      : '<div class="p3-ht" style="margin-top:6px">'+esc3(c.cosaFare||'')+'</div>';
+
+    return '<div style="padding:9px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
+        +'<span style="font-size:11px;font-weight:800;color:var(--text)">'+esc3(l.n)+'</span>'
+        +'<span style="font-size:10px;font-weight:700;color:'+semaforo.c+'">'+semaforo.i+' '+esc3(semaforo.t)+'</span>'
+      +'</div>'
+      +VOCI_CONSUNTIVO.map(campo).join('')
+      +'<div style="display:flex;align-items:center;gap:5px;margin-top:6px">'
+        +'<span style="flex:1;font-size:10px;font-weight:700;color:var(--text)">Costo reale totale</span>'
+        +'<input class="p3-fc" type="number" step="0.01" min="0" style="width:78px;text-align:right;font-size:11px;padding:4px 6px;font-weight:800" '
+          +'placeholder="€/pz" value="'+(reale.costo==null?'':reale.costo)+'" '
+          +'oninput="Print3DQuoter.setConsuntivo('+l.id+',\'costo\',this.value)">'
+        +'<span style="font-size:9px;color:var(--text-dim);width:12px">€</span></div>'
+      +confronto
+    +'</div>';
+  }).join('')
+  +'<div class="p3-ht" style="margin-top:8px">Il consuntivo sta in un archivio suo: il preventivo consegnato non cambia mai per averlo compilato.</div>';
+}
+
+/* ── Il giro di ritorno ────────────────────────────────────────────────────
+   Quando il consuntivo dice che una stima era sbagliata, il sistema lo
+   **propone** e si ferma lì. Aggiornare da solo un tasso di fallimento
+   vorrebbe dire che il preventivo di domani parte da un numero che nessuno ha
+   guardato — e quel numero finisce in un prezzo che qualcuno pagherà. */
+function proposta(l,c){
+  if(!c.disponibile) return '';
+  var p=c.scostamento.costoPct;
+  if(p==null || Math.abs(p)<10) return '';
+  var su = p>0;
+  return '<div style="margin-top:7px;padding:7px 9px;border-radius:8px;background:var(--bg-card2);border-left:3px solid #22d3ee;font-size:10px;color:var(--text-muted);line-height:1.5">'
+    +'<b style="color:#22d3ee">Disponibili nuovi dati per aggiornare le stime.</b><br>'
+    +'Questo lavoro è costato il <b style="color:var(--text)">'+Math.abs(p).toFixed(1)+'%</b> '
+    +(su?'in più':'in meno')+' del preventivo. '
+    +(su
+      ? 'Le cause più frequenti sono un tasso di fallimento più alto del dichiarato o un post-processo più lungo.'
+      : 'Se si ripete, le tue stime sono prudenti: puoi rivederle al ribasso e restare competitivo.')
+    +'<br><span style="color:var(--text-dim)">Nessun dato è stato modificato: la revisione la decidi tu.</span>'
+  +'</div>';
+}
+
+function setConsuntivo(id,campo,valore){
+  var d={}; d[campo] = (valore===''||valore==null) ? null : (parseFloat(valore)||0);
+  salvaConsuntivo(id,d);
+  disegnaConsuntivo();
+}
+
+/* ── Macchina importata contro macchina usata ──────────────────────────────
+   La card compare solo quando il file ne ha dichiarata una: senza importazione
+   non c'è niente da confrontare, e una card vuota che dice «nessuna macchina
+   importata» sarebbe rumore. */
+function cardMacchina(){
+  if(!MACCHINA_IMPORTATA) return '';
+  var usata=(function(){
+    var sel=el('p3d-mach');
+    if(sel && sel.selectedOptions && sel.selectedOptions[0] && sel.value) return sel.selectedOptions[0].textContent;
+    return 'quella configurata a schermo';
+  })();
+  var trovata=trovaMacchina(MACCHINA_IMPORTATA);
+  var b=function(id,lab,sotto,attiva){
+    return '<button class="p3-tb'+(MACCHINA_MODO===id?' afdm':'')+'" style="flex:1;text-align:left;padding:7px 10px'
+      +(attiva?'':';opacity:.45;cursor:not-allowed')+'" '
+      +(attiva?'onclick="Print3DQuoter.setMacchinaModo(\''+id+'\')"':'')+'>'
+      +'<div style="font-weight:800;font-size:11px">'+lab+'</div>'
+      +'<div style="font-size:9px;opacity:.75;font-weight:600">'+sotto+'</div></button>';
+  };
+  return '<div class="p3-card cyan">'
+    +'<div class="p3-ct c">🤖 MACCHINA DEL PROGETTO</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+      +'<div style="padding:8px 10px;background:var(--bg-card2);border-radius:8px">'
+        +'<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Importata dal file</div>'
+        +'<div style="font-size:12px;font-weight:800;color:var(--text);margin-top:2px">'+esc3(MACCHINA_IMPORTATA)+'</div></div>'
+      +'<div style="padding:8px 10px;background:var(--bg-card2);border-radius:8px;border-left:3px solid #22d3ee">'
+        +'<div style="font-size:9px;color:#22d3ee;text-transform:uppercase;letter-spacing:.5px">Usata per il conto</div>'
+        +'<div style="font-size:12px;font-weight:800;color:var(--text);margin-top:2px">'+esc3(usata)+'</div></div>'
+    +'</div>'
+    +'<div class="p3-type" style="gap:6px">'
+      +b('progetto','📄 Macchina del progetto', trovata?('trovata: '+trovata.n):'non è fra le tue macchine', !!trovata)
+      +b('ingly','🏭 Macchina INGLY','quella scelta qui sopra',true)
+    +'</div>'
+    +'<div class="p3-ht" style="margin-top:6px">'
+      +(trovata
+        ? 'Il file dichiara il modello, non il suo prezzo né la sua vita utile: «macchina del progetto» sceglie <b>'+esc3(trovata.n)+'</b> fra le tue e usa i tuoi costi.'
+        : '<span style="color:var(--orange)">«'+esc3(MACCHINA_IMPORTATA)+'» non è fra le macchine configurate: il conto usa quella scelta a schermo, e questa riga esiste perché tu lo sappia.</span>')
+    +'</div></div>';
+}
+
+/** La macchina configurata che corrisponde al modello dichiarato dal file.
+    Confronto per sottostringa in entrambe le direzioni: gli slicer scrivono
+    codici («C11»), i cataloghi nomi commerciali («Bambu Lab X1 Carbon»). */
+function trovaMacchina(modello){
+  var m=String(modello||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(!m) return null;
+  var elenco=(MACH[T]||[]);
+  for(var i=0;i<elenco.length;i++){
+    var n=String(elenco[i].n||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(!n) continue;
+    if(n.indexOf(m)>=0 || m.indexOf(n)>=0) return elenco[i];
+  }
+  return null;
+}
+
+function setMacchinaModo(v){
+  MACCHINA_MODO = (v==='progetto') ? 'progetto' : 'ingly';
+  if(MACCHINA_MODO==='progetto'){
+    var t=trovaMacchina(MACCHINA_IMPORTATA);
+    if(t){ pickMach(t.id); return; }   // `pickMach` ridisegna già
+  }
+  render();
 }
 
 /* ── I materiali del pezzo ─────────────────────────────────────────────────
@@ -1212,6 +1529,8 @@ function disegnaVerdetto(){
     +'<div style="font-size:12px;font-weight:800;color:'+v.col+'">'+v.icona+' '+v.lab+'</div>'
     +'<div style="font-size:10px;color:var(--text-muted);line-height:1.5;margin-top:3px">'+v.testo+'</div>'
     +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;font-size:10px;color:var(--text-muted)">'
+      +'<span>costo <b style="color:var(--text)">'+eur(costo)+'</b>/pz</span>'
+      +'<span>prezzo <b style="color:var(--text)">'+eur(PREZZO_MANUALE)+'</b>/pz</span>'
       +'<span>profitto <b style="color:var(--text)">'+eur(PREZZO_MANUALE-costo)+'</b>/pz</span>'
       +'<span>margine <b style="color:var(--text)">'+v.margine.toFixed(1)+'%</b></span>'
       +'<span>ricarico <b style="color:var(--text)">'+(costo>0?((PREZZO_MANUALE/costo-1)*100).toFixed(1):'—')+'%</b></span>'
@@ -1791,6 +2110,7 @@ function calc(){
 
   disegnaBom();
   disegnaLotti();
+  disegnaConsuntivo();
 
   var co=el('p3d-calib-out');
   if(co){
@@ -2034,6 +2354,11 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   addPk:addPk, upPk:upPk, rmPk:rmPk,
   setProgetto:setProgetto, setModalita:setModalita,
   addMat2:addMat2, upMat2:upMat2, rmMat2:rmMat2,
+  setMacchinaModo:setMacchinaModo,
+  setConsuntivo:setConsuntivo,
+  /* Letti dal collaudo: il preventivato viene dallo snapshot, e il consuntivo
+     sta in un archivio che non lo tocca. */
+  _previsto:previstoDi, _consuntivi:consuntivi,
   svuotaPiatti:svuotaPiatti, usaPiatto:usaPiatto, leggiFile:leggiFile,
   _multimat:costoMultiMateriale,
   setOverheadModo:setOverheadModo, setOverheadValore:setOverheadValore,

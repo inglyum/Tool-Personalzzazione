@@ -162,6 +162,31 @@ const esito = await page.evaluate(async () => {
     b.righe.some((r) => r.n === 'Magnete' && vicino(r.costo, 0.30, 0.001)));
   dico('la distinta è a schermo', /DISTINTA BASE/.test(vista()) && /Magnete/.test(testo('p3d-bom')));
 
+  /* ── La distinta legge il dettaglio, non lo rifà ─────────────────────── */
+  const rr = E.calcola(Print3DQuoter._ingresso());
+  const vv = (id) => (rr.perPezzo.voci.find((v) => v.id === id) || { value: 0 }).value;
+  dico(`il materiale della distinta è quello del dettaglio (${b.voci.materiale.toFixed(4)} vs ${vv('materiale').toFixed(4)})`,
+    vicino(b.voci.materiale, vv('materiale'), 0.0005));
+  dico('i componenti anche', vicino(b.voci.hardware, vv('hardware'), 0.0005));
+  dico('e la confezione anche', vicino(b.voci.packaging, vv('packaging'), 0.0005));
+  dico('la somma delle righe è il totale della distinta',
+    vicino(b.righe.reduce((s2, r) => s2 + r.costo, 0), b.totale, 0.005));
+
+  /* Con uno spreco percentuale la distinta deve seguire il motore: è il caso
+     in cui una distinta che si rifà i conti diverge in silenzio. */
+  sv('p3d-waste', 12); Print3DQuoter.calc(); await a(500);
+  const b2 = Print3DQuoter._bom();
+  const v2 = E.calcola(Print3DQuoter._ingresso()).perPezzo.voci.find((v) => v.id === 'materiale').value;
+  dico(`con il 12% di spreco la distinta resta agganciata al dettaglio (${b2.voci.materiale.toFixed(4)} vs ${v2.toFixed(4)})`,
+    vicino(b2.voci.materiale, v2, 0.0005));
+  sv('p3d-waste', 0); Print3DQuoter.calc(); await a(400);
+
+  /* ── Una sola funzione di calcolo ────────────────────────────────────── */
+  dico('non esistono due funzioni di calcolo diverse',
+    typeof Print3DQuoter.calc === 'function'
+    && typeof Print3DQuoter.quickCalculation === 'undefined'
+    && typeof Print3DQuoter.professionalCalculation === 'undefined');
+
   /* ═══ 7 · POSIZIONI DI PREZZO ═════════════════════════════════════════ */
   const pol = testo('p3d-politiche');
   dico('le card delle posizioni sono in pagina', pol.length > 60);

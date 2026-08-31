@@ -254,7 +254,12 @@
     var esito = R ? R.risolvi(movimenti, id, {
       policy: politica,
       warehouseId: o.warehouseId,
-      richiesta: politica === 'fifo' && pos(o.quantita) > 0 ? pos(o.quantita) : undefined,
+      /* Il resolver chiama questo parametro `quantity`: passarlo con un altro
+         nome lo faceva ignorare in silenzio, e il FIFO rispondeva con il
+         costo dei **lotti residui** invece che con quello del prelievo — un
+         numero corretto per un'altra domanda, che è il modo peggiore di
+         sbagliare. */
+      quantity: politica === 'fifo' && pos(o.quantita) > 0 ? pos(o.quantita) : undefined,
     }) : null;
     var st = storico(movimenti, id, o.warehouseId);
 

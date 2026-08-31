@@ -227,6 +227,14 @@
       var peso = num(attributo(b, 'metadata', 'weight'));
       var sec = num(attributo(b, 'metadata', 'prediction'));
       var etichetta = attributo(b, 'metadata', 'index') || String(idx + 1);
+      /* La macchina dichiarata nel file. Non sostituisce mai quella scelta a
+         schermo: si legge, si mostra accanto, e la sostituzione è una scelta
+         esplicita dell'utente. Un progetto affettato per una A1 mini e
+         preventivato con i costi di una X1C darebbe un numero plausibile e
+         sbagliato, e niente lo direbbe. */
+      var stampante = attributo(b, 'metadata', 'printer_model_id')
+        || attributo(b, 'metadata', 'printer_model')
+        || null;
       var filamenti = [];
       var re = /<filament[^>]*>/gi, m;
       while ((m = re.exec(b))) {
@@ -236,11 +244,25 @@
         if (usoG > 0 || tipo) filamenti.push({ tipo: tipo, grammi: usoG, colore: colore });
       }
       if (peso > 0 || sec > 0 || filamenti.length) {
-        piatti.push({ nome: 'Piatto ' + etichetta, grammi: peso, ore: sec / 3600, materiali: filamenti });
+        piatti.push({
+          /* `plateId` è l'indice dichiarato dal file, non la posizione
+             nell'array: due piatti possono essere importati in un ordine
+             diverso da quello in cui sono stati affettati. */
+          plateId: String(etichetta),
+          nome: 'Piatto ' + etichetta,
+          stampante: stampante,
+          grammi: peso, ore: sec / 3600, materiali: filamenti,
+        });
       }
     });
 
     if (!piatti.length) return vuoto('il 3MF non dichiara né peso né tempo di stampa');
+
+    /* La stampante del progetto: quella dichiarata sul primo piatto che ne
+       ha una. Se i piatti ne dichiarano di diverse è un progetto multi-
+       macchina, e va detto invece che sceglierne una in silenzio. */
+    var stampanti = piatti.map(function (p) { return p.stampante; }).filter(Boolean);
+    var uniche = stampanti.filter(function (x, k) { return stampanti.indexOf(x) === k; });
 
     var grammi = piatti.reduce(function (a, p) { return a + p.grammi; }, 0);
     var ore = piatti.reduce(function (a, p) { return a + p.ore; }, 0);
@@ -265,10 +287,13 @@
       dettaglioMateriali: materiali,
       comprendeTutto: true,
       piatti: piatti,
-      grafie: { peso: '3MF slice_info', tempo: '3MF slice_info' },
-      nota: piatti.length > 1
-        ? piatti.length + ' piatti: ognuno è una stampa a sé, con il proprio avviamento.'
-        : null,
+      stampante: uniche.length === 1 ? uniche[0] : null,
+      stampantiDiverse: uniche.length > 1 ? uniche : null,
+      grafie: { peso: '3MF slice_info', tempo: '3MF slice_info', macchina: uniche.length ? '3MF slice_info' : null },
+      nota: [
+        piatti.length > 1 ? piatti.length + ' piatti: ognuno è una stampa a sé, con il proprio avviamento.' : null,
+        uniche.length > 1 ? 'I piatti dichiarano macchine diverse (' + uniche.join(', ') + ').' : null,
+      ].filter(Boolean).join(' ') || null,
     };
   }
 

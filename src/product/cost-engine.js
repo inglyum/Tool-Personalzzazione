@@ -99,6 +99,22 @@
     return (Math.round(n * 100) / 100).toString();
   };
 
+  /* ── Il conto, con i numeri dentro ────────────────────────────────────────
+     Una formula simbolica — «grammi ÷ 1000 × €/kg» — dice come si calcola, non
+     da dove viene questo numero. Chi guarda un preventivo vuole leggere
+     «290 g × € 15,99/kg = € 4,64»: i tre pezzi che ha inserito lui e il
+     risultato, così può rifarlo a mente e accorgersi dove ha sbagliato.
+
+     `conti()` compone quella stringa dai numeri **già usati** dal calcolo. Non
+     ricalcola: riceve il risultato e lo mette in coda. Ricalcolarlo qui
+     sarebbe una seconda matematica, cioè esattamente il difetto che questo
+     motore esiste per non avere. */
+  function conti(operandi, risultato) {
+    var pezzi = (operandi || []).filter(function (o) { return o != null && o !== ''; });
+    if (!pezzi.length) return null;
+    return pezzi.join(' × ') + ' = € ' + (Math.round(num(risultato) * 100) / 100).toFixed(2);
+  }
+
   /* ── Driver comuni ────────────────────────────────────────────────────────
      Scritti una volta e usati da ogni tecnologia. È la parte che non si
      duplica mai: se la formula dell'ammortamento cambia, cambia qui. */
@@ -228,6 +244,12 @@
              filamento; tenerli separati è l'unico modo per configurarne uno
              senza gonfiare l'altro. */
           { id: 'materiale', label: 'Materiale',
+            conti: multi.length
+              ? conti([multi.map(function (m) { return fmt(pos(m.grams)) + ' g × € ' + fmt(pos(m.pricePerKg) > 0 ? pos(m.pricePerKg) : prezzoKg) + '/kg'; }).join(' + ')],
+                  costoMulti * sprecoFattore)
+              : conti([fmt(grammi + supporti + spurgo) + ' g', '€ ' + fmt(prezzoKg) + '/kg',
+                  pos(i.materialWasteRate) > 0 ? '(1 + ' + fmt(i.materialWasteRate) + '%)' : null],
+                  ((grammi + supporti + spurgo) * sprecoFattore / 1000) * prezzoKg),
             value: multi.length
               ? costoMulti * sprecoFattore
               : ((grammi + supporti + spurgo) * sprecoFattore / 1000) * prezzoKg,
@@ -239,15 +261,20 @@
                 (pos(i.materialWasteRate) > 0 ? ' + ' + fmt(i.materialWasteRate) + '% di spreco' : '') +
                 (supporti ? ' · supporti ' + Math.round(supporti) + ' g' : '') +
                 (spurgo ? ' · spurgo ' + Math.round(spurgo) + ' g' : '') },
-          { id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail },
+          { id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail,
+            conti: conti([fmt(consumo(i, ore).kwh) + ' kWh', '€ ' + fmt(i.kwhPrice) + '/kWh'], energia(i, ore)) },
           { id: 'macchina', label: 'Ammortamento macchina', value: oraMacchina(i) * ore,
-            detail: pos(i.machineLifeHours) ? pos(i.machineLifeHours) + ' h di vita utile' : 'vita utile non indicata' },
+            detail: pos(i.machineLifeHours) ? pos(i.machineLifeHours) + ' h di vita utile' : 'vita utile non indicata',
+            conti: conti([fmt(ore) + ' h', '€ ' + fmt(oraMacchina(i)) + '/h'], oraMacchina(i) * ore) },
           { id: 'manutenzione', label: 'Manutenzione e consumabili', value: pos(i.maintenancePerHour) * ore,
-            detail: ore.toFixed(2) + ' h di lavoro' },
+            detail: ore.toFixed(2) + ' h di lavoro',
+            conti: conti([fmt(ore) + ' h', '€ ' + fmt(i.maintenancePerHour) + '/h'], pos(i.maintenancePerHour) * ore) },
           { id: 'postProcesso', label: 'Post-processo', value: (pos(i.washCureMin) / 60) * oraLavoro(i) + pos(i.consumablesPerPrint),
-            detail: num(i.washCureMin) + ' min di lavaggio e polimerizzazione' },
+            detail: num(i.washCureMin) + ' min di lavaggio e polimerizzazione',
+            conti: conti([fmt(i.washCureMin) + ' min ÷ 60', '€ ' + fmt(oraLavoro(i)) + '/h'], (pos(i.washCureMin) / 60) * oraLavoro(i)) },
           { id: 'finitura', label: 'Finitura', value: (pos(i.finishMin) / 60) * oraLavoro(i),
-            detail: num(i.finishMin) + ' min per pezzo' },
+            detail: num(i.finishMin) + ' min per pezzo',
+            conti: conti([fmt(i.finishMin) + ' min ÷ 60', '€ ' + fmt(oraLavoro(i)) + '/h'], (pos(i.finishMin) / 60) * oraLavoro(i)) },
         ];
       },
       perdibili: ['materiale', 'energia', 'macchina', 'manutenzione'],
@@ -637,7 +664,8 @@
     var scarto = perdibile * (tasso / (1 - tasso || 1));
     if (scarto > 0.0000001) {
       vociPerPezzo.push({ id: 'scarto', label: 'Scarto previsto', value: scarto,
-        detail: (tasso * 100).toFixed(0) + '% di pezzi da rifare' });
+        detail: (tasso * 100).toFixed(0) + '% di pezzi da rifare',
+        conti: '€ ' + fmt(perdibile) + ' × ' + fmt(tasso * 100) + '% ÷ (1 − ' + fmt(tasso * 100) + '%) = € ' + (Math.round(scarto * 100) / 100).toFixed(2) });
       totalePerPezzo += scarto;
     }
 
@@ -788,14 +816,30 @@
         f = campi.length === 0 ? 'utente' : (presenti.length ? 'inserito' : 'mancante');
       }
       var conf = CONF_DA_FONTE[f] || 'estimated';
-      /* L'energia sa dire di più di quanto sappia la mappa delle fonti. */
+      var extra = null;
+      /* ── L'energia ha due metà, e vanno dette separate ──────────────────
+         Il costo dell'energia è `kWh × €/kWh`, e le due metà possono avere
+         qualità diversissime: si può misurare il consumo con una presa
+         intelligente e poi scrivere il prezzo a mano guardando la bolletta.
+
+         La confidenza **complessiva** resta la peggiore delle due — è la
+         regola di tutto il motore, e un costo non è più solido del suo dato
+         più debole. Ma dichiarare solo quella rendeva invisibile la scala
+         misurato → medio → targa: chi comprava una presa intelligente vedeva
+         il preventivo restare «dichiarato» e non capiva perché. Adesso la
+         provenienza porta anche la confidenza del **consumo**, così la
+         schermata può dire «kWh misurati, prezzo dichiarato» — che è la
+         verità, e indica pure quale delle due metà conviene migliorare. */
       if (v.id === 'energia') {
-        var m = MODI_ENERGIA[consumo(i, pos(i.hours)).modo];
+        var e = consumo(i, pos(i.hours));
+        var m = MODI_ENERGIA[e.modo];
+        extra = { modoEnergia: e.modo, confidenzaConsumo: m.confidence,
+          confidenzaPrezzo: CONF_DA_FONTE[f] || 'estimated' };
         if (CONFIDENZE.indexOf(m.confidence) > CONFIDENZE.indexOf(conf)) conf = m.confidence;
       }
-      out.push({ id: v.id, label: v.label, value: v.value,
+      out.push(Object.assign({ id: v.id, label: v.label, value: v.value,
         source: f, sourceType: f, confidence: conf,
-        campi: campi, lastUpdated: (i.fontiAggiornate || {})[v.id] || null });
+        campi: campi, lastUpdated: (i.fontiAggiornate || {})[v.id] || null }, extra || {}));
     });
     return out;
   }
@@ -1269,7 +1313,9 @@
       righe.push({
         gruppo: 'una tantum', id: v.id, label: v.label,
         formula: v.id === 'setup' ? 'minuti ÷ 60 × tariffa oraria' : 'valore dichiarato',
-        input: v.detail, result: v.value,
+        conti: v.conti || (v.id === 'setup'
+          ? conti([fmt(i.setupMin) + ' min ÷ 60', '€ ' + fmt(oraLavoro(i)) + '/h'], v.value) : null),
+        input: v.detail, result: v.value, value: v.value,
         fonte: fonteDi(i, v.id === 'setup' ? 'setupMin' : v.id),
       });
     });
@@ -1278,8 +1324,9 @@
       righe.push({
         gruppo: 'una tantum', id: 'unaTantumPerPezzo', label: 'Una tantum per pezzo',
         formula: 'totale una tantum ÷ quantità',
+        conti: '€ ' + fmt(c.unaTantum.totale) + ' ÷ ' + c.qty + ' pz = € ' + (Math.round(c.unaTantum.perPezzo * 100) / 100).toFixed(2),
         input: c.unaTantum.totale.toFixed(2) + ' € ÷ ' + c.qty,
-        result: c.unaTantum.perPezzo, fonte: 'calcolato',
+        result: c.unaTantum.perPezzo, value: c.unaTantum.perPezzo, fonte: 'calcolato',
       });
     }
 
@@ -1307,6 +1354,7 @@
          viene dalla provenienza, che è l'unica a saperla. */
       var prov = (c.provenienza || []).filter(function (x) { return x.id === v.id; })[0];
       righe.push({ gruppo: 'per pezzo', id: v.id, label: v.label, formula: formula,
+        conti: v.conti || null,
         input: v.detail, detail: v.detail, result: v.value, value: v.value,
         fonte: fonte, source: (prov && prov.source) || fonte,
         confidence: (prov && prov.confidence) || 'estimated' });
@@ -1314,7 +1362,9 @@
 
     if (c.overhead > 0) {
       righe.push({ gruppo: 'per pezzo', id: 'overhead', label: 'Spese generali',
-        formula: 'costo diretto × percentuale', input: num(i.overheadPct) + '%', result: c.overhead, fonte: fonteDi(i, 'overheadPct') });
+        formula: 'ripartizione ' + c.overheadModo,
+        conti: '€ ' + (Math.round(c.overhead * 100) / 100).toFixed(2) + ' (' + c.overheadModo + ')',
+        input: c.overheadModo, result: c.overhead, value: c.overhead, fonte: fonteDi(i, 'overheadPct') });
     }
 
     righe.push({ gruppo: 'costo', id: 'costoPezzo', label: 'Costo reale per pezzo',

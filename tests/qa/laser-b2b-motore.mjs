@@ -134,8 +134,13 @@ const esito = await page.evaluate(async () => {
 
   /* ── Il motore è quello unico ──────────────────────────────────────── */
   dico('il motore di costo è quello centrale', !!window.InglyCostEngine);
-  dico('le cinque posizioni di prezzo esistono nel motore',
-    Object.keys(E.POLITICHE).length === 5 && !!E.POLITICHE.b2b);
+  /* Le posizioni sono sette dopo il benchmark 3D — e il numero non si scrive
+     qui: si chiede al motore, che è l'unico a saperlo. Quel che questo
+     collaudo deve presidiare è che il B2B sia una **posizione a margine** e
+     non uno sconto scritto nel preventivatore laser. */
+  const pol = E.politiche({});
+  dico('le posizioni di prezzo vengono dal motore (' + pol.length + ')', pol.length >= 5);
+  dico('e il B2B è fra loro, come margine', !!E.POLITICHE.b2b && E.POLITICHE.b2b.marginTarget > 0);
 
   return out;
 });

@@ -88,11 +88,27 @@
         + (nota ? '<div style="font-size:10px;color:var(--text-muted);margin-top:3px">' + esc(nota) + '</div>' : '')
         + '</div>';
     };
-    return '<div style="display:flex;gap:10px;flex-wrap:wrap">'
-      + cella('Costo di stampa', eu(r.costoStampa), 'var(--text-muted)', 'materiale ed energia')
-      + cella('Costo ' + r.modalitaLabel.toLowerCase(), eu(r.costo), 'var(--text)', r.modalitaSotto)
-      + cella('Prezzo consigliato', eu(r.prezzo), 'var(--primary)', 'margine ' + pc(r.marginePct))
-      + cella('Profitto', eu(r.profitto), r.profitto > 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)', 'per pezzo')
+    /* ── Costi e prezzo, in due aree separate ───────────────────────────
+       Mescolarli in una striscia sola è il modo in cui si finisce per
+       trattare sul costo credendo di trattare sul prezzo. Sono due domande
+       diverse — «quanto mi costa» e «quanto chiedo» — e la seconda dipende
+       dalla prima, non viceversa. */
+    var gruppo = function (titolo, colore, celle) {
+      return '<div style="flex:1;min-width:280px">'
+        + '<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:' + colore + ';margin-bottom:6px">' + esc(titolo) + '</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap">' + celle + '</div></div>';
+    };
+    var iva = num(r.iva);
+    var lordo = num(r.prezzoLordo) || (num(r.prezzo) + iva);
+    return '<div style="display:flex;gap:16px;flex-wrap:wrap">'
+      + gruppo('Costi', 'var(--text-muted)',
+          cella('Costo di stampa', eu(r.costoStampa), 'var(--text-muted)', 'materiale ed energia')
+          + cella('Costo ' + r.modalitaLabel.toLowerCase(), eu(r.costo), 'var(--text)', r.modalitaSotto))
+      + gruppo('Prezzo', 'var(--primary)',
+          cella('Prezzo netto', eu(r.prezzo), 'var(--primary)', 'margine ' + pc(r.marginePct))
+          + (iva > 0 ? cella('IVA', eu(iva), 'var(--text-muted)', 'sul netto') : '')
+          + (iva > 0 ? cella('Prezzo lordo', eu(lordo), 'var(--text)', 'quello che paga il cliente') : '')
+          + cella('Profitto', eu(r.profitto), r.profitto > 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)', 'per pezzo'))
       + '</div>';
   }
 

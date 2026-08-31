@@ -123,3 +123,93 @@ acquisto a registro — dichiarato «non verificato».
   scelta a schermo: «Usa» carica un piatto per volta.
 - Il confronto «preventivato contro reale» ha i dati (`InglyActualCost`) ma non
   ancora una schermata nel preventivatore.
+
+---
+
+# Fase 3D.2 — validazione
+
+## Il caso di riferimento, fissato
+
+PLA · 290 g · 9 h 57 m · 1 pezzo · 150 W al 60% · € 0,28/kWh · macchina € 400
+su 2 000 h · manutenzione € 0,12/h · scarto 7% · manodopera € 18/h ·
+avviamento 15 min · finitura 10 min.
+
+| voce | 15,99 €/kg | 20,00 €/kg | 24,00 €/kg |
+| ---- | ---------: | ---------: | ---------: |
+| materialCost        | 4,6371 | 5,8000 | 6,9600 |
+| energyCost          | 0,2507 | 0,2507 | 0,2507 |
+| machineDepreciation | 1,9900 | 1,9900 | 1,9900 |
+| maintenance         | 1,1940 | 1,1940 | 1,1940 |
+| consumables         | 0,0000 | 0,0000 | 0,0000 |
+| waste (spreco)      | 0,0000 | 0,0000 | 0,0000 |
+| failure (scarto)    | 0,6076 | 0,6951 | 0,7824 |
+| labor               | 7,5000 | 7,5000 | 7,5000 |
+| hardware            | 0,0000 | 0,0000 | 0,0000 |
+| packaging           | 0,0000 | 0,0000 | 0,0000 |
+| overhead            | 0,0000 | 0,0000 | 0,0000 |
+| **TRUE COST**       | **16,1794** | **17,4298** | **18,6771** |
+
+Con € 15,99/kg, IVA 22%:
+
+| posizione | netto | profitto | margine | ricarico | IVA | lordo |
+| --------- | ----: | -------: | ------: | -------: | --: | ----: |
+| Competitive 25% | 21,57 | 5,39 | 25,0% | 33,3% | 4,75 | 26,32 |
+| Standard 40%    | 26,97 | 10,79 | 40,0% | 66,7% | 5,93 | 32,90 |
+| Premium 60%     | 40,45 | 24,27 | 60,0% | 150,0% | 8,90 | 49,35 |
+| Luxury 80%      | 80,90 | 64,72 | 80,0% | 400,0% | 17,80 | 98,69 |
+
+`tests/calibrazione-290g.test.mjs` non copia questi numeri: li ricalcola dalle
+grandezze dichiarate. Un test che copia l'output non si accorge mai di un
+errore, lo certifica.
+
+## La catena, provata sui documenti veri
+
+`tests/qa/quoter-3d-integrita.mjs` non intercetta `totali()`: apre il PDF che
+il preventivatore genera davvero e legge l'URL WhatsApp che compone davvero.
+
+```
+canonico  16,1794    (InglyCostEngine.calcola)
+live      16,1794    (schermo)
+voci      16,1794    (spiegazione, somma delle righe)
+riga      16,1794    (snapshot della voce a preventivo)
+netto     26,9657 = 16,1794 / (1 − 0,40)
+PDF       32,90      WhatsApp 32,90      (netto + 22%)
+```
+
+Poi si cambia tutto — filamento a € 39,90, macchina a € 1 200, vita utile a
+1 000 h, € 0,55/kWh, manodopera a € 30/h, avviamento a 45 min, margine al 70%,
+IVA al 10% — e la voce a preventivo non si muove di un centesimo. Lo snapshot è
+identico campo per campo; il costo vivo sì che cambia, e la schermata lo dice.
+
+## Difetti trovati in questa fase
+
+1. **Il FIFO non riceveva la quantità.** `material-cost.js` passava
+   `richiesta:` dove il resolver legge `quantity:`. Il parametro veniva
+   ignorato in silenzio e il FIFO rispondeva con il costo dei **lotti
+   residui** invece che del prelievo — un numero corretto per un'altra
+   domanda, che è il modo peggiore di sbagliare.
+2. **La scala dell'energia era invisibile.** La confidenza della voce è la
+   peggiore fra consumo e prezzo al kWh — corretto — ma dichiarare solo quella
+   faceva sì che comprare una presa intelligente non cambiasse niente di ciò
+   che si vede. Adesso la provenienza porta `confidenzaConsumo` e
+   `confidenzaPrezzo` accanto alla complessiva, e la banda le mostra separate.
+3. **La distinta rifaceva i conti.** Calcolava grammi × €/kg per conto suo:
+   con uno spreco percentuale o un secondo materiale sarebbe divergita dal
+   dettaglio senza che nulla lo dicesse. Ora legge le voci del motore.
+4. **«Costo Vivo»** non aveva un significato contabile preciso.
+
+## Preventivato vs Reale
+
+`InglyScostamento` (puro, 12 test) più la card nel preventivatore. Il
+consuntivo sta in `p3d_consuntivo_v1` e non tocca lo snapshot. Semaforo: verde
+entro il 5%, giallo oltre, rosso in perdita o oltre il 20%. Quando lo
+scostamento supera il 10% compare «Disponibili nuovi dati per aggiornare le
+stime» — e nient'altro succede: la revisione la decide una persona.
+
+## Architettura
+
+```
+InglyCostEngine   stima      →  QUOTE  (snapshot congelato)
+InglyActualCost   consuntivo →  ORDER
+InglyScostamento  confronto  →  VARIANCE
+```

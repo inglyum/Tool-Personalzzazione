@@ -644,7 +644,7 @@
           <tbody id="ql-lines-body"></tbody>
         </table>
         <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-          <div class="stat-row" style="font-size:12px"><span class="text-muted">Costo Vivo Totale</span><span class="stat-val" id="ql-tot-cost">€0.00</span></div>
+          <div class="stat-row" style="font-size:12px"><span class="text-muted" title="Somma dei costi delle voci a preventivo: materiale, macchina, lavoro ed extra. Non comprende IVA né margine.">Costo totale del lavoro</span><span class="stat-val" id="ql-tot-cost">€0.00</span></div>
           <div class="stat-row" style="font-size:12px"><span class="text-muted">Subtotale netto</span><span class="stat-val" id="ql-tot-net">€0.00</span></div>
           <div class="stat-row" style="font-size:12px"><span class="text-muted">Margine %</span><span id="ql-tot-margin" style="font-weight:700;color:var(--green)">—</span></div>
           <div class="stat-row" style="font-size:12px"><span class="text-muted">IVA (22%)</span><span class="stat-val" id="ql-tot-vat">€0.00</span></div>
@@ -692,7 +692,7 @@
             <button id="qr-iva-no-btn" onclick="Quoter.setIVAMode(false)" title="Prezzi senza IVA (es. B2B)" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:10px;font-weight:700;background:transparent;color:var(--text-muted);transition:all .2s">Senza IVA</button>
           </div>
         </div>
-        <div class="stat-row" style="font-size:12px"><span class="text-muted">Costo Vivo</span><span class="stat-val" id="qr-cost">€0.00</span></div>
+        <div class="stat-row" style="font-size:12px"><span class="text-muted" title="Somma dei costi delle voci a preventivo: materiale, macchina, lavoro ed extra. Non comprende IVA né margine.">Costo totale del lavoro</span><span class="stat-val" id="qr-cost">€0.00</span></div>
         <!-- ➕ Costi Aggiuntivi Dettagliati v37 -->
         <div style="margin:8px 0;border:1px solid var(--border2);border-radius:9px;overflow:hidden">
           <button onclick="const b=document.getElementById('qr-extra-body');const ic=document.getElementById('qr-extra-ic');b.style.display=b.style.display==='none'?'block':'none';ic.textContent=b.style.display==='none'?'▶':'▼'" style="width:100%;background:var(--bg-card2);border:none;padding:8px 10px;color:var(--text-muted);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;text-align:left">
