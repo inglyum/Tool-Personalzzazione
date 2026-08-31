@@ -365,13 +365,30 @@
   #sidebar-nav > .nav-search,
   /* I primi due pulsanti della barra strumenti sono "Espandi" e "Comprimi":
      in modalità barra la sidebar è già compressa e dicono l'ovvio a metà. */
-  /* !important-ok: "⭐ Favorites — hover nav items to pin" e i pulsanti
-     "Espandi"/"Comprimi" sono creati da JavaScript con `style.cssText`, quindi
-     portano `display:flex` in linea. Nessuna regola di foglio può batterlo. */
-  #nav-favorites-bar,
+  /* !important-ok: i pulsanti "Espandi"/"Comprimi" sono creati da JavaScript
+     con `style.cssText`, quindi portano `display:flex` in linea. Nessuna
+     regola di foglio può batterlo. */
   #sidebar-toolbar > button:nth-child(1),
   #sidebar-toolbar > button:nth-child(2) {
     display: none !important;
+  }
+
+  /* In modalità barra i preferiti restano: sono icone, ed è la modalità in cui
+     una scorciatoia serve di più. Spariscono l'intestazione della categoria e
+     i comandi d'ordine, che a 60 px non si leggono — riordinare si fa quando
+     la sidebar è larga. Il `title` di ogni riga resta e fa da suggerimento. */
+  /* !important-ok: l'intestazione della categoria e le righe delle scorciatoie
+     sono disegnate da JavaScript con `style` in linea (`display:flex`,
+     `padding-right`), e uno stile in linea batte qualunque regola d'autore. */
+  #nav-favs-group .nav-group-title,
+  #nav-favs-group .fav-ord-group {
+    display: none !important;
+  }
+
+  /* !important-ok: `padding-right` è scritto in linea sulla riga per fare posto
+     ai comandi d'ordine, che qui non ci sono. */
+  #nav-favs-group .nav-item {
+    padding-right: 0 !important;
   }
 
   /* Le voci di menu scrivono l'etichetta come nodo di testo nudo accanto
@@ -585,11 +602,62 @@ mark.sh {
    comprime e le sue pastiglie escono dal riquadro, finendo sopra le voci del
    menu. Il difetto si vede solo quando ci sono dei preferiti — ed è per questo
    che è sopravvissuto a due giri di collaudo fatti su un elenco vuoto.        */
-#nav-favorites-bar,
+/* `#nav-favorites-bar` è stato ritirato: era la seconda rappresentazione dello
+   stesso elenco, e per anni è stata tenuta invisibile da un `display:none
+   !important` in tre fogli diversi. Un componente nascosto con il martello è
+   una duplicazione che sopravvive: adesso non viene più creato. Resta la barra
+   di ripristino, che è un'altra cosa. */
 #nav-restore-bar {
   flex-shrink: 0;
   min-height: auto;
   align-content: flex-start;
+}
+
+/* ── La categoria ⭐ PREFERITI ─────────────────────────────────────────────
+   Sta in cima alla navigazione perché è la prima cosa che si cerca. La
+   visibilità la decide il componente — `favorites.length > 0` — non un
+   `!important` in un foglio: una regola che nasconde a prescindere è il modo
+   in cui questa categoria è rimasta invisibile per tre versioni. */
+#nav-favs-group {
+  order: -1;
+}
+
+#nav-favs-group .fav-ord {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-subtle);
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity .12s ease, color .12s ease, background .12s ease;
+}
+
+/* I comandi compaiono quando servono — al passaggio o con il fuoco da
+   tastiera. `:focus-within` è ciò che li rende raggiungibili con il Tab: senza
+   di lui il fuoco entrerebbe su un pulsante invisibile. */
+#nav-favs-group .nav-item:hover .fav-ord,
+#nav-favs-group .nav-item:focus-within .fav-ord,
+#nav-favs-group .fav-ord:focus-visible {
+  opacity: .7;
+}
+
+#nav-favs-group .fav-ord:hover:not([disabled]) {
+  opacity: 1;
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+
+#nav-favs-group .fav-ord[disabled] {
+  cursor: default;
+  opacity: .2;
+}
+
+#nav-favs-group .fav-ord:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 /* ── Il contenuto di «Altro (n)» chiuso deve restare chiuso ────────────────

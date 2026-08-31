@@ -13,14 +13,31 @@
   var NS='http://www.w3.org/2000/svg';
 
   var css=`
+  /* ── Le tre righe che nascondevano i Preferiti ──────────────────────────
+     Qui c'erano tre regole display:none !important — su .nav-pin, su
+     #nav-favorites-bar e su #nav-favs-group.
+
+     Le prime due sono corrette e restano. La stella .nav-pin è quella vecchia
+     di Favs: quella buona la disegna NavPrefs.renderSectionActions, e due
+     stelle per voce su 98 voci erano il difetto che la v81 stava chiudendo.
+     #nav-favorites-bar e' la vecchia barra orizzontale di pastiglie, ritirata
+     perche' era la seconda rappresentazione dello stesso elenco.
+
+     La terza era l'errore: #nav-favs-group e' la CATEGORIA stella PREFERITI,
+     quella che l'utente deve vedere. La v81 la nascondeva per sostituirla con
+     #nav-fav-top, che invece di disegnare scorciatoie SPOSTAVA FISICAMENTE le
+     voci vere in cima. Due conseguenze misurate: la sezione spariva dalla sua
+     categoria d'origine, e una sezione insieme preferita e nascosta veniva
+     spostata in cima e poi nascosta da NavPrefs.apply() — cioe' spariva del
+     tutto, proprio nel caso in cui il preferito serve di piu'.
+
+     Adesso la categoria e' una sola e la disegna Favs.render(). Qui resta
+     quello che la v81 faceva bene: le icone SVG coerenti e la fine del
+     tremolio. */
   .nav-pin{ display:none !important; }
-  #nav-favorites-bar{ display:none !important; }
-  #nav-favs-group{ display:none !important; }
-  #sidebar-nav .nav-item[data-fav-dup="1"]{ display:flex !important; }
+  #nav-favs-group .nav-pin{ display:inline !important; }
   /* stop flicker/ondeggiamento: nessuna animazione opacity/max-height sulle voci */
   #sidebar-nav .nav-item{ max-height:none !important; opacity:1 !important; transition:background .14s ease,color .14s ease !important; }
-  #nav-fav-top{ padding:2px 0 6px; margin-bottom:4px; border-bottom:1px solid var(--border,#333); }
-  #nav-fav-top-lbl{ display:flex; align-items:center; gap:6px; padding:4px 8px 6px; }
   .nav-item .nav-ctrl{ display:inline-flex !important; align-items:center; gap:4px; margin-left:auto; flex-shrink:0; }
   .nav-item .nav-ctrl button{ opacity:1 !important; width:24px; height:24px; min-width:24px; display:inline-flex;
     align-items:center; justify-content:center; padding:0 !important; border-radius:7px !important; background:none;
@@ -78,45 +95,20 @@
   var mo=null, nav=null;
   function paused(fn){ try{ if(mo&&nav) mo.disconnect(); fn(); } finally { if(mo&&nav) mo.observe(nav,{childList:true,subtree:true}); } }
 
-  function ensureTop(){
-    var top=$('nav-fav-top');
-    if(!top){ top=document.createElement('div'); top.id='nav-fav-top';
-      var lbl=document.createElement('div'); lbl.id='nav-fav-top-lbl'; lbl.className='nav-group-title';
-      lbl.innerHTML='<span style="color:var(--primary,#fbbf24);font-weight:800;font-size:10px;letter-spacing:.06em;text-transform:uppercase">⭐ Preferiti</span>';
-      top.appendChild(lbl); nav.insertBefore(top, nav.firstChild);
-    } else if(nav.firstElementChild!==top){ nav.insertBefore(top, nav.firstChild); }
-    return top;
-  }
-  function findReal(sec){
-    var all=document.querySelectorAll('#sidebar-nav .nav-item[data-section="'+esc(sec)+'"]');
-    for(var i=0;i<all.length;i++){ if(all[i].closest('#nav-favs-list')) continue; return all[i]; }
-    return null;
-  }
-  function pin(el, top){ if(el.parentNode===top) return;
-    if(!el.__ph){ var ph=document.createComment('fav'); el.parentNode.insertBefore(ph, el); el.__ph=ph; }
-    top.appendChild(el);
-  }
-  function restore(el){ var ph=el.__ph; if(ph&&ph.parentNode){ ph.parentNode.insertBefore(el, ph); ph.parentNode.removeChild(ph); } el.__ph=null; }
+  /* ── Il riordino che spostava le voci: ritirato ──────────────────────────
+     `ensureTop()` creava `#nav-fav-top` e `pin()` ci **spostava dentro il nodo
+     vero** della voce, lasciando un commento come segnaposto per rimetterlo a
+     posto. Funzionava, ed era la cosa sbagliata: la sezione spariva dalla sua
+     categoria, e un preferito anche nascosto veniva spostato in cima e poi
+     nascosto — cioè perso.
 
+     Un preferito è una **scorciatoia**, non un trasloco. Le scorciatoie le
+     disegna `Favs.render()` dentro `#nav-favs-group`, dalla stessa sorgente
+     (`NavPrefs._prefs.favorites`), e la voce originale non si muove.
+
+     Qui resta solo il ripasso delle icone, che è quello che questo layer sa
+     fare e nessun altro fa. */
   function reorder(){
-    if(!nav) nav=$('sidebar-nav'); if(!nav) return;
-    var favs=favList();
-    paused(function(){
-      var top=ensureTop();
-      // 1. togli dalla cima ciò che non è più preferito
-      slice(top.querySelectorAll('.nav-item[data-section]')).forEach(function(el){
-        if(favs.indexOf(el.getAttribute('data-section'))<0) restore(el);
-      });
-      // 2. porta in cima i preferiti mancanti
-      favs.forEach(function(sec){ var el=findReal(sec); if(el && el.parentNode!==top) pin(el, top); });
-      // 3. riordina SOLO se l'ordine è diverso (idempotente → niente flicker)
-      var cur=slice(top.querySelectorAll('.nav-item[data-section]')).map(function(e){ return e.getAttribute('data-section'); });
-      var desired=favs.filter(function(s){ return top.querySelector('.nav-item[data-section="'+esc(s)+'"]'); });
-      if(cur.join(',')!==desired.join(',')){
-        desired.forEach(function(sec){ var el=top.querySelector('.nav-item[data-section="'+esc(sec)+'"]'); if(el) top.appendChild(el); });
-      }
-      var lbl=$('nav-fav-top-lbl'); if(lbl) lbl.style.display=favs.length?'flex':'none';
-    });
     restyleControls();
   }
 

@@ -5320,21 +5320,34 @@ const NavPrefs = {
 
   async load() {
     const saved = await IDB.get('settings', 'nav_prefs').catch(() => null);
-    if (saved) this._prefs = { favorites: saved.favorites || [], hidden: saved.hidden || [] };
+    if (saved) this._prefs = { favorites: saved.favorites || [], hidden: saved.hidden || [],
+      migratoDaFavs3: !!saved.migratoDaFavs3 };
 
     /* Fino alla v88 esistevano due sistemi di preferiti che non si parlavano:
        questo (IndexedDB, `nav_prefs`) e `Favs` (localStorage, `ingly_favs3`).
        Ogni voce di menu portava due stelle, e aggiungere ai preferiti in una
        non si vedeva nell'altra. Ora la sorgente è una sola — ma i preferiti
        già salvati nel vecchio sistema non si buttano: si assorbono. */
-    try {
-      const vecchi = JSON.parse(localStorage.getItem('ingly_favs3') || '[]');
-      if (Array.isArray(vecchi) && vecchi.length) {
-        const prima = this._prefs.favorites.length;
-        vecchi.forEach((s) => { if (s && this._prefs.favorites.indexOf(s) === -1) this._prefs.favorites.push(s); });
-        if (this._prefs.favorites.length !== prima) await this.save();
-      }
-    } catch (e) { /* un JSON illeggibile non deve impedire l'avvio */ }
+    /* ── E si assorbono UNA VOLTA SOLA ────────────────────────────────────
+       La fusione girava a ogni avvio. Conseguenza misurata: un preferito
+       ereditato dal vecchio sistema e poi **tolto** dall'utente tornava al
+       ricaricamento successivo, perché la chiave storica lo conteneva ancora e
+       la fusione lo rimetteva dentro. Togliere un preferito non funzionava, e
+       sembrava un difetto di salvataggio.
+
+       Il travaso è un'operazione, non uno stato: si fa una volta e si segna di
+       averla fatta. `ingly_favs3` non si cancella — la direttiva chiede di
+       conservarlo per compatibilità — ma smette di essere una sorgente. */
+    if (!this._prefs.migratoDaFavs3) {
+      try {
+        const vecchi = JSON.parse(localStorage.getItem('ingly_favs3') || '[]');
+        if (Array.isArray(vecchi)) {
+          vecchi.forEach((s) => { if (s && this._prefs.favorites.indexOf(s) === -1) this._prefs.favorites.push(s); });
+        }
+      } catch (e) { /* un JSON illeggibile non deve impedire l'avvio */ }
+      this._prefs.migratoDaFavs3 = true;
+      await this.save().catch(() => { /* senza database si riproverà al prossimo avvio */ });
+    }
 
     this._loaded = true;
     this.apply();
@@ -5345,12 +5358,57 @@ const NavPrefs = {
   },
 
   async toggleFavorite(section) {
+    if (!section) return;
     const idx = this._prefs.favorites.indexOf(section);
     if (idx > -1) this._prefs.favorites.splice(idx, 1);
-    else this._prefs.favorites.push(section);
+    /* Un preferito aggiunto due volte comparirebbe due volte nella categoria e
+       una volta sola nella stella: l'`indexOf` sopra lo esclude già, ma la
+       guardia resta perché `favorites` arriva anche dalla migrazione e da
+       `nav_prefs` scritto da versioni precedenti. */
+    else if (this._prefs.favorites.indexOf(section) === -1) this._prefs.favorites.push(section);
     await this.save();
     this.apply();
-    toast(idx > -1 ? 'Rimosso dai preferiti' : 'Aggiunto ai preferiti ⭐', 'info');
+    toast(idx > -1 ? 'Rimosso dai Preferiti' : '⭐ Aggiunto ai Preferiti', 'info');
+  },
+
+  /* ── L'ordine dei preferiti ───────────────────────────────────────────────
+     L'ordine **è** quello dell'array: non c'è un secondo campo che potrebbe
+     divergere da lui. Spostare vuol dire spostare l'elemento, e il salvataggio
+     è lo stesso di sempre — quindi l'ordine sopravvive al ricaricamento senza
+     che nessuno debba ricordarsene. */
+  async moveFavorite(section, delta) {
+    const f = this._prefs.favorites;
+    const i = f.indexOf(section);
+    if (i < 0) return false;
+    const j = Math.max(0, Math.min(f.length - 1, i + delta));
+    if (i === j) return false;
+    f.splice(j, 0, f.splice(i, 1)[0]);
+    await this.save();
+    this.apply();
+    return true;
+  },
+
+  async favoriteToTop(section) {
+    const f = this._prefs.favorites;
+    const i = f.indexOf(section);
+    if (i <= 0) return false;
+    f.unshift(f.splice(i, 1)[0]);
+    await this.save();
+    this.apply();
+    toast('⭐ Messo in cima', 'info');
+    return true;
+  },
+
+  /** L'elenco dei preferiti, ripulito: è quello che disegna la categoria.
+      Un id ripetuto o vuoto arrivato da una migrazione non deve diventare una
+      riga doppia a schermo. */
+  favorites() {
+    const visti = {};
+    return (this._prefs.favorites || []).filter((s) => {
+      if (!s || visti[s]) return false;
+      visti[s] = true;
+      return true;
+    });
   },
 
   async toggleHide(section) {
@@ -5372,10 +5430,17 @@ const NavPrefs = {
   isHidden(section) { return this._prefs.hidden.includes(section); },
 
   apply() {
-    // 1. Favorites bar
+    // 1. Le sezioni nascoste, e la barra di ripristino
     this._renderFavBar();
-    // 2. Hide/show nav items
+    /* 2. Nascondi/mostra le voci — **tranne** le scorciatoie dei preferiti.
+
+       Il selettore era `.nav-item[data-section]` senza ambito, e le righe della
+       categoria ⭐ PREFERITI sono `.nav-item[data-section]` anche loro: una
+       sezione insieme preferita e nascosta veniva nascosta pure lì, cioè
+       spariva del tutto. È esattamente il caso in cui il preferito serve di
+       più — «tolgo dal menu quello che uso di rado, ma lo tengo a portata». */
     document.querySelectorAll('.nav-item[data-section]').forEach(el => {
+      if (el.closest('#nav-favs-group')) return;
       const section = el.dataset.section;
       const hide = this.isHidden(section);
       if (hide) {
@@ -5397,30 +5462,36 @@ const NavPrefs = {
         });
       }
     });
-    // 3. Add star + hide buttons to nav items (if not already)
+    // 3. Le stelle e il nascondi su ogni voce
     this._addNavControls();
+    /* 4. La categoria ⭐ PREFERITI. Ridisegnarla qui è ciò che rende immediato
+       l'aggiungi/togli: `toggleFavorite` chiama `apply()`, e la sidebar si
+       aggiorna senza ricaricare la pagina. `Favs.render()` è idempotente —
+       riscrive `#nav-favs-list` invece di appendere — quindi chiamarla cento
+       volte lascia una categoria sola. */
+    try { if (typeof Favs !== 'undefined' && Favs.render) Favs.render(); }
+    catch (e) { /* la categoria non deve poter impedire il resto della sidebar */ }
   },
 
+  /* ── Che cosa disegna ancora questa funzione ─────────────────────────────
+     Non più i preferiti: quelli sono la categoria ⭐ PREFERITI, e la disegna
+     `Favs.render()` da questa stessa sorgente. Qui resta la barra «n sezioni
+     nascoste · Ripristina», che è l'altra metà di `NavPrefs` e non ha un altro
+     posto dove stare.
+
+     La vecchia barra orizzontale di pastiglie (`#nav-favorites-bar`) non viene
+     più creata. Era la seconda rappresentazione dello stesso elenco, e per
+     anni è stata tenuta invisibile da un `display:none !important` in tre
+     fogli diversi: nascondere un componente con un martello è il modo in cui
+     una duplicazione sopravvive invece di essere tolta. Se ne resta una in
+     pagina da una sessione precedente, la si rimuove. */
   _renderFavBar() {
-    let bar = eid('nav-favorites-bar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'nav-favorites-bar';
-      /* `min-height:0` su un figlio di un contenitore flex in colonna lo lascia
-         comprimere: la barra restava alta 13 px mentre le sue pastiglie
-         continuavano a disegnarsi a grandezza naturale. Uscivano dal riquadro e
-         finivano sopra le voci del menu — erano le pastiglie ciano sovrapposte
-         a «Workspace» e «Dashboard ROI».
+    const vecchia = eid('nav-favorites-bar');
+    if (vecchia) vecchia.remove();
+    return this._renderRestoreBar();
+  },
 
-         Non è un problema di z-index: è un riquadro che non aveva l'altezza del
-         proprio contenuto. `flex-shrink:0` glielo impedisce, `min-height:auto`
-         gli restituisce l'altezza naturale. */
-      bar.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);margin-bottom:4px;' +
-        'display:flex;flex-wrap:wrap;gap:4px;min-height:auto;flex-shrink:0;align-content:flex-start';
-      const sidebar = document.querySelector('.sidebar') || document.querySelector('nav');
-      if (sidebar) sidebar.insertBefore(bar, sidebar.firstChild);
-    }
-
+  _renderRestoreBar() {
     // Show restore button if any sections hidden
     const hiddenCount = this._prefs.hidden.length;
     const restoreBarId = 'nav-restore-bar';
@@ -5441,20 +5512,6 @@ const NavPrefs = {
       restoreBar.remove();
     }
 
-    if (!this._prefs.favorites.length) {
-      bar.innerHTML = `<div style="font-size:10px;color:var(--text-dim);padding:4px 6px;width:100%">⭐ Favorites — hover nav items to pin</div>`;
-      bar.style.minHeight = '0';
-      return;
-    }
-
-    bar.innerHTML = `<div style="font-size:9px;color:var(--text-dim);width:100%;margin-bottom:2px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">⭐ Quick Access</div>` +
-      this._prefs.favorites.map(section => {
-        const navEl = document.querySelector(`.nav-item[data-section="${section}"]`);
-        const label = navEl?.textContent?.trim()?.replace(/^[⭐👁️\s]+/, '').slice(0, 14) || section;
-        return `<button onclick="App.navigate('${section}')" 
-          style="font-size:10px;padding:3px 8px;background:var(--primary);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:700;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis"
-          title="${label}">${label}</button>`;
-      }).join('');
   },
 
   /* L'unica funzione che disegna le azioni di una voce di menu: una stella e
@@ -6746,15 +6803,24 @@ const Favs = {
      `ingly_favs3` resta letta solo come ripiego finché la migrazione in
      `NavPrefs.load()` non è passata su questa installazione. */
   getFavs(){
-    if (typeof NavPrefs !== 'undefined' && NavPrefs._loaded) return NavPrefs._prefs.favorites.slice();
+    /* `favorites()` toglie i doppioni e i vuoti: un id ripetuto arrivato da
+       una vecchia migrazione diventerebbe due righe identiche a schermo, e
+       una stella sola da cui toglierne una. */
+    if (typeof NavPrefs !== 'undefined' && NavPrefs._loaded) return NavPrefs.favorites();
     try{return JSON.parse(localStorage.getItem(this.FK)||'[]')}catch(e){return[]}
   },
   getRecent(){ try{return JSON.parse(localStorage.getItem(this.RK)||'[]')}catch(e){return[]} },
   _cat: null,
 
+  /* La mappa icona/etichetta/colore delle sezioni, riletta a ogni render.
+     Prima si costruiva **una volta sola** (`if(this._cat) return;`): un modulo
+     che cambiava etichetta — o che veniva disegnato dopo il primo giro —
+     restava nei preferiti con il nome vecchio, o senza icona. La cache non si
+     butta: le voci che non si trovano più (una sezione nascosta dal menu, per
+     esempio) conservano quello che si sapeva di loro, che è meglio di un id
+     nudo. */
   _buildCat(){
-    if(this._cat) return;
-    this._cat = {};
+    if(!this._cat) this._cat = {};
     // Store original FA class on first scan
     document.querySelectorAll('#sidebar-nav .nav-item[data-section] i:not(.nav-pin):not(.nav-badge)').forEach(ic=>{
       if(!ic.dataset.fa) ic.dataset.fa = ic.className;
@@ -6771,7 +6837,7 @@ const Favs = {
       tmp.querySelectorAll('.nav-pin,.nav-badge,img').forEach(x=>x.remove());
       const label = tmp.textContent.trim();
       const col = el.style.color||'';
-      this._cat[s] = {ico, label, col};
+      if(label) this._cat[s] = {ico, label, col};
     });
   },
 
@@ -6854,26 +6920,47 @@ const Favs = {
     const recent = this.getRecent().filter(s=>!favs.includes(s)).slice(0,5);
     const cur    = App.currentSection||'dashboard';
 
-    // --- Preferiti list in sidebar (enhanced card style) ---
+    /* ── La categoria ⭐ PREFERITI ─────────────────────────────────────────
+       Una scorciatoia, non un trasloco: la voce originale resta nella sua
+       categoria, e questa riga la richiama con la stessa `data-section` e la
+       stessa `App.navigate`. Se la sezione è anche nascosta dal menu, qui
+       compare lo stesso — è il caso in cui il preferito serve di più.
+
+       Vuota, il gruppo sparisce: una riga «nessun preferito» in cima alla
+       sidebar occupa spazio per non dire niente. */
     const fg = eid('nav-favs-group'), fl = eid('nav-favs-list'), fc = eid('nav-favs-count');
     if(fg) fg.style.display = favs.length ? '' : 'none';
-    if(fc) fc.textContent = favs.length ? '('+favs.length+')' : '';
-    if(fl) fl.innerHTML = favs.length === 0
-      ? '<div style="padding:8px 10px;font-size:11px;color:var(--text-dim)">Nessun preferito — clicca ☆ accanto a un modulo</div>'
-      : favs.map(s=>{
-          const d = this._cat[s]; if(!d) return '';
-          const isActive = cur===s;
-          const ico = this._getIcon(s, d);
-          const col = d.col||'';
-          return `<div class="nav-item${isActive?' active':''}" data-section="${s}" onclick="App.navigate('${s}')"
-            style="${col?'color:'+col+';':''}position:relative;padding-right:32px;border-radius:8px;margin-bottom:2px;
-            ${isActive?'background:var(--primary-dim);border-left:3px solid var(--primary);padding-left:7px;':''}">
-            ${ico}
-            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:13px">${d.label}</span>
-            <span class="nav-pin pinned" onclick="Favs.togglePin('${s}',event)" title="Rimuovi dai preferiti"
-              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:13px;color:#fbbf24;opacity:1">★</span>
-          </div>`;
-        }).join('');
+    if(fc) fc.textContent = favs.length ? '· ' + favs.length : '';
+    if(fl) fl.innerHTML = favs.map((s, idx)=>{
+      const d = this._cat[s] || { ico:'<i class="fas fa-circle" style="width:16px;text-align:center;font-size:13px;flex-shrink:0"></i>', label:s, col:'' };
+      const isActive = cur===s;
+      const nascosta = (typeof NavPrefs!=='undefined') && NavPrefs.isHidden(s);
+      const q = (x)=>String(x).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+      const etichetta = q(d.label);
+      /* I comandi d'ordine sono pulsanti veri: raggiungibili da tastiera,
+         con un nome che uno screen reader può leggere. Il primo non può
+         salire e l'ultimo non può scendere, e lo dichiarano invece di
+         restare cliccabili senza effetto. */
+      const cmd = (icona, titolo, azione, spento)=>
+        `<button type="button" class="fav-ord" aria-label="${titolo} — ${etichetta}" title="${titolo}"`
+        + (spento?' disabled aria-disabled="true"':'')
+        + ` onclick="event.stopPropagation();${spento?'':azione}">${icona}</button>`;
+      return `<div class="nav-item${isActive?' active':''}" data-section="${q(s)}" data-fav-shortcut="1"
+        role="link" tabindex="0" aria-label="${etichetta}${nascosta?' (nascosta dal menu)':''}" title="${etichetta}"
+        onclick="App.navigate('${q(s)}')"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();App.navigate('${q(s)}');}"
+        style="${d.col?'color:'+d.col+';':''}position:relative;padding-right:76px;border-radius:8px;margin-bottom:2px;
+        ${isActive?'background:var(--primary-dim);border-left:3px solid var(--primary);padding-left:7px;':''}">
+        ${d.ico}
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:13px">${etichetta}</span>
+        ${nascosta?'<i class="fas fa-eye-slash" title="Nascosta dal menu, raggiungibile da qui" style="font-size:9px;opacity:.5;flex-shrink:0"></i>':''}
+        <span class="fav-ord-group" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:1px">
+          ${cmd('&#9650;','Sposta su',`NavPrefs.moveFavorite('${q(s)}',-1)`, idx===0)}
+          ${cmd('&#9660;','Sposta giù',`NavPrefs.moveFavorite('${q(s)}',1)`, idx===favs.length-1)}
+          ${cmd('&#9733;','Rimuovi dai Preferiti',`Favs.togglePin('${q(s)}',event)`, false)}
+        </span>
+      </div>`;
+    }).join('');
 
     // --- Recenti ---
     const rg = eid('nav-recent-group'), rl = eid('nav-recent-list');

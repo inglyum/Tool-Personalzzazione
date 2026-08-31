@@ -24,7 +24,10 @@
   if (!Nav || !icon) return;
 
   var STORAGE_GROUPS = 'ingly_nav_groups_v1';
-  var STORAGE_FAVS = 'ingly_nav_favs_v1';
+  /* `ingly_nav_favs_v1` non si usa più: nessuno ci ha mai scritto e la
+     sorgente dei preferiti è `NavPrefs`. La costante resta documentata qui
+     perché una chiave che sparisce senza spiegazione è una chiave che qualcuno
+     reintroduce. */
   var built = false;
 
   /* Tutto ciò che entra in innerHTML passa da qui: le etichette arrivano dai
@@ -54,7 +57,25 @@
   }
 
   var collapsed = readSet(STORAGE_GROUPS);
-  var favourites = readSet(STORAGE_FAVS);
+
+  /* ── I preferiti non sono di questo modulo ────────────────────────────────
+     Qui c'era `readSet(STORAGE_FAVS)`: un insieme in `localStorage`
+     (`ingly_nav_favs_v1`) letto per disegnare una stella sulle voci e un
+     secondo gruppo «Preferiti». Nessuno ci scriveva mai — `writeSet` non viene
+     chiamata con quella chiave in tutto il file — quindi era sempre vuoto: una
+     quarta memoria dei preferiti, silenziosa e perennemente in disaccordo con
+     le altre tre.
+
+     La sorgente è `NavPrefs` (IndexedDB, `nav_prefs`). Si legge da lì; se non
+     è ancora caricato, nessuna stella — che è la verità, non un ripiego. */
+  function favoriti() {
+    try {
+      var n = window.NavPrefs;
+      if (n && n._prefs && n._prefs.favorites) return n._prefs.favorites;
+    } catch (e) { /* la sidebar non deve dipendere dal caricamento di NavPrefs */ }
+    return [];
+  }
+  function isFavorito(id) { return favoriti().indexOf(id) >= 0; }
 
   function itemMarkup(item, isFav) {
     return (
@@ -88,7 +109,7 @@
       '<div class="nav-group-items" id="ngi-' + esc(group.id) + '" role="menu"' +
       (isCollapsed ? ' hidden' : '') + '>';
 
-    for (var i = 0; i < primary.length; i += 1) html += itemMarkup(primary[i], favourites.has(primary[i].id));
+    for (var i = 0; i < primary.length; i += 1) html += itemMarkup(primary[i], isFavorito(primary[i].id));
 
     /* Progressive disclosure: le voci secondarie esistono, ma non pesano sulla
        lettura finché non servono. Sono comunque raggiungibili dalla ricerca. */
@@ -97,24 +118,20 @@
         '<details class="nav-more"><summary class="nav-item nav-item--more">' +
         '<i class="fas fa-ellipsis" aria-hidden="true"></i><span>Altro (' + secondary.length + ')</span>' +
         '</summary>';
-      for (var j = 0; j < secondary.length; j += 1) html += itemMarkup(secondary[j], favourites.has(secondary[j].id));
+      for (var j = 0; j < secondary.length; j += 1) html += itemMarkup(secondary[j], isFavorito(secondary[j].id));
       html += '</details>';
     }
 
     return html + '</div></div>';
   }
 
-  function favouritesMarkup() {
-    if (!favourites.size) return '';
-    var items = Nav.allItems().filter(function (i) { return favourites.has(i.id); });
-    if (!items.length) return '';
-    var html =
-      '<div class="nav-group" id="ng-favourites"><div class="nav-group-title">' +
-      '<i class="fas fa-star" aria-hidden="true"></i><span>Preferiti</span></div>' +
-      '<div class="nav-group-items" role="menu">';
-    for (var i = 0; i < items.length; i += 1) html += itemMarkup(items[i], false);
-    return html + '</div></div>';
-  }
+  /* ── Il secondo gruppo «Preferiti»: ritirato ──────────────────────────────
+     Disegnava `#ng-favourites` dal proprio insieme locale, accanto alla
+     categoria ⭐ PREFERITI che vive nel markup e che questa funzione adotta
+     senza toccarla. Due gruppi con lo stesso nome, alimentati da due memorie
+     diverse — e siccome l'insieme locale era sempre vuoto, quello che si
+     vedeva era vuoto o assente, mentre l'altro era nascosto da un
+     `display:none`. Una rappresentazione sola, e sta in `#nav-favs-group`. */
 
   /* Nodi che questa funzione NON ha creato e che quindi non le appartengono:
      la barra dei preferiti, le voci aggiunte dalle patch storiche, i pulsanti
@@ -123,7 +140,14 @@
 
      Un render deve poter girare mille volte e lasciare lo stesso risultato:
      compreso ciò che non ha messo lui. Si mettono da parte e si rimettono. */
-  var ADOTTATI = ['#nav-favorites-bar', '#nav-restore-bar', '#core-nav'];
+  /* `#nav-favs-group` è la categoria ⭐ PREFERITI: sta nel markup, non la crea
+     questa funzione, e senza adottarla il primo re-render della sidebar la
+     cancellava. Era la seconda causa per cui i preferiti non si vedevano —
+     quella che restava anche dopo aver tolto il `display:none`.
+
+     `#nav-favorites-bar` resta nell'elenco per le pagine aperte da prima del
+     ritiro: se una ne ha ancora una in DOM, non la si cancella a metà. */
+  var ADOTTATI = ['#nav-favs-group', '#nav-recent-group', '#nav-favorites-bar', '#nav-restore-bar', '#core-nav'];
 
   function ospiti(container) {
     var fuori = [];
@@ -140,8 +164,14 @@
     var estranee = container.querySelectorAll('.nav-item[data-section]');
     for (var i = 0; i < estranee.length; i += 1) {
       var sec = estranee[i].getAttribute('data-section');
+      /* Le scorciatoie dei preferiti e dei recenti sono `.nav-item[data-section]`
+         come le altre, ma appartengono al loro gruppo: raccoglierle una per una
+         le staccherebbe da lì e le riappenderebbe sciolte — cioè le
+         duplicherebbe, perché il gruppo viene già conservato intero. */
       if (!noti[sec] && fuori.indexOf(estranee[i]) === -1 &&
-          !estranee[i].closest('#nav-favorites-bar')) fuori.push(estranee[i]);
+          !estranee[i].closest('#nav-favorites-bar') &&
+          !estranee[i].closest('#nav-favs-group') &&
+          !estranee[i].closest('#nav-recent-group')) fuori.push(estranee[i]);
     }
     return fuori;
   }
@@ -154,7 +184,7 @@
       '<label class="ds-visually-hidden" for="nav-filter">Filtra il menu</label>' +
       '<input id="nav-filter" class="form-control" type="search" placeholder="Filtra il menu…" autocomplete="off">' +
       '</div>' +
-      favouritesMarkup();
+      '';
     for (var i = 0; i < Nav.NAV_GROUPS.length; i += 1) html += groupMarkup(Nav.NAV_GROUPS[i]);
     container.innerHTML = html;
 
