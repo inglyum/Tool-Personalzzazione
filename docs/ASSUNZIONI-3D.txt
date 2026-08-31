@@ -1,0 +1,28 @@
+
+ASSUNZIONI DEL PREVENTIVO — caso 290 g · 9 h 57 m · 1 pz
+
+VOCE                       VALORE      FONTE                      CONFIDENZA
+────────────────────────────────────────────────────────────────────────────────────
+Materiale                    € 6.9600  campo del preventivatore  USER CONFIGURED
+Energia                      € 0.2507  campo del preventivatore  ESTIMATED  (consumo ESTIMATED)
+Ammortamento macchina        € 1.9900  campo del preventivatore  USER CONFIGURED
+Manutenzione e consumabili   € 1.1940  campo del preventivatore  USER CONFIGURED
+Finitura                     € 3.0000  campo del preventivatore  USER CONFIGURED
+Scarto previsto              € 0.7824  campo del preventivatore  USER CONFIGURED
+Avviamento                   € 4.5000  campo del preventivatore  USER CONFIGURED
+────────────────────────────────────────────────────────────────────────────────────
+COMPLESSIVA                 € 18.6771  la peggiore delle voci    ESTIMATED
+
+IPOTESI DICHIARATE (cose vere date per scontate)
+
+  · Il consumo è stimato dalla potenza di targa con un ciclo di lavoro del 60%.
+  · La macchina si assume senza valore residuo a fine vita.
+  · Nessuna spesa generale ripartita su questo lavoro.
+
+AVVISI
+
+  nessuno
+
+CAMPI NON COMPILATI IN QUESTO CASO (restano a zero, e il conto lo dice)
+
+

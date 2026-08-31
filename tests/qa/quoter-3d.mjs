@@ -116,7 +116,10 @@ const esito = await page.evaluate(async () => {
   const prezzoVecchio = atteso.costoPezzo * m1;
   dico('il moltiplicatore ×' + m1 + ' valeva un margine del ' + margineDaMolt.toFixed(1) + '%', margineDaMolt > 70);
 
-  const prezzoSchermo = leggiEuro((hero.match(/Prezzo consigliato[^\d]*([\d.,]+)/i) || [''])[0]);
+  /* La cella si chiama «Prezzo netto» da quando costi e prezzo stanno in due
+     aree separate: nella stessa striscia c'erano IVA e lordo, e «consigliato»
+     non diceva quale dei tre fosse. */
+  const prezzoSchermo = leggiEuro((hero.match(/Prezzo netto[^\d]*([\d.,]+)/i) || [''])[0]);
   dico('il prezzo a schermo non è più il ×3,5 (' + prezzoSchermo.toFixed(2) + ' vs ' + prezzoVecchio.toFixed(2) + ')',
     prezzoSchermo > 0 && !vicino(prezzoSchermo, prezzoVecchio, 0.05));
 
@@ -132,7 +135,7 @@ const esito = await page.evaluate(async () => {
   await new Promise((s) => setTimeout(s, 250));
   const hero40 = testo('p3d-hero');
   const marg40 = parseFloat((hero40.match(/margine\s*([\d.,]+)%/i) || [0, '0'])[1].replace(',', '.'));
-  const prezzo40 = leggiEuro((hero40.match(/Prezzo consigliato[^\d]*([\d.,]+)/i) || [''])[0]);
+  const prezzo40 = leggiEuro((hero40.match(/Prezzo netto[^\d]*([\d.,]+)/i) || [''])[0]);
   dico('chiedendo il 40% a schermo si ottiene il 40% (' + marg40.toFixed(1) + '%)', vicino(marg40, 40, 0.15));
   dico('e il prezzo è costo ÷ (1 − margine), non costo × 1,4',
     vicino(prezzo40, atteso.costoPezzo / 0.6, 0.05));

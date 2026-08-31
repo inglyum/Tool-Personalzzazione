@@ -746,6 +746,11 @@
          non è una vergogna: è un'informazione, e nasconderla è il modo in cui
          un valore inserito una volta sopravvive per anni. */
       provenienza: provenienza(i, vociPerPezzo.concat(vociUnaTantum)),
+      /* La confidenza complessiva era calcolata solo da `explain()`: chi
+         chiamava `calcola()` doveva rifarsi la regola per conto suo — e
+         «la peggiore delle voci» riscritta due volte è due regole che
+         prima o poi divergono. Ora la dice il conto stesso. */
+      get confidenza() { return confidenzaComplessiva(this.provenienza); },
       /* Le ipotesi su cui questo numero regge. Se una cade, il numero cade. */
       assunzioni: assunzioni(i, ore, qty),
 
@@ -1593,6 +1598,7 @@
     POLITICHE: POLITICHE,
     politiche: politiche,
     MARGINE_MINIMO_POLITICA: MARGINE_MINIMO,
+    confidenzaComplessiva: confidenzaComplessiva,
     POLITICHE_PREDEFINITE: POLITICHE,
     MARGINE_MINIMO: MARGINE_MINIMO,
     avvisi: avvisi,

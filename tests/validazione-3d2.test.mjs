@@ -288,3 +288,95 @@ test('il lettore 3MF dichiara la macchina invece di applicarla', () => {
     'il lettore non deve toccare la macchina in uso');
   assert.equal(typeof S.da3mf, 'function');
 });
+
+/* ═══ 13 · FIFO — i quattro consumi ════════════════════════════════════════ */
+
+test('FIFO a 300, 400, 500 e 800 g: quel che il registro copre, e quel che no', () => {
+  const movimenti = [
+    mov('A', 300, 15.99 / 1000, '2026-01-01T10:00:00Z'),
+    mov('B', 500, 20.00 / 1000, '2026-02-01T10:00:00Z'),
+  ];
+  const chiedi = (g) => R.risolvi(movimenti, 'pla-red', { policy: 'fifo', quantity: g });
+
+  /* 300 g: esattamente il primo lotto. */
+  const a = chiedi(300);
+  vicino(a.costoTotale, 300 * (15.99 / 1000), 0.0001);
+  assert.equal(a.lineage.length, 1);
+  assert.equal(a.completa, true);
+
+  /* 400 g: il primo intero più 100 g del secondo. */
+  vicino(chiedi(400).costoTotale, 300 * (15.99 / 1000) + 100 * (20 / 1000), 0.0001);
+
+  /* 500 g: il primo intero più 200 g del secondo. */
+  const c = chiedi(500);
+  vicino(c.costoTotale, 300 * (15.99 / 1000) + 200 * (20 / 1000), 0.0001);
+  vicino(c.costo, c.costoTotale / 500, 1e-9);
+
+  /* 800 g: tutto il registro, e non un grammo in più. */
+  const d = chiedi(800);
+  vicino(d.costoTotale, 300 * (15.99 / 1000) + 500 * (20 / 1000), 0.0001);
+  assert.equal(d.coperta, 800);
+  assert.equal(d.scoperta, 0);
+
+  /* 900 g: cento grammi che il registro non conosce. Non valgono zero. */
+  const e = chiedi(900);
+  vicino(e.coperta, 800);
+  vicino(e.scoperta, 100);
+  assert.equal(e.completa, false);
+  vicino(e.costoTotale, d.costoTotale, 0.0001);
+});
+
+/* ═══ 14 · MULTI-MATERIALE, I TRE DELLA DIRETTIVA ══════════════════════════ */
+
+test('PLA Red 200 g + PLA Black 100 g + PETG 50 g, ognuno al suo prezzo', () => {
+  const materials = [
+    { name: 'PLA Red', grams: 200, pricePerKg: 15.99 },
+    { name: 'PLA Black', grams: 100, pricePerKg: 20 },
+    { name: 'PETG', grams: 50, pricePerKg: 22 },
+  ];
+  const r = E.calcola({ ...BASE, materials });
+  const atteso = (200 / 1000) * 15.99 + (100 / 1000) * 20 + (50 / 1000) * 22;
+  vicino(voce(r, 'materiale'), atteso, 0.0001);
+  vicino(atteso, 3.198 + 2 + 1.1, 0.0001);
+
+  /* Il dettaglio elenca i tre, così la somma è verificabile a occhio. */
+  const dettaglio = r.perPezzo.voci.find((v) => v.id === 'materiale').detail;
+  for (const n of ['PLA Red', 'PLA Black', 'PETG']) assert.ok(dettaglio.includes(n), n + ' non è nel dettaglio');
+});
+
+/* ═══ 10 · NESSUN MOLTIPLICATORE NASCOSTO ══════════════════════════════════ */
+
+test('nessun ×2 ×2,5 ×3 ×3,5 ×4 usato come prezzo nel preventivatore', () => {
+  /* Si guardano i file che fanno il prezzo. Un moltiplicatore è ammesso solo
+     se dichiarato, configurabile e chiamato ricarico — cioè se passa da
+     `strategia:'ricarico'`, che è l'unico modo di ottenerne uno dal motore. */
+  const sorgenti = [
+    'src/legacy/patches/108-var-print3dquoter-function.js',
+    'src/product/quoter3d-view.js',
+    'src/product/cost-engine.js',
+  ];
+  const sospetti = [];
+  for (const f of sorgenti) {
+    const codice = fs.readFileSync(f, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .split('\n').map((r) => (/^\s*\/\//.test(r) ? '' : r)).join('\n');
+    /* `costo * 3.5`, `cost*2`, `× 2,5` applicati a qualcosa che si chiama
+       costo o prezzo. */
+    const re = /\b(cost[a-zA-Z]*|prezz[a-zA-Z]*|price[a-zA-Z]*|COST|PRICE)\s*\*\s*(2|2\.5|3|3\.5|4)\b/g;
+    let m;
+    while ((m = re.exec(codice))) sospetti.push(f + ': ' + m[0]);
+    const re2 = /\b(2|2\.5|3|3\.5|4)\s*\*\s*(cost[a-zA-Z]*|prezz[a-zA-Z]*|price[a-zA-Z]*|COST|PRICE)\b/g;
+    while ((m = re2.exec(codice))) sospetti.push(f + ': ' + m[0]);
+  }
+  assert.deepEqual(sospetti.join(' | '), '', 'moltiplicatore implicito: ' + sospetti.join(' | '));
+});
+
+test('il ricarico esiste, ma è dichiarato e separato dal margine', () => {
+  /* Non si vieta il moltiplicatore: si vieta quello nascosto. Chiederne uno
+     esplicitamente deve funzionare, e deve restare distinguibile. */
+  const p = E.prezzo(10, { strategia: 'ricarico', ricarico: 3.5, ivaPct: 0 });
+  vicino(p.netto, 35);
+  assert.equal(p.strategia, 'ricarico');
+  vicino(p.ricaricoPct, 250, 0.0001);
+  vicino(p.marginePct, 71.4286, 0.001);
+});

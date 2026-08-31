@@ -213,3 +213,101 @@ InglyCostEngine   stima      →  QUOTE  (snapshot congelato)
 InglyActualCost   consuntivo →  ORDER
 InglyScostamento  confronto  →  VARIANCE
 ```
+
+---
+
+# Benchmark esterno — che cosa si è potuto confrontare, e che cosa no
+
+## Il vincolo, dichiarato
+
+I due siti di riferimento **non sono raggiungibili da questo ambiente**: il
+proxy di rete risponde `403 CONNECT tunnel failed` per entrambi i domini.
+
+```
+https://3dprintingcostcalculator.com/   → EGRESS_BLOCKED
+https://stimalo.com/calcola_costo       → EGRESS_BLOCKED
+```
+
+Quindi i numeri delle due colonne restano **N/D**. Non sono stati stimati, né
+ricostruiti da ricordi: un benchmark con numeri inventati è peggio di un
+benchmark mancante, perché sembra una misura.
+
+## La tabella, con le colonne che si possono compilare
+
+Scenario: PLA · 290 g · 9 h 57 m · 1 pz · € 15,99/kg.
+
+| Componente | INGLY | 3DPCC | Stimalo | Note |
+| ---------- | ----: | ----: | ------: | ---- |
+| Material   | 4,6371 | N/D | N/D | 290 g × € 15,99/kg |
+| Energy     | 0,2507 | N/D | N/D | 150 W × 60% × 9,95 h × € 0,28/kWh — **stimato da targa** |
+| Machine    | 1,9900 | N/D | N/D | (400 − 0) ÷ 2000 h × 9,95 h |
+| Maintenance| 1,1940 | N/D | N/D | € 0,12/h × 9,95 h |
+| Labor      | 7,5000 | N/D | N/D | 15 min avviamento + 10 min finitura × € 18/h |
+| Waste      | 0,0000 | N/D | N/D | spreco materiale 0% in questo caso |
+| Failure    | 0,7824 | N/D | N/D | perdibile × 7%/(1−7%) |
+| Hardware   | 0,0000 | N/D | N/D | nessun componente dichiarato |
+| Packaging  | 0,0000 | N/D | N/D | nessuna confezione dichiarata |
+| **Total Cost** | **16,1794** | N/D | N/D | costo aziendale pieno |
+| **Standard Price** | **26,97** | N/D | N/D | margine 40% → costo ÷ 0,60 |
+
+## Il livello di costo — la parte del confronto che conta davvero
+
+Anche potendo leggere i due siti, confrontare i totali sarebbe stato
+scorretto senza prima dichiarare **a quale domanda** ognuno risponde. È
+esattamente l'errore che ha prodotto la segnalazione da cui è nata questa
+serie di correzioni: € 4,50 dello slicer contro € 6,96 di INGLY sembravano un
+errore di formula ed erano due prezzi al chilo diversi sulla stessa formula.
+
+INGLY dichiara quattro livelli, e il preventivatore lascia scegliere:
+
+| livello | che cosa comprende | a chi risponde |
+| ------- | ------------------ | -------------- |
+| **Material cost** | solo materiale, supporti e spurgo | è il numero che dichiara uno slicer come «costo filamento» |
+| **Print cost** | + energia | è il numero che mostrano gli slicer |
+| **Production cost** | + ammortamento, manutenzione, scarto | quanto costa produrlo |
+| **Full cost** | + tempo di persona e spese generali | quanto devi rientrare per non lavorare in perdita |
+
+Sul caso qui sopra, misurati: material € 4,6371 · print € 4,8878 ·
+production € 8,6794 · full € 16,1794. Chi confronta il « € 4,64 » di INGLY con un «costo totale» di un
+altro strumento sta confrontando due cose diverse — e il divario si legge come
+un errore.
+
+Il confronto con un riferimento esterno è già una funzione del prodotto
+(«Confronta con lo slicer»): si inserisce il costo che l'altro strumento
+dichiara, e `InglyCostEngine.calibra()` risponde **a quale livello** quel
+numero corrisponde, invece di forzare INGLY a coincidere.
+
+---
+
+# Audit delle assunzioni
+
+Generato da `scripts/audit-assunzioni.mjs`, che **chiede al motore** invece di
+elencare a mano: un elenco scritto a mano invecchia al primo campo aggiunto, e
+nessuno se ne accorge. L'uscita completa è in `docs/ASSUNZIONI-3D.txt`.
+
+Caso 290 g · 9 h 57 m · 1 pz, compilato come lo compila la vista al primo uso:
+
+| voce | valore | fonte | confidenza |
+| ---- | -----: | ----- | ---------- |
+| Materiale | € 6,9600 | campo del preventivatore | USER CONFIGURED |
+| Energia | € 0,2507 | campo del preventivatore | ESTIMATED *(consumo ESTIMATED)* |
+| Ammortamento macchina | € 1,9900 | campo del preventivatore | USER CONFIGURED |
+| Manutenzione e consumabili | € 1,1940 | campo del preventivatore | USER CONFIGURED |
+| Finitura | € 3,0000 | campo del preventivatore | USER CONFIGURED |
+| Scarto previsto | € 0,7824 | campo del preventivatore | USER CONFIGURED |
+| Avviamento | € 4,5000 | campo del preventivatore | USER CONFIGURED |
+| **complessiva** | **€ 18,6771** | la peggiore delle voci | **ESTIMATED** |
+
+La complessiva è `ESTIMATED` per una sola voce: l'energia stimata dalla targa.
+Basta inserire i W medi o i kWh contati perché salga — ed è il senso di averla
+resa visibile.
+
+Le tre ipotesi che il conto dichiara di dare per scontate:
+
+- il consumo è stimato dalla potenza di targa con un ciclo di lavoro del 60%;
+- la macchina si assume senza valore residuo a fine vita;
+- nessuna spesa generale ripartita su questo lavoro.
+
+Diventano `VERIFIED` o `FROM INVENTORY` quando: il materiale ha un acquisto a
+registro (allora il prezzo viene dal magazzino, non dal campo), la macchina è
+scelta dal Calcolatore Macchine, o il consumo è misurato.
