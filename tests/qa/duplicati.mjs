@@ -33,7 +33,19 @@ await page.waitForTimeout(12000);
 /** Conta gli esemplari di ogni componente che deve essere unico. */
 const censimento = () => page.evaluate(() => {
   const sb = document.getElementById('sidebar') || document.body;
-  const voci = [...sb.querySelectorAll('.nav-item[data-section]')];
+  /* ── Voci di menu e scorciatoie sono due cose ─────────────────────────────
+     Una scorciatoia dei Preferiti (o dei Recenti) porta la stessa
+     `data-section` della voce a cui rimanda: è quello che la rende una
+     scorciatoia. Contarla come «sezione ripetuta» accuserebbe di duplicazione
+     una funzione che fa esattamente il suo mestiere.
+
+     Quindi si contano separatamente. Il presidio non si allenta: le voci di
+     menu devono restare uniche, e in più ogni scorciatoia deve puntare a una
+     sezione che nel menu esiste — una scorciatoia verso il nulla è un difetto
+     quanto un doppione. */
+  const scorciatoie = [...sb.querySelectorAll('#nav-favs-group .nav-item[data-section], #nav-recent-group .nav-item[data-section]')];
+  const voci = [...sb.querySelectorAll('.nav-item[data-section]')]
+    .filter((v) => scorciatoie.indexOf(v) < 0);
 
   /* Un marcatore-stella è qualunque foglia che mostri ☆ o ★: conta l'effetto
      sullo schermo, non la classe con cui è stato scritto. */
@@ -55,6 +67,16 @@ const censimento = () => page.evaluate(() => {
       const c = {}; voci.forEach((v) => { c[v.dataset.section] = (c[v.dataset.section] || 0) + 1; });
       return Object.entries(c).filter(([, n]) => n > 1).length;
     })(),
+    scorciatoie: scorciatoie.length,
+    scorciatoieRipetute: (() => {
+      const c = {}; scorciatoie.forEach((v) => { c[v.dataset.section] = (c[v.dataset.section] || 0) + 1; });
+      return Object.entries(c).filter(([, n]) => n > 1).length;
+    })(),
+    scorciatoieOrfane: (() => {
+      const noti = {}; voci.forEach((v) => { noti[v.dataset.section] = true; });
+      return scorciatoie.filter((v) => !noti[v.dataset.section]).length;
+    })(),
+    scorciatoieConStellaDiTroppo: scorciatoie.filter((v) => v.querySelectorAll('.nav-ctrl').length > 0).length,
   };
 });
 
@@ -68,6 +90,9 @@ function esamina(momento, c) {
   if (c.vociConPiuDiUnaStella > 0) problemi.push(`${momento}: ${c.vociConPiuDiUnaStella} voci con più di una stella`);
   if (c.vociConPiuDiUnNascondi > 0) problemi.push(`${momento}: ${c.vociConPiuDiUnNascondi} voci con più di un «nascondi»`);
   if (c.sezioniRipetute > 0) problemi.push(`${momento}: ${c.sezioniRipetute} sezioni presenti due volte nel menu`);
+  if (c.scorciatoieRipetute > 0) problemi.push(`${momento}: ${c.scorciatoieRipetute} scorciatoie ripetute`);
+  if (c.scorciatoieOrfane > 0) problemi.push(`${momento}: ${c.scorciatoieOrfane} scorciatoie verso sezioni che nel menu non ci sono`);
+  if (c.scorciatoieConStellaDiTroppo > 0) problemi.push(`${momento}: ${c.scorciatoieConStellaDiTroppo} scorciatoie con i comandi di una voce di menu`);
   console.log(momento.padEnd(28) + '│ ' + JSON.stringify(c));
 }
 

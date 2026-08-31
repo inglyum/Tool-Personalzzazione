@@ -5529,8 +5529,16 @@ const NavPrefs = {
     this._buildNavControls(el, section);
   },
 
+  /* Le scorciatoie dei Preferiti e dei Recenti hanno già i propri comandi:
+     aggiungere qui la stella al passaggio ne metterebbe **due** sulla stessa
+     riga — quella d'ordine e quella di `NavPrefs` — su una riga che è già una
+     scorciatoia. `renderSectionActions` disegna le azioni di una voce di menu,
+     e una scorciatoia non è una voce di menu. */
   _addNavControls() {
-    document.querySelectorAll('.nav-item[data-section]').forEach(el => this.renderSectionActions(el));
+    document.querySelectorAll('.nav-item[data-section]').forEach(el => {
+      if (el.closest('#nav-favs-group') || el.closest('#nav-recent-group')) return;
+      this.renderSectionActions(el);
+    });
   },
 
   _buildNavControls(el, section) {

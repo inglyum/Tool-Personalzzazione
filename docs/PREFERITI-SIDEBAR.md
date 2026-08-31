@@ -100,3 +100,31 @@ zero/uno/cinque preferiti, aggiunta e rimozione immediate, identità della
 cima», nascosto + preferito, ricerca, cento `apply()` di fila, staleness,
 accessibilità, sidebar stretta, tema, e la persistenza provata **ricaricando
 davvero la pagina**.
+
+
+## Una regressione introdotta e chiusa
+
+Il collaudo `duplicati.mjs` l'ha trovata prima che uscisse: dopo cinque cicli
+completi, **5 voci con due stelle** e **5 sezioni presenti due volte**.
+
+Due cose diverse, e solo la prima era un difetto.
+
+**Difetto.** `NavPrefs._addNavControls()` iterava `.nav-item[data-section]`
+senza ambito, quindi metteva la stella al passaggio e il «nascondi» **anche
+sulle scorciatoie** — che hanno già i propri comandi. Due stelle sulla stessa
+riga. Corretto: `renderSectionActions` disegna le azioni di una **voce di
+menu**, e una scorciatoia non è una voce di menu.
+
+**Assunzione da aggiornare.** «La stessa sezione due volte» era una
+duplicazione finché l'unico modo di avere due nodi era un errore. Una
+scorciatoia porta la stessa `data-section` per definizione. Il collaudo adesso
+le conta separate — e il presidio non si allenta, si affila: le voci di menu
+devono restare uniche, le scorciatoie non devono ripetersi fra loro, ognuna
+deve puntare a una sezione che nel menu **esiste** (una scorciatoia verso il
+nulla è un difetto quanto un doppione), e nessuna deve portare i comandi di una
+voce di menu.
+
+```
+all'avvio          voci 112 · scorciatoie 0
+dopo 5 cicli       voci 112 · scorciatoie 5 · ripetute 0 · orfane 0
+```
