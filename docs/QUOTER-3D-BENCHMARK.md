@@ -311,3 +311,35 @@ Le tre ipotesi che il conto dichiara di dare per scontate:
 Diventano `VERIFIED` o `FROM INVENTORY` quando: il materiale ha un acquisto a
 registro (allora il prezzo viene dal magazzino, non dal campo), la macchina è
 scelta dal Calcolatore Macchine, o il consumo è misurato.
+
+
+---
+
+# Esito della validazione finale
+
+```
+npm run verify   217 file JS parsati · 0 errori   (src/product incluso)
+npm test        1089 test · 1089 pass · 0 fail · 0 skipped · 0 todo
+npm run qa        23 suite · 440 controlli · 0 fail · 0 errori JavaScript
+```
+
+Le 23 suite nel browser, ognuna con il proprio verdetto:
+
+nessuna duplicazione · un'azione, un'icona, un nodo · il conto di allora è
+ancora quello di allora · la paginazione dei clienti pagina davvero · una riga,
+un disegno · la giacenza è la somma dei movimenti · il costo è quello pagato ·
+un motore solo, anche nel calcolatore che si usa · nessuna finestra dichiara
+display in linea · ogni finestra si apre e si richiude · il template rimette il
+lavoro com'era · il prezzo lo fa il motore, anche a schermo · una sola
+matematica · il Laser B2B calcola una volta sola · un solo motore per l'aspetto
+· si archivia, non si perde · una lista sola · il prezzo parte dal costo vero ·
+un preventivatore solo, e sa fare tutto · un costo, un prezzo, ovunque · regge
+il carico.
+
+Nessun test instabile: le suite del preventivatore sono state eseguite più
+volte durante la fase, sempre con lo stesso esito. L'unico rosso incontrato
+aveva una causa deterministica — un collaudo che leggeva l'etichetta «Prezzo
+consigliato» dopo che la cella era stata rinominata «Prezzo netto» nella
+separazione fra costi e prezzo — corretto nel collaudo, non nel prodotto.
+
+**SMART QUOTER 3D — VALIDATED**
