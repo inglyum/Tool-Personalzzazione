@@ -215,7 +215,15 @@ function render(){
       +'<th>Descrizione</th><th style="text-align:center">Qtà</th><th style="text-align:right">Costo/pz</th><th style="text-align:right">Prezzo/pz</th><th style="text-align:right">Subtot.</th><th></th>'
       +'</tr></thead><tbody>'+rows+'</tbody></table>'
       +'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
-      +'<div class="p3-sr"><span style="color:var(--text-muted)">Costo Vivo</span><span style="font-weight:700;color:#fff">'+eur(totC)+'</span></div>'
+      /* Il costo delle righe non è quello della configurazione aperta: lo si
+         dichiara, e la divergenza la riempie `calc()` — che è l'unico a
+         sapere quanto costa adesso quello che si sta configurando. Metterla
+         qui dentro avrebbe voluto dire ridisegnare tutta la tabella a ogni
+         tasto premuto per aggiornare una riga di avviso. */
+      +'<div class="p3-sr"><span style="color:var(--text-muted)">Costo delle voci a preventivo'
+        +'<div style="font-size:9px;color:var(--text-dim);line-height:1.35">come erano quando le hai aggiunte</div></span>'
+        +'<span style="font-weight:700;color:#fff">'+eur(totC)+'</span></div>'
+      +'<div id="p3d-divergenza"></div>'
       +(discAmt>0.005?'<div class="p3-sr"><span style="color:var(--text-muted)">Listino</span><span style="font-weight:700;color:#fff">'+eur(listino)+'</span></div>'
         +'<div class="p3-sr"><span style="color:var(--text-muted)">Sconto ('+DISC+'%) già applicato</span><span style="font-weight:700;color:var(--red)">-'+eur(discAmt)+'</span></div>':'')
       +'<div class="p3-sr"><span style="color:var(--text-muted)">Subtotale netto</span><span style="font-weight:700;color:#fff">'+eur(totN)+'</span></div>'
@@ -305,7 +313,7 @@ function render(){
       +'<div class="p3-ct c">📐 DETTAGLI STAMPA</div>'
       +'<div class="p3-fg"><label class="p3-fl">📛 NOME PRODOTTO</label><input class="p3-fc" id="p3d-name" placeholder="es. Supporto telefono personalizzato"></div>'
       +'<div class="p3-g2">'
-        +'<div class="p3-fg"><label class="p3-fl" id="p3d-gl">'+(isFdm?'🧵 MATERIALE (g)':'🧴 RESINA (ml)')+'</label><input class="p3-fc acc" id="p3d-g" type="number" step="1" value="20" oninput="Print3DQuoter.calc()"><div class="p3-ht">Da slicer (Bambu/Prusa)</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl" id="p3d-gl">'+(isFdm?'🧵 MATERIALE (g)':'🧴 RESINA (ml)')+'</label><input class="p3-fc acc" id="p3d-g" type="number" step="1" value="20" oninput="Print3DQuoter.calc()"><div class="p3-ht" id="p3d-g-fonte">Da slicer (Bambu/Prusa)</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">⏱️ TEMPO STAMPA (h)</label><input class="p3-fc acc" id="p3d-h" type="number" step="0.25" value="1.5" oninput="Print3DQuoter.calc()"></div>'
         +'<div class="p3-fg"><label class="p3-fl">👤 MANODOPERA (min)</label><input class="p3-fc acc" id="p3d-lm" type="number" step="5" value="10" oninput="Print3DQuoter.calc()"><div class="p3-ht">Setup + rimozione</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">💶 €/h MANODOPERA</label><input class="p3-fc" id="p3d-lr" type="number" step="1" value="18" oninput="Print3DQuoter.calc()"></div>'
@@ -507,6 +515,11 @@ function cardSlicer(){
       +'<span style="font-size:10px;color:var(--text-muted);line-height:1.45">Il peso totale comprende già supporti e spurgo'
       +'<br><span style="color:var(--text-dim)">Se è così, vengono sottratti invece che sommati: è il doppio conteggio più comune.</span></span>'
     +'</label>'
+    +(attivo && p.sospetto
+      ? '<div style="margin-top:9px;padding:9px 11px;border-radius:8px;background:var(--bg-card2);border-left:3px solid var(--orange);font-size:10px;color:var(--text-muted);line-height:1.6">'
+        +'<b style="color:var(--orange)">Il modello pesa '+Math.round(p.modello)+' g su '+Math.round(SLICER.pesoTotale)+' g totali.</b><br>'
+        +'La sottrazione è giusta, ma un modello che pesa meno di un quinto del totale quasi sempre vuol dire che nel campo «supporti» c\'è il peso del pezzo. Controlla prima di preventivare.'
+      +'</div>' : '')
     +(attivo
       ? '<div style="margin-top:9px;padding:8px 10px;background:var(--bg-card2);border-radius:8px;font-size:10px;color:var(--text-muted);line-height:1.6">'
         +'Il conto userà <b style="color:var(--text)">'+Math.round(p.modello)+' g</b> di modello'
@@ -583,6 +596,13 @@ function totali(){
     margine: netto>0 ? ((netto-costo)/netto*100) : 0,
     forzate:forzate, righe:LINES.length,
     aliquota:pct, etichettaIva: F?F.etichetta():'IVA 22%',
+    /* Le righe portano il costo **come era quando sono state aggiunte**: è la
+       regola dello storico economico, e serve perché un preventivo consegnato
+       non cambi sotto i piedi. Ma se nel frattempo la configurazione è
+       cambiata, i due numeri a schermo divergono e finora niente lo diceva —
+       è la seconda causa dell'incoerenza segnalata. */
+    congelato:true,
+    costoCorrente: COST,
   };
 }
 
@@ -802,6 +822,7 @@ function ingresso(){
     tecnologia:'print3d',
     qty:Math.max(1,gv('p3d-qty',1)),
     grams:m.modello, supportGrams:m.supporti, purgeGrams:m.purge,
+    filamentWeightSource:m.sorgente, totalFilamentGrams:m.totale,
     measuredEnergyKwh:e.measuredEnergyKwh, averagePowerW:e.averagePowerW, ratedPowerW:e.ratedPowerW,
     slicerMaterialCost:SLICER.costo>0?SLICER.costo:undefined,
     spoolPrice:gv('p3d-mkg',24), spoolGrams:gv('p3d-mu',1000),
@@ -830,16 +851,43 @@ function ingresso(){
 
    Qui la regola è dichiarata: se lo slicer ha detto «totale», i supporti si
    **sottraggono** invece di sommarsi. */
+/* ── Le tre fonti del peso, dichiarate ────────────────────────────────────
+   Il difetto misurato: bastava un numero nella card «Importa dallo slicer»
+   perché il campo «MATERIALE (g)» smettesse di comandare — **e il campo
+   continuava a mostrare 290 mentre il motore usava 2**. Due numeri a schermo,
+   nessuno dei due sbagliato, e nessun modo di sapere quale valesse.
+
+   Adesso la fonte è una sola per volta, ha un nome, e la schermata lo dice:
+
+     COMPLETE_SLICER_TOTAL  lo slicer ha dato un totale che comprende già
+                            supporti e spurgo: non si somma altro
+     MANUAL_BREAKDOWN       lo slicer ha dato le voci separate: si sommano
+     MODEL_ONLY             nessun dato dallo slicer: comandano i campi
+
+   Il guardiano sul peso modello esiste perché il caso che ha prodotto i 2 g
+   non è un errore di formula: la sottrazione «totale − supporti» è giusta ed
+   è l'anti-doppio-conteggio che funziona. È «supporti» compilato con il peso
+   del modello. Un modello che pesa meno di un quinto del totale è quasi
+   sempre quello, non un pezzo fatto di supporti. */
+var SOGLIA_MODELLO = 0.20;
+
 function pesi(){
   if(SLICER.pesoTotale>0){
     if(SLICER.includeTutto){
       var modello = SLICER.pesoModello>0 ? SLICER.pesoModello
         : Math.max(0, SLICER.pesoTotale - SLICER.supporti - SLICER.purge);
-      return { modello:modello, supporti:SLICER.supporti, purge:SLICER.purge, fonte:'slicer' };
+      var sospetto = SLICER.pesoTotale>0 && (modello / SLICER.pesoTotale) < SOGLIA_MODELLO;
+      return { modello:modello, supporti:SLICER.supporti, purge:SLICER.purge,
+               totale:modello+SLICER.supporti+SLICER.purge,
+               fonte:'slicer', sorgente:'COMPLETE_SLICER_TOTAL', sospetto:sospetto };
     }
-    return { modello:SLICER.pesoTotale, supporti:SLICER.supporti, purge:SLICER.purge, fonte:'slicer' };
+    return { modello:SLICER.pesoTotale, supporti:SLICER.supporti, purge:SLICER.purge,
+             totale:SLICER.pesoTotale+SLICER.supporti+SLICER.purge,
+             fonte:'slicer', sorgente:'MANUAL_BREAKDOWN', sospetto:false };
   }
-  return { modello:gv('p3d-g',0), supporti:gv('p3d-sup',0), purge:0, fonte:'manuale' };
+  var g=gv('p3d-g',0), sup=gv('p3d-sup',0);
+  return { modello:g, supporti:sup, purge:0, totale:g+sup,
+           fonte:'manuale', sorgente:'MODEL_ONLY', sospetto:false };
 }
 
 /* ── L'energia, e quale delle tre si sta usando ────────────────────────────
@@ -925,6 +973,41 @@ function calc(){
   var ok = R && !R.indisponibile;
   COST  = ok ? R.costo  : 0;
   PRICE = ok ? R.prezzo : 0;
+
+  /* ── Il peso: chi comanda, e se il campo dice un'altra cosa ─────────────
+     Il difetto misurato: la card slicer sovrascriveva il campo in silenzio.
+     Il campo mostrava 290, il motore usava 2, e nessuna schermata diceva
+     quale dei due valesse. */
+  var m=pesi();
+  var nf=el('p3d-g-fonte');
+  if(nf){
+    var campo=gv('p3d-g',0);
+    if(m.fonte==='slicer'){
+      var diverso = Math.abs(campo - m.modello) > 0.5;
+      nf.innerHTML='<span style="color:#22d3ee;font-weight:700">Comanda la card slicer: '
+        +Math.round(m.modello)+' g</span>'
+        +(diverso ? '<br><span style="color:var(--orange)">⚠️ questo campo dice '+Math.round(campo)
+                    +' g e non viene usato — svuota la card per usarlo</span>' : '');
+    } else {
+      nf.textContent='Da slicer (Bambu/Prusa) — comanda questo campo';
+    }
+  }
+
+  /* La voce a preventivo è congelata, questa configurazione è viva: quando
+     divergono lo si dice, invece di lasciare due numeri diversi a schermo
+     senza spiegazione. È la seconda causa dell'incoerenza segnalata. */
+  var dv=el('p3d-divergenza');
+  if(dv){
+    var uno = LINES.length===1 ? LINES[0] : null;
+    var diverge = uno && ok && Math.abs(uno.cpz - COST) > 0.01;
+    dv.innerHTML = diverge
+      ? '<div style="font-size:10px;padding:7px 9px;border-radius:8px;margin:4px 0;background:var(--bg-card2);'
+        +'border-left:3px solid var(--orange);color:var(--text-muted);line-height:1.5">'
+        +'⚠️ La configurazione aperta adesso costa <b>'+eur(COST)+'</b>, la voce a preventivo <b>'+eur(uno.cpz)+'</b>. '
+        +'Hai cambiato qualcosa dopo averla aggiunta: rimuovila e riaggiungila per aggiornarla.'
+        +'</div>'
+      : '';
+  }
 
   var t=el('p3d-hero-t');
   if(t) t.textContent = ok ? ('📊 IL CONTO — '+R.modalitaLabel) : '📊 IL CONTO';
