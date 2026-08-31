@@ -52,7 +52,10 @@ const esito = await page.evaluate(async () => {
     sv('p3d-h', 9.95); sv('p3d-qty', 1); sv('p3d-mkg', 24); sv('p3d-mu', 1000);
     sv('p3d-watt', 256); sv('p3d-duty', 0.6); sv('p3d-kwh', 0.28);
     sv('p3d-mc', 299); sv('p3d-lh', 2000); sv('p3d-mnt', 0.12);
-    sv('p3d-fail', 7); sv('p3d-lr', 15); sv('p3d-setup', 15); sv('p3d-lm', 0);
+    sv('p3d-fail', 7); sv('p3d-lr', 15);
+    /* I minuti umani si impostano dalle fasi: è l'unico posto che li possiede. */
+    for (const f of ['prep', 'rimoz', 'post', 'qc', 'pack', 'altro']) Print3DQuoter.setFase(f, 0);
+    Print3DQuoter.setFase('setup', 15);
     sv('p3d-sup', 0); sv('p3d-avgw', ''); sv('p3d-kwhm', '');
     Print3DQuoter.setDisc(0); Print3DQuoter.setIva(true); Print3DQuoter.setModo('completo');
   };

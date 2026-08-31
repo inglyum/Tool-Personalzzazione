@@ -193,8 +193,19 @@
         if (!prezzoKg && i.spoolPrice && i.spoolGrams) prezzoKg = (pos(i.spoolPrice) / pos(i.spoolGrams)) * 1000;
 
         return [
-          { id: 'materiale', label: 'Materiale', value: ((grammi + supporti + spurgo) / 1000) * prezzoKg,
+          /* ── Due sprechi diversi, che non vanno confusi ────────────────
+             `materialWasteRate` è filamento che si consuma e non finisce nel
+             pezzo: spurgo del cambio colore, prime righe, brim. Aumenta i
+             **grammi**.
+             `failureRate` è il pezzo che va rifatto: butta materiale, energia,
+             ore macchina e usura insieme, e si applica al costo (più sotto).
+             Sommarli come se fossero la stessa cosa conta due volte lo stesso
+             filamento; tenerli separati è l'unico modo per configurarne uno
+             senza gonfiare l'altro. */
+          { id: 'materiale', label: 'Materiale',
+            value: ((grammi + supporti + spurgo) * (1 + frazione(i.materialWasteRate != null ? i.materialWasteRate / 100 : 0)) / 1000) * prezzoKg,
             detail: Math.round(grammi + supporti + spurgo) + ' g' +
+              (pos(i.materialWasteRate) > 0 ? ' + ' + fmt(i.materialWasteRate) + '% di spreco' : '') +
               (supporti ? ' · supporti ' + Math.round(supporti) + ' g' : '') +
               (spurgo ? ' · spurgo ' + Math.round(spurgo) + ' g' : '') },
           { id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail },
@@ -545,8 +556,33 @@
     var extra = (i.extras || []).reduce(function (a, e) { return a + pos(e && e.cost); }, 0);
     if (extra > 0) vociPerPezzo.push({ id: 'extra', label: 'Extra', value: extra, detail: (i.extras || []).length + ' voci' });
 
-    var packaging = pos(i.packagingPerUnit);
-    if (packaging > 0) vociPerPezzo.push({ id: 'packaging', label: 'Confezione', value: packaging, detail: 'per pezzo' });
+    /* ── Ferramenta ───────────────────────────────────────────────────────
+       Magneti, viti, inserti, LED. Non sono «extra»: hanno una quantità e un
+       costo unitario, e chi preventiva un portachiavi con due magneti vuole
+       vedere «2 × € 0,15», non un totale che deve ricordare a memoria. */
+    var ferramenta = (i.hardware || []).reduce(function (a, h) {
+      return a + pos(h && h.qty, 1) * pos(h && (h.unitCost != null ? h.unitCost : h.cost));
+    }, 0);
+    if (ferramenta > 0) {
+      vociPerPezzo.push({ id: 'hardware', label: 'Componenti', value: ferramenta,
+        detail: (i.hardware || []).map(function (h) {
+          return pos(h.qty, 1) + '× ' + (h.name || 'componente');
+        }).join(' · ') });
+    }
+
+    /* Il confezionamento può essere un numero solo o un elenco di materiali:
+       scatola, busta, etichetta, protezione, nastro. Entrambi finiscono nella
+       stessa voce, perché è una voce sola nel conto di chi vende. */
+    var pkgVoci = (i.packagingItems || []).reduce(function (a, x) {
+      return a + pos(x && x.qty, 1) * pos(x && (x.unitCost != null ? x.unitCost : x.cost));
+    }, 0);
+    var packaging = pos(i.packagingPerUnit) + pkgVoci;
+    if (packaging > 0) {
+      vociPerPezzo.push({ id: 'packaging', label: 'Confezione', value: packaging,
+        detail: (i.packagingItems || []).length
+          ? (i.packagingItems || []).map(function (x) { return x.name || 'materiale'; }).join(' · ')
+          : 'per pezzo' });
+    }
 
     var totaleUnaTantum = vociUnaTantum.reduce(function (a, v) { return a + v.value; }, 0);
     var totalePerPezzo = vociPerPezzo.reduce(function (a, v) { return a + v.value; }, 0);
@@ -644,6 +680,24 @@
       provenienza: provenienza(i, vociPerPezzo.concat(vociUnaTantum)),
       /* Le ipotesi su cui questo numero regge. Se una cade, il numero cade. */
       assunzioni: assunzioni(i, ore, qty),
+
+      /* ── I costi unitari ──────────────────────────────────────────────
+         Le stesse cifre divise per le grandezze con cui si ragiona in
+         officina. «Questo pezzo costa 18 €» non dice se conviene; «costa
+         1,90 € all'ora di macchina» confrontato con il listino sì. Sono
+         derivati, non un secondo calcolo: nessuno di questi numeri può
+         divergere dal totale perché discende da lui. */
+      costoPer: (function () {
+        var g = pos(i.grams) + pos(i.supportGrams) + pos(i.purgeGrams);
+        var oreUomo = oreDiPersona(i);
+        return {
+          grammo: g > 0 ? costoPezzo / g : null,
+          oraMacchina: ore > 0 ? costoPezzo / ore : null,
+          minutoUomo: oreUomo > 0 ? costoPezzo / (oreUomo * 60) : null,
+          pezzo: costoPezzo,
+          lavoro: costoPezzo * qty,
+        };
+      }()),
     };
   }
 
@@ -904,7 +958,14 @@
   var CAMPI = {
     comuni: ['qty', 'machinePrice', 'residualValue', 'machineLifeHours', 'watt', 'kwhPrice',
       'dutyCycle', 'maintenancePerHour', 'laborPerHour', 'setupMin', 'failureRate',
-      'packagingPerUnit', 'overheadPct', 'overheadPerHour'],
+      'packagingPerUnit', 'overheadPct', 'overheadPerHour',
+      /* Fase redesign: i due sprechi separati, la ferramenta e i materiali di
+         confezionamento come elenchi, e la provenienza del peso dichiarata. */
+      'materialWasteRate', 'hardware', 'packagingItems',
+      'filamentWeightSource', 'totalFilamentGrams',
+      'measuredEnergyKwh', 'averagePowerW', 'ratedPowerW',
+      'slicerTotalCost', 'slicerMaterialCost', 'fonti', 'fontiAggiornate',
+      'ivaPct', 'livelloCosto'],
     print3d: ['grams', 'volumeCm3', 'density', 'material', 'supportGrams', 'purgeGrams',
       'materialPricePerKg', 'spoolPrice', 'spoolGrams', 'hours', 'washCureMin',
       'consumablesPerPrint', 'finishMin', 'testPrintCost'],

@@ -56,8 +56,14 @@ const esito = await page.evaluate(async () => {
   sv('p3d-g', 290); sv('p3d-h', 9.95); sv('p3d-mkg', 24); sv('p3d-mu', 1000);
   sv('p3d-watt', 150); sv('p3d-kwh', 0.28); sv('p3d-duty', 0.6);
   sv('p3d-mc', 400); sv('p3d-lh', 2000); sv('p3d-mnt', 0.12);
-  sv('p3d-fail', 7); sv('p3d-lr', 18); sv('p3d-setup', 15); sv('p3d-lm', 10);
-  sv('p3d-qty', 1); sv('p3d-sup', 0); sv('p3d-wash', 0);
+  sv('p3d-fail', 7); sv('p3d-lr', 18);
+  sv('p3d-qty', 1); sv('p3d-sup', 0);
+  /* I minuti umani hanno un solo padrone: la tabella delle fasi. I campi
+     «SETUP» e «POST-PROCESSO» della card macchina sono stati ritirati perché
+     non comandavano più niente — `setupMin` arrivava già da qui. */
+  for (const f of ['prep', 'rimoz', 'post', 'qc', 'pack', 'altro']) Print3DQuoter.setFase(f, 0);
+  Print3DQuoter.setFase('setup', 15);
+  Print3DQuoter.setFase('rimoz', 10);
   Print3DQuoter.calc();
   await new Promise((s) => setTimeout(s, 500));
 
@@ -99,24 +105,26 @@ const esito = await page.evaluate(async () => {
      preventivatore non diceva di stare rispondendo. */
   dico('il costo di stampa si vede accanto', /Costo di stampa/i.test(hero));
 
-  const m1 = 3.5;   // il moltiplicatore che il preventivatore applicava allo scaglione singolo
+  /* ── Il ×3,5 non è più il predefinito ───────────────────────────────────
+     Fino al redesign il margine iniziale era `(1 − 1/3,5)·100 = 71,43%`: il
+     vecchio moltiplicatore travestito da margine. Era stato tenuto per non
+     muovere nessun prezzo durante il montaggio; ora il predefinito dichiarato
+     è la politica «Standard», 40%. Il test che qui pretendeva ×3,5 pretendeva
+     il difetto. */
+  const m1 = 3.5;
   const margineDaMolt = (1 - 1 / m1) * 100;
-  const prezzoAtteso = E.prezzo(atteso.costoPezzo, { strategia: 'margine', marginePct: margineDaMolt, ivaPct: 0 }).netto;
   const prezzoVecchio = atteso.costoPezzo * m1;
+  dico('il moltiplicatore ×' + m1 + ' valeva un margine del ' + margineDaMolt.toFixed(1) + '%', margineDaMolt > 70);
 
-  dico('il moltiplicatore ×' + m1 + ' vale un margine del ' + margineDaMolt.toFixed(1) + '%', margineDaMolt > 70);
-  dico('e il prezzo dal margine coincide con il vecchio ricarico (nessun numero si è mosso)',
-    vicino(prezzoAtteso, prezzoVecchio, 0.02));
-
-  /* La prova che il montaggio non ha spostato prezzi: il prezzo consigliato a
-     schermo, con il margine iniziale, è quello che il vecchio ×3,5 dava. */
   const prezzoSchermo = leggiEuro((hero.match(/Prezzo consigliato[^\d]*([\d.,]+)/i) || [''])[0]);
-  dico('il prezzo a schermo è quello di prima (' + prezzoSchermo.toFixed(2) + ' vs ×3,5 = ' + prezzoVecchio.toFixed(2) + ')',
-    vicino(prezzoSchermo, prezzoVecchio, 0.05));
+  dico('il prezzo a schermo non è più il ×3,5 (' + prezzoSchermo.toFixed(2) + ' vs ' + prezzoVecchio.toFixed(2) + ')',
+    prezzoSchermo > 0 && !vicino(prezzoSchermo, prezzoVecchio, 0.05));
 
   const margineMostrato = parseFloat((hero.match(/margine\s*([\d.,]+)%/i) || [0, '0'])[1].replace(',', '.'));
-  dico('il margine mostrato è quello reale (' + margineMostrato.toFixed(1) + '%)',
-    vicino(margineMostrato, margineDaMolt, 0.15));
+  dico('il margine predefinito è il 40% dichiarato (' + margineMostrato.toFixed(1) + '%)',
+    vicino(margineMostrato, 40, 0.15));
+  dico('e il prezzo predefinito è costo ÷ (1 − 0,40)',
+    vicino(prezzoSchermo, atteso.costoPezzo / 0.6, 0.05));
 
   /* ── Un solo comando del margine ─────────────────────────────────────────
      Cursore e casella scrivono lo stesso valore, e il valore comanda. */

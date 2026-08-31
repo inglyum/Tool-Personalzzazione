@@ -54,16 +54,57 @@ var EXT_PRE=[
 var T='fdm',MATS=[],LINES=[],EXTRAS=[],SAVED=[],COST=0,PRICE=0;
 var IVA_ON=true, DISC=0;
 
-/* ── Un solo comando del margine ────────────────────────────────────────────
-   Prima ce n'erano due che non si parlavano: tre campi moltiplicatore
-   (×3,5 / ×2,8 / ×2,2) che facevano il prezzo, e uno slider «margine minimo»
-   che non faceva niente. Adesso il margine è uno solo e comanda.
+/* ── Il margine, e la fine del ×3,5 ─────────────────────────────────────────
+   Storia in tre atti, perché il numero che cambia oggi si capisca.
 
-   Il valore iniziale è il margine equivalente al vecchio ×3,5 — cioè
-   71,43%. Non è una scelta nuova: è quello che il preventivatore ha sempre
-   applicato allo scaglione singolo. Metterlo in chiaro come margine non
-   sposta nessun prezzo, rende solo visibile quello che c'era. */
-var MARG=(1-1/3.5)*100;
+   Prima c'erano tre campi moltiplicatore (×3,5 / ×2,8 / ×2,2) che facevano il
+   prezzo, e uno slider «margine minimo» che non faceva niente: chi chiedeva il
+   40% otteneva il 71,4%.
+
+   Poi il moltiplicatore è stato convertito nel margine equivalente — 71,43% —
+   perché nessun prezzo si muovesse mentre si sistemava la matematica. Era la
+   scelta giusta allora ed è diventata il difetto adesso: un costo di € 12,78
+   usciva a € 44,73, e nessuno sapeva perché.
+
+   Adesso il predefinito è la strategia **Standard, 40% di margine**. Il ×3,5
+   resta raggiungibile come strategia «Storico», dichiarata per quello che è —
+   un ricarico ereditato, non una decisione commerciale. Questo cambia i prezzi
+   dei preventivi **nuovi**: quelli salvati sono congelati e non si muovono. */
+/* ── Il lavoro umano, per fasi ────────────────────────────────────────────
+   Una stampa di dieci ore può richiedere quindici minuti di persona o due
+   ore, e il conto è diverso. Finora c'era un campo solo — «manodopera» —
+   che costringeva a sommare a mente prima di scriverlo, e sommare a mente è
+   il modo in cui una fase si dimentica.
+
+   Le sette fasi non aggiungono precisione al totale: aggiungono la
+   possibilità di accorgersi che il controllo qualità non era stato contato. */
+var FASI=[
+  { id:'prep',    lab:'Preparazione file', icona:'💻', pre:0 },
+  { id:'setup',   lab:'Avviamento',        icona:'⚙️', pre:15, job:true },
+  { id:'rimoz',   lab:'Rimozione stampa',  icona:'🔧', pre:5 },
+  { id:'post',    lab:'Post-processo',     icona:'🪣', pre:0 },
+  { id:'qc',      lab:'Controllo qualità', icona:'🔎', pre:0 },
+  { id:'pack',    lab:'Confezionamento',   icona:'📦', pre:0 },
+  { id:'altro',   lab:'Altro',             icona:'✳️', pre:0 },
+];
+var LAVORO={};
+FASI.forEach(function(f){ LAVORO[f.id]=f.pre; });
+
+/* Ferramenta e materiali di confezionamento: righe con quantità e costo
+   unitario, perché «2 × € 0,15» si controlla e un totale no. */
+var HARDWARE=[];
+var IMBALLO=[];
+
+/* Il prezzo che l'utente vuole praticare, quando ne ha già uno in testa.
+   Il preventivatore smette di proporre e comincia a rispondere: con questo
+   prezzo, quanto guadagno davvero? */
+var PREZZO_MANUALE=0;
+/* Sotto questo margine il lavoro non si accetta. È una politica, non un
+   calcolo: si dichiara una volta e vale per tutti i preventivi. */
+var MARGINE_MINIMO_3D=25;
+
+var STRATEGIA='standard';
+var MARG=40;
 var MODO='completo';
 var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
 var _registroLetto=false;
@@ -291,9 +332,7 @@ function render(){
         +'<div class="p3-fg"><label class="p3-fl">🔧 MANUTENZIONE €/h</label><input class="p3-fc" id="p3d-mnt" type="number" step="0.05" value="'+(isFdm?'0.12':'0.20')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'Ugelli, piatti, cinghie':'Film FEP, alcool, guanti')+'</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">📉 STAMPE FALLITE %</label><input class="p3-fc" id="p3d-fail" type="number" step="1" value="'+(isFdm?'7':'12')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">Materiale e ore già spesi</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🔌 CICLO DI LAVORO</label><input class="p3-fc" id="p3d-duty" type="number" step="0.05" min="0.1" max="1" value="'+(isFdm?'0.6':'0.9')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">Frazione della potenza di targa</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">⚙️ SETUP (min)</label><input class="p3-fc" id="p3d-setup" type="number" step="5" value="15" oninput="Print3DQuoter.calc()"><div class="p3-ht">Si paga una volta, diviso per la quantità</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🧱 SUPPORTI (g)</label><input class="p3-fc" id="p3d-sup" type="number" step="1" value="0" oninput="Print3DQuoter.calc()"><div class="p3-ht">Finiscono nel cestino, si pagano al chilo</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">'+(isFdm?'🪣 POST-PROCESSO (min)':'🚿 LAVAGGIO + CURA (min)')+'</label><input class="p3-fc" id="p3d-wash" type="number" step="5" value="'+(isFdm?'0':'20')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'Rimozione supporti, carteggiatura':'La stampa non è finita quando si ferma')+'</div></div>'
       +'</div>'
       +bandaEnergia()
     +'</div>'
@@ -314,9 +353,21 @@ function render(){
       +'<div class="p3-fg"><label class="p3-fl">📛 NOME PRODOTTO</label><input class="p3-fc" id="p3d-name" placeholder="es. Supporto telefono personalizzato"></div>'
       +'<div class="p3-g2">'
         +'<div class="p3-fg"><label class="p3-fl" id="p3d-gl">'+(isFdm?'🧵 MATERIALE (g)':'🧴 RESINA (ml)')+'</label><input class="p3-fc acc" id="p3d-g" type="number" step="1" value="20" oninput="Print3DQuoter.calc()"><div class="p3-ht" id="p3d-g-fonte">Da slicer (Bambu/Prusa)</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">⏱️ TEMPO STAMPA (h)</label><input class="p3-fc acc" id="p3d-h" type="number" step="0.25" value="1.5" oninput="Print3DQuoter.calc()"></div>'
-        +'<div class="p3-fg"><label class="p3-fl">👤 MANODOPERA (min)</label><input class="p3-fc acc" id="p3d-lm" type="number" step="5" value="10" oninput="Print3DQuoter.calc()"><div class="p3-ht">Setup + rimozione</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">💶 €/h MANODOPERA</label><input class="p3-fc" id="p3d-lr" type="number" step="1" value="18" oninput="Print3DQuoter.calc()"></div>'
+        /* Ore e minuti separati, perché è così che li dice lo slicer: «9h 57m».
+           Chi deve convertire a mente scrive 10, e dieci ore non sono 9,95 —
+           su una macchina da € 0,08/h la differenza è piccola, sull'energia e
+           sull'ammortamento di cento pezzi no. Il campo decimale resta, e i
+           due si tengono allineati. */
+        +'<div class="p3-fg"><label class="p3-fl">⏱️ TEMPO STAMPA</label>'
+          +'<div style="display:flex;gap:4px;align-items:center">'
+            +'<input class="p3-fc acc" id="p3d-hh" type="number" step="1" min="0" value="1" oninput="Print3DQuoter.setTempo()" style="text-align:right">'
+            +'<span style="font-size:11px;color:var(--text-muted)">h</span>'
+            +'<input class="p3-fc acc" id="p3d-mm" type="number" step="1" min="0" max="59" value="30" oninput="Print3DQuoter.setTempo()" style="text-align:right">'
+            +'<span style="font-size:11px;color:var(--text-muted)">m</span>'
+          +'</div>'
+          +'<input type="hidden" id="p3d-h" value="1.5">'
+          +'<div class="p3-ht" id="p3d-h-dec">= 1,50 h</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">📉 SPRECO MATERIALE %</label><input class="p3-fc" id="p3d-waste" type="number" step="1" min="0" value="0" oninput="Print3DQuoter.calc()"><div class="p3-ht">Spurgo, brim, prime righe — non è lo scarto</div></div>'
       +'</div>'
       +'<div style="background:var(--bg-card2);border-radius:var(--radius-sm);padding:10px;margin-top:8px;border:1px solid var(--border)">'
         +'<div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">✨ LAVORAZIONI EXTRA</div>'
@@ -326,6 +377,11 @@ function render(){
       +'<div class="p3-fg" style="margin-top:10px"><label class="p3-fl">📦 QTÀ ORDINE</label><input class="p3-fc" id="p3d-qty" type="number" value="1" min="1" oninput="Print3DQuoter.calc()"></div>'
       +'<button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;letter-spacing:.3px;background:#22d3ee;color:#000;margin-top:4px" onclick="Print3DQuoter.addLine()"><i class="fas fa-plus-circle"></i> AGGIUNGI AL PREVENTIVO</button>'
     +'</div>'
+    // ── Il lavoro umano, per fasi ────────────────────────────────────
+    +cardLavoro()
+    // ── Componenti e confezione ──────────────────────────────────────
+    +cardRighe('🔩 COMPONENTI', HARDWARE, 'Hw', 'magnete, vite, inserto, LED…')
+    +cardRighe('📦 CONFEZIONE', IMBALLO, 'Pk', 'scatola, busta, etichetta, protezione…')
     // Macchine rapide
     +'<div class="p3-card"><div class="p3-ct">🤖 MACCHINE RAPIDE</div><div class="p3-mg">'+machBtns+'</div></div>'
   +'</div>'
@@ -350,6 +406,8 @@ function render(){
     +'</div>'
     // ── C · dove vanno i soldi ────────────────────────────────────────
     +'<div class="p3-card"><div class="p3-ct">🔢 DETTAGLIO COSTI — live</div><div id="p3d-bk"><div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">Inserisci grammi e ore per vedere il calcolo</div></div></div>'
+    // ── Costo per grammo, ora macchina, minuto uomo ──────────────────
+    +'<div id="p3d-costoper"></div>'
     // ── E · le quantità: l'avviamento si divide, il pezzo no ──────────
     +'<div class="p3-card"><div class="p3-ct">📦 QUANTITÀ — quanto conviene stampare</div><div id="p3d-scaglioni"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div></div></div>'
     // ── F · calibrazione contro un riferimento esterno ────────────────
@@ -375,10 +433,32 @@ function render(){
             +'<span style="display:block;font-size:8px;opacity:.7;font-weight:400;line-height:1.3;margin-top:2px">'+m.sotto+'</span>'
             +'</button>';
         }).join('')+'</div>'
-      /* Un solo comando del margine. Il numero che si legge qui è il numero
-         che il motore usa: non c'è più un secondo posto dove il prezzo si
-         forma. Il cursore e la casella scrivono la stessa variabile. */
+      /* ── Le strategie ─────────────────────────────────────────────────
+         Quattro posizioni commerciali con un nome, più quella storica
+         dichiarata per quello che è. Prima il prezzo veniva da un
+         moltiplicatore senza nome: si vedeva il risultato e non la
+         decisione. */
       +'<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+        +'<label class="p3-fl">🎯 STRATEGIA DI PREZZO</label>'
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:5px;margin-bottom:9px">'
+        +strategie3D().map(function(st){
+          var on=STRATEGIA===st.id;
+          var col=st.storica?'var(--text-dim)':(on?'#22d3ee':'var(--text-dim)');
+          return '<button onclick="Print3DQuoter.setStrategia(\''+st.id+'\')" style="padding:7px 4px;border-radius:8px;cursor:pointer;text-align:center;'
+            +'border:1.5px solid '+(on?'#22d3ee':'var(--border2)')+';background:'+(on?'#22d3ee18':'transparent')+';color:'+col+'">'
+            +'<span style="font-size:10px;font-weight:800;display:block;line-height:1.2">'+st.label+'</span>'
+            +'<span style="font-size:9px;opacity:.75">'+Math.round(st.marginTarget)+'%</span>'
+            +'</button>';
+        }).join('')
+        +'</div>'
+        +(STRATEGIA==='storico'
+          ? '<div style="font-size:10px;padding:7px 9px;border-radius:8px;margin-bottom:8px;background:var(--bg-card2);'
+            +'border-left:3px solid var(--orange);color:var(--text-muted);line-height:1.5">'
+            +'⚠️ È il vecchio moltiplicatore ×3,5 ereditato dalle prime versioni: un ricarico, non una decisione commerciale. '
+            +'Le altre quattro sono margini scelti.</div>'
+          : '')
+        +(STRATEGIA==='libero'
+          ? '<div class="p3-ht" style="margin-bottom:8px">Margine impostato a mano: nessuna strategia attiva.</div>' : '')
         +'<label style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
           +'<span>Margine applicato</span>'
           +'<span style="display:flex;align-items:center;gap:4px">'
@@ -395,6 +475,8 @@ function render(){
       +'<div class="p3-ct">🎯 POLITICHE DI PREZZO</div>'
       +'<div id="p3d-tiers"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere i prezzi</div></div>'
     +'</div>'
+    // ── Prezzo manuale e verdetto ────────────────────────────────────
+    +cardPrezzoManuale()
     // IVA + Sconto
     +'<div class="p3-card">'
       +'<div class="p3-ct">🧾 IVA &amp; SCONTO</div>'
@@ -438,6 +520,9 @@ function render(){
   +'</div>'; // close p3-grid
 
   _ripristina(root,_prima);
+  /* Le due caselle e il decimale nascosto devono restare d'accordo dopo ogni
+     ridisegno: sono la stessa grandezza scritta in due modi. */
+  (function(){ var h=el('p3d-h'); if(h) tempoDaDecimale(parseFloat(h.value)||0); }());
   setTimeout(function(){calc();},10);
   /* Il registro si rilegge quando la sezione si apre, non a ogni tasto. */
   if(!_registroLetto){ _registroLetto=true; aggiornaRegistro(); }
@@ -708,7 +793,210 @@ function pannelloPerche(){
   +'</div>';
 }
 
-function setType(t){T=t;render();}
+/* ── La card del lavoro ───────────────────────────────────────────────────
+   Sette fasi, e una riga che dice quanto costano insieme. L'avviamento è
+   marcato «per lavoro» perché è l'unico che si divide per la quantità, ed è
+   la distinzione che rende il costo di cento pezzi diverso da cento volte il
+   costo di uno. */
+function cardLavoro(){
+  var q=Math.max(1,gv('p3d-qty',1));
+  return '<div class="p3-card cyan">'
+    +'<div class="p3-ct c">👤 LAVORO — quanto tempo ci metti tu</div>'
+    +'<div class="p3-g2">'
+    +FASI.map(function(f){
+      return '<div class="p3-fg"><label class="p3-fl">'+f.icona+' '+f.lab.toUpperCase()
+        +(f.job?' <span style="color:#22d3ee">·job</span>':'')+'</label>'
+        +'<input class="p3-fc" type="number" step="1" min="0" value="'+(LAVORO[f.id]||0)+'" '
+        +'oninput="Print3DQuoter.setFase(\''+f.id+'\',this.value)">'
+        +'<div class="p3-ht">'+(f.job?'una volta per lavoro':'per pezzo')+'</div></div>';
+    }).join('')
+    +'</div>'
+    +'<div class="p3-fg" style="margin-top:8px"><label class="p3-fl">💶 €/H MANODOPERA</label>'
+      +'<input class="p3-fc" id="p3d-lr" type="number" step="1" value="18" oninput="Print3DQuoter.calc()"></div>'
+    +'<div style="margin-top:8px;padding:8px 10px;background:var(--bg-card2);border-radius:8px;font-size:10px;color:var(--text-muted);line-height:1.6" id="p3d-lavoro-tot"></div>'
+  +'</div>';
+}
+
+/* ── Righe con quantità e costo unitario ──────────────────────────────────
+   Ferramenta e confezione hanno la stessa forma: nome, quantità, costo. Una
+   funzione sola per entrambe, perché due copie di questa tabella
+   divergerebbero alla prima modifica. */
+function cardRighe(titolo,elenco,suffisso,esempio){
+  var righe = elenco.length ? elenco.map(function(x,i){
+    return '<div style="display:flex;align-items:center;gap:4px;margin-bottom:5px">'
+      +'<input class="p3-fc" style="flex:2;font-size:11px;padding:5px 7px" value="'+esc3(x.n)+'" oninput="Print3DQuoter.up'+suffisso+'('+i+',\'n\',this.value)">'
+      +'<input class="p3-fc" type="number" step="1" min="0" style="flex:0.6;text-align:center;font-size:11px;padding:5px 4px" value="'+x.q+'" oninput="Print3DQuoter.up'+suffisso+'('+i+',\'q\',this.value)">'
+      +'<span style="font-size:10px;color:var(--text-dim)">×</span>'
+      +'<input class="p3-fc" type="number" step="0.01" min="0" style="flex:0.8;text-align:right;font-size:11px;padding:5px 6px" value="'+x.c+'" oninput="Print3DQuoter.up'+suffisso+'('+i+',\'c\',this.value)">'
+      +'<span style="font-size:10px;color:var(--text-dim)">€</span>'
+      +'<button class="btn btn-danger btn-sm" onclick="Print3DQuoter.rm'+suffisso+'('+i+')">✕</button></div>';
+  }).join('') : '<div class="p3-ht" style="padding:4px 0">Nessuna voce — '+esempio+'</div>';
+  var tot = elenco.reduce(function(a,x){ return a+(x.q||0)*(x.c||0); },0);
+  return '<div class="p3-card">'
+    +'<div class="p3-ct" style="display:flex;justify-content:space-between;align-items:center">'
+      +'<span>'+titolo+'</span>'
+      +(tot>0?'<span style="color:#22d3ee;font-weight:800;text-transform:none">'+eur(tot)+'/pz</span>':'')
+    +'</div>'
+    +righe
+    +'<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;border-style:dashed;color:#22d3ee;border-color:#22d3ee40" onclick="Print3DQuoter.add'+suffisso+'()">+ Aggiungi</button>'
+  +'</div>';
+}
+
+/** L'apostrofo e le virgolette in un `value=` chiudono l'attributo: senza
+    questo, un componente chiamato «vite 3" » romperebbe la pagina. */
+function esc3(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+/** Ore e minuti diventano ore decimali, una volta sola e senza arrotondare:
+    9h57 fa 9,95 e non 10. Il campo decimale resta la fonte per il motore, così
+    nessuna formula deve sapere che esistono due caselle. */
+function setTempo(){
+  var h=Math.max(0,gv('p3d-hh',0));
+  var m=Math.max(0,Math.min(59,gv('p3d-mm',0)));
+  var dec=h+m/60;
+  sv('p3d-h',dec);
+  var n=el('p3d-h-dec');
+  if(n) n.textContent='= '+(Math.round(dec*100)/100).toFixed(2).replace('.',',')+' h';
+  calc();
+}
+
+/** L'inverso, per quando le ore arrivano da un import o da un preventivo
+    salvato: si riempiono le due caselle senza perdere i minuti. */
+function tempoDaDecimale(dec){
+  var h=Math.floor(Math.max(0,dec));
+  var m=Math.round((Math.max(0,dec)-h)*60);
+  if(m===60){ h+=1; m=0; }
+  sv('p3d-hh',h); sv('p3d-mm',m); sv('p3d-h',dec);
+  var n=el('p3d-h-dec');
+  if(n) n.textContent='= '+(Math.round(dec*100)/100).toFixed(2).replace('.',',')+' h';
+}
+
+/** Il verdetto disegnato, con i tre numeri che servono per decidere. */
+function disegnaVerdetto(){
+  var n=el('p3d-verdetto'); if(!n) return;
+  var costo=COST||0;
+  var v=verdetto(PREZZO_MANUALE,costo);
+  if(!v){ n.innerHTML='<div class="p3-ht">Scrivi un prezzo per sapere che margine produce.</div>'; return; }
+  var q=Math.max(1,gv('p3d-qty',1));
+  n.innerHTML='<div style="padding:9px 11px;border-radius:9px;background:var(--bg-card2);border-left:3px solid '+v.col+'">'
+    +'<div style="font-size:12px;font-weight:800;color:'+v.col+'">'+v.icona+' '+v.lab+'</div>'
+    +'<div style="font-size:10px;color:var(--text-muted);line-height:1.5;margin-top:3px">'+v.testo+'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;font-size:10px;color:var(--text-muted)">'
+      +'<span>profitto <b style="color:var(--text)">'+eur(PREZZO_MANUALE-costo)+'</b>/pz</span>'
+      +'<span>margine <b style="color:var(--text)">'+v.margine.toFixed(1)+'%</b></span>'
+      +'<span>ricarico <b style="color:var(--text)">'+(costo>0?((PREZZO_MANUALE/costo-1)*100).toFixed(1):'—')+'%</b></span>'
+      +(q>1?'<span>sul lavoro <b style="color:var(--text)">'+eur((PREZZO_MANUALE-costo)*q)+'</b></span>':'')
+    +'</div></div>';
+}
+
+function setPrezzoManuale(v){ PREZZO_MANUALE=Math.max(0,parseFloat(v)||0); calc(); }
+function setMargineMinimo(v){ MARGINE_MINIMO_3D=Math.max(0,Math.min(95,parseFloat(v)||0)); calc(); }
+
+/* ── Il verdetto ──────────────────────────────────────────────────────────
+   Tre stati, e nessuno è un'opinione: sono tre confronti fra il prezzo e due
+   numeri che il preventivatore conosce già. Serve perché «€ 25» non dice
+   niente da solo, e chi tratta con un cliente ha bisogno di sapere subito da
+   che parte della riga si trova. */
+function verdetto(prezzo,costo){
+  if(!(prezzo>0)||!(costo>0)) return null;
+  var m=(prezzo-costo)/prezzo*100;
+  if(prezzo<costo) return { id:'perdita', icona:'🔴', lab:'In perdita',
+    col:'var(--red)', margine:m,
+    testo:'Vendi sotto il costo: ogni pezzo toglie '+eur(costo-prezzo)+'.' };
+  if(m<MARGINE_MINIMO_3D) return { id:'attenzione', icona:'⚠️', lab:'Sotto il minimo',
+    col:'var(--orange)', margine:m,
+    testo:'Margine '+m.toFixed(1)+'%, sotto il minimo che ti sei dato ('+MARGINE_MINIMO_3D+'%).' };
+  return { id:'ok', icona:'✅', lab:'Profittevole', col:'var(--green,#22c55e)', margine:m,
+    testo:'Margine '+m.toFixed(1)+'%, sopra il minimo del '+MARGINE_MINIMO_3D+'%.' };
+}
+
+/* ── La card del prezzo manuale ───────────────────────────────────────────
+   Il preventivatore risponde a due domande diverse: «quanto devo chiedere» e
+   «se chiedo questo, quanto ci guadagno». La seconda serve quando il prezzo
+   arriva dal cliente o da un listino, ed è quella che dice se una commessa
+   conviene accettarla. */
+function cardPrezzoManuale(){
+  var costo=COST||0;
+  var minimo=null;
+  var MOT=(typeof window!=='undefined') && window.InglyCostEngine;
+  if(MOT && costo>0) minimo=MOT.prezzo(costo,{strategia:'margine',marginePct:MARGINE_MINIMO_3D,ivaPct:0}).netto;
+
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">💶 SE VOLESSI FAR PAGARE…</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">'
+      +'<span style="font-size:13px;color:var(--text-muted)">€</span>'
+      +'<input class="p3-fc" type="number" step="0.5" min="0" placeholder="prezzo al pezzo" value="'+(PREZZO_MANUALE||'')+'" '
+      +'oninput="Print3DQuoter.setPrezzoManuale(this.value)" style="font-size:15px;font-weight:800">'
+    +'</div>'
+    /* Il verdetto lo riempie `calc()`: dipende dal costo, che cambia a ogni
+       tasto premuto, e ridisegnare la card intera per aggiornare tre righe
+       farebbe perdere il fuoco al campo mentre si scrive il prezzo. */
+    +'<div id="p3d-verdetto"></div>'
+    +'<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">'
+      +'<label style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center">'
+        +'<span>🛑 Margine minimo accettabile</span>'
+        +'<span style="display:flex;align-items:center;gap:4px">'
+          +'<input class="p3-fc" type="number" step="1" min="0" max="95" value="'+MARGINE_MINIMO_3D+'" '
+          +'oninput="Print3DQuoter.setMargineMinimo(this.value)" style="width:56px;padding:3px 6px;font-size:12px;text-align:right;font-weight:800">'
+          +'<span>%</span></span>'
+      +'</label>'
+      +(minimo!=null
+        ? '<div class="p3-ht" style="margin-top:5px">Sotto <b style="color:var(--orange)">'+eur(minimo)+'</b> al pezzo non conviene accettare.</div>'
+        : '')
+    +'</div>'
+  +'</div>';
+}
+
+/* ── I costi unitari ──────────────────────────────────────────────────────
+   Le stesse cifre divise per le grandezze con cui si ragiona in officina.
+   «Questo pezzo costa 18 €» non dice se conviene; «costa 1,90 € all'ora di
+   macchina» confrontato con quanto si fa pagare l'ora, sì. */
+function cardCostoPer(){
+  if(!R||R.indisponibile||!R._costo||!R._costo.costoPer) return '';
+  var c=R._costo.costoPer;
+  var voce=function(lab,val,unita){
+    if(val==null) return '';
+    return '<div style="flex:1;min-width:96px;padding:8px 10px;background:var(--bg-card2);border-radius:9px;border:1px solid var(--border)">'
+      +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim)">'+lab+'</div>'
+      +'<div style="font-size:15px;font-weight:900;color:var(--text);line-height:1.2">'+eur(val)+'</div>'
+      +'<div style="font-size:9px;color:var(--text-muted)">'+unita+'</div></div>';
+  };
+  return '<div class="p3-card"><div class="p3-ct">📏 COSTO PER</div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+      +voce('Grammo',c.grammo,'di materiale')
+      +voce('Ora macchina',c.oraMacchina,'di stampa')
+      +voce('Minuto uomo',c.minutoUomo,'di lavoro')
+      +voce('Pezzo',c.pezzo,'finito')
+    +'</div></div>';
+}
+
+function setFase(id,v){ LAVORO[id]=Math.max(0,parseFloat(v)||0); calc(); aggiornaLavoro(); }
+function addHw(){ HARDWARE.push({n:'Componente',q:1,c:0.10}); render(); }
+function upHw(i,k,v){ if(!HARDWARE[i])return; HARDWARE[i][k]=(k==='n')?v:(parseFloat(v)||0); calc(); }
+function rmHw(i){ HARDWARE.splice(i,1); render(); }
+function addPk(){ IMBALLO.push({n:'Materiale',q:1,c:0.20}); render(); }
+function upPk(i,k,v){ if(!IMBALLO[i])return; IMBALLO[i][k]=(k==='n')?v:(parseFloat(v)||0); calc(); }
+function rmPk(i){ IMBALLO.splice(i,1); render(); }
+
+/** Il totale dei minuti umani, aggiornato senza ridisegnare tutto. */
+function aggiornaLavoro(){
+  var el2=el('p3d-lavoro-tot'); if(!el2) return;
+  var min=FASI.reduce(function(a,f){ return a+(LAVORO[f.id]||0); },0);
+  var perJob=LAVORO.setup||0, perPezzo=min-perJob;
+  var q=Math.max(1,gv('p3d-qty',1));
+  var tar=gv('p3d-lr',18);
+  el2.innerHTML='<b style="color:var(--text)">'+min+' min</b> di persona · '
+    +eur((perPezzo/60*tar)+((perJob/60*tar)/q))+'/pz'
+    +(q>1?' <span style="color:var(--text-dim)">(avviamento diviso su '+q+')</span>':'');
+}
+
+function setType(t){
+  /* Il lavaggio e la polimerizzazione sono lavoro di resina: cambiando
+     tecnologia cambia il predefinito della fase, ma solo se nessuno l'ha
+     ancora toccato — altrimenti si cancellerebbe un dato inserito. */
+  var pre=(T==='resin')?20:0;
+  if(LAVORO.post===pre) LAVORO.post=(t==='resin')?20:0;
+  T=t;render();
+}
 function setIva(on){
   IVA_ON=on;
   var y=el('p3d-iva-yes'),n=el('p3d-iva-no');
@@ -835,9 +1123,21 @@ function ingresso(){
     kwhPrice:gv('p3d-kwh',.28), dutyCycle:gv('p3d-duty',1),
     machinePrice:gv('p3d-mc',400), machineLifeHours:gv('p3d-lh',2000),
     maintenancePerHour:gv('p3d-mnt',0),
-    washCureMin:gv('p3d-wash',0), laborPerHour:gv('p3d-lr',15),
-    setupMin:gv('p3d-setup',0), finishMin:gv('p3d-lm',0),
+    /* Il lavaggio è la fase «post» della card lavoro, non un campo a parte:
+       finché ne esistevano due, chi compilava entrambi pagava il
+       post-processo due volte. */
+    washCureMin:LAVORO.post, laborPerHour:gv('p3d-lr',18),
+    /* L'avviamento è per **lavoro** e si divide per la quantità; tutte le
+       altre fasi sono per **pezzo**. Confonderli è il modo in cui il costo di
+       cento pezzi diventa cento volte l'avviamento. */
+    setupMin:LAVORO.setup,
+    finishMin:LAVORO.prep+LAVORO.rimoz+LAVORO.qc+LAVORO.pack+LAVORO.altro,
+    /* I due sprechi, separati: lo spreco di materiale aumenta i grammi, lo
+       scarto di produzione butta il pezzo intero. */
+    materialWasteRate:gv('p3d-waste',0),
     failureRate:gv('p3d-fail',0),
+    hardware:HARDWARE.map(function(h){ return { name:h.n, qty:h.q, unitCost:h.c }; }),
+    packagingItems:IMBALLO.map(function(x){ return { name:x.n, qty:x.q, unitCost:x.c }; }),
     extras:EXTRAS.map(function(e){ return { label:e.n, cost:parseFloat(e.c)||0 }; }),
   };
 }
@@ -910,6 +1210,9 @@ function setEnergia(m){ ENE=m; render(); }
 
 function setSlicer(k,v){
   SLICER[k]= (k==='includeTutto') ? !!v : (parseFloat(v)||0);
+  /* Le ore dello slicer riempiono le due caselle: chi importa 9,95 deve
+     vedere «9 h 57 m», non un decimale da riconvertire a mente. */
+  if(k==='ore' && SLICER.ore>0) tempoDaDecimale(SLICER.ore);
   render();
 }
 
@@ -940,10 +1243,32 @@ function setModo(m){ MODO=m; render(); }
 
 /* Cursore e casella scrivono la stessa variabile e si risincronizzano a
    vicenda: due controlli, un solo valore. */
+/** Le strategie sono i preset del motore, più quella storica. Sceglierne una
+    imposta il margine; toccare il margine a mano sgancia la scelta, perché
+    dire «Standard» mentre si applica il 53% sarebbe una bugia. */
+function strategie3D(){
+  var MOT=(typeof window!=='undefined') && window.InglyCostEngine;
+  var base=MOT&&MOT.politiche?MOT.politiche():[];
+  return base.concat([{ id:'storico', label:'Storico ×3,5',
+    marginTarget:(1-1/3.5)*100, storica:true }]);
+}
+
+function setStrategia(id){
+  var s=strategie3D().filter(function(x){return x.id===id;})[0];
+  if(!s) return;
+  STRATEGIA=id;
+  MARG=s.marginTarget;
+  render();
+}
+
 function setMargine(v){
   var n=parseFloat(v);
   if(!isFinite(n)) return;
   MARG=Math.max(0,Math.min(95,n));
+  /* Se il margine non corrisponde più a nessuna strategia, nessuna strategia
+     resta accesa: l'etichetta deve dire la verità. */
+  var s=strategie3D().filter(function(x){return Math.abs(x.marginTarget-MARG)<0.05;})[0];
+  STRATEGIA=s?s.id:'libero';
   var r=el('p3d-margin'); if(r && Math.round(MARG)!==parseFloat(r.value)) r.value=Math.round(MARG);
   var b=el('p3d-margin-num'); if(b && document.activeElement!==b) b.value=MARG.toFixed(1);
   calc();
@@ -1008,6 +1333,11 @@ function calc(){
         +'</div>'
       : '';
   }
+
+  aggiornaLavoro();
+
+  var cp=el('p3d-costoper'); if(cp) cp.innerHTML=cardCostoPer();
+  disegnaVerdetto();
 
   var t=el('p3d-hero-t');
   if(t) t.textContent = ok ? ('📊 IL CONTO — '+R.modalitaLabel) : '📊 IL CONTO';
@@ -1075,8 +1405,49 @@ function addLine(){
      mostrava un altro con IVA: due colonne, sulla stessa schermata, diverse
      del 22% senza che nulla lo dicesse. */
   var listino = DISC>0 ? PRICE/(1-DISC/100) : PRICE;
+
+  /* ── Lo snapshot della riga ────────────────────────────────────────────
+     La riga non porta più due numeri: porta il conto intero come era in
+     questo istante — ogni voce di costo, il margine, l'IVA, e da dove
+     venivano i dati. Serve a due cose che prima non si potevano fare.
+
+     La prima: la riga non ha bisogno di ricalcolare niente per mostrarsi, e
+     quindi non può divergere dal motore — è la regola che questa fase
+     esiste per rendere strutturale invece che sperata.
+
+     La seconda: fra sei mesi, con il filamento a un altro prezzo, si può
+     ancora rispondere a «perché costava così» guardando la riga, invece di
+     rifare il conto con i dati di oggi e ottenere un numero diverso. */
+  var voci={}, prov={};
+  if(R && !R.indisponibile && R._costo){
+    (R._costo.perPezzo.voci||[]).forEach(function(v){ voci[v.id]=v.value; });
+    if(R._costo.unaTantum && R._costo.unaTantum.perPezzo>0) voci.setup=R._costo.unaTantum.perPezzo;
+    if(R._costo.overhead>0) voci.overhead=R._costo.overhead;
+    (R._costo.provenienza||[]).forEach(function(x){ prov[x.id]={ source:x.source, confidence:x.confidence }; });
+  }
+  var F=(typeof window!=='undefined') && window.InglyFisco;
+  var aliq=IVA_ON?(F?F.aliquota():22):0;
+
   LINES.push({id:Date.now(),n:name,qty:qty,cpz:COST,ppz:PRICE,ppzListino:listino,
-              marg:MARG,modo:MODO,manuale:false,t:T});
+              marg:MARG,modo:MODO,manuale:false,t:T,
+              snapshot:{
+                schema:1,
+                quando:new Date().toISOString(),
+                voci:voci,
+                trueCost:COST,
+                netPrice:PRICE,
+                margine:MARG,
+                ricaricoPct: COST>0 ? (PRICE/COST-1)*100 : null,
+                strategia:STRATEGIA,
+                livello:MODO,
+                aliquotaIva:aliq,
+                iva:PRICE*aliq/100,
+                lordo:PRICE*(1+aliq/100),
+                scontoPct:DISC,
+                ingresso: ingresso(),
+                provenienza: prov,
+                calcolatoDa: (window.InglyCostEngine&&window.InglyCostEngine.version)||null,
+              }});
   showToastP('✅ Aggiunto: '+name+' — '+eur(PRICE)+'/pz netti','success');
   render();
 }
@@ -1167,7 +1538,7 @@ function sendQ(){
 
 function reset(){
   if(!confirm('Resettare tutto il preventivo 3D?'))return;
-  LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=(1-1/3.5)*100;
+  LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=40;STRATEGIA='standard';
   render();showToastP('🔄 Reset completato','info');
 }
 
@@ -1243,6 +1614,11 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   doPdf:doPdf,doWa:doWa,sendQ:sendQ,openMat:openMat,closeMat:closeMat,
   addMat:addMat,editMat:editMat,delMat:delMat,
   setModo:setModo,setMargine:setMargine,setCalib:setCalib,setPrezzoMat:setPrezzoMat,
+  setStrategia:setStrategia,
+  setFase:setFase, addHw:addHw, upHw:upHw, rmHw:rmHw,
+  setPrezzoManuale:setPrezzoManuale, setMargineMinimo:setMargineMinimo,
+  setTempo:setTempo, tempoDaDecimale:tempoDaDecimale,
+  addPk:addPk, upPk:upPk, rmPk:rmPk,
   setEnergia:setEnergia,setSlicer:setSlicer,svuotaSlicer:svuotaSlicer,togglePerche:togglePerche,
   aggiornaRegistro:aggiornaRegistro,
   /* Letto dal collaudo per verificare l'ingresso senza ricostruirlo: un
