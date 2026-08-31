@@ -186,12 +186,17 @@ test('senza un riferimento slicer il confronto è nullo, non inventato', () => {
 
 /* ── Le cinque posizioni commerciali ────────────────────────────────────── */
 
-test('le cinque posizioni esistono e sono ordinate per margine', () => {
+test('le posizioni commerciali sono ordinate per margine', () => {
+  /* Sette, dopo il benchmark: ingrosso e «su misura» si sono aggiunte alle
+     cinque. La scala deve salire — una scala che non sale confonde — e «su
+     misura» ne sta fuori di proposito, perché non ha un margine proprio:
+     prende quello impostato dall'utente. */
   const p = E.politiche();
-  assert.equal(p.length, 5);
-  assert.equal(p.map((x) => x.id).join(','), 'competitive,b2b,standard,premium,luxury');
-  const m = p.map((x) => x.marginTarget);
-  for (let i = 1; i < m.length; i++) assert.ok(m[i] > m[i - 1], `${m[i - 1]} → ${m[i]}`);
+  assert.equal(p.map((x) => x.id).join(','), 'wholesale,competitive,b2b,standard,premium,luxury,custom');
+  const scala = p.filter((x) => !x.apertaAllUtente).map((x) => x.marginTarget);
+  for (let i = 1; i < scala.length; i++) assert.ok(scala[i] > scala[i - 1], `${scala[i - 1]} → ${scala[i]}`);
+  assert.equal(p.filter((x) => x.recommended).length, 1);
+  assert.equal(p.find((x) => x.recommended).id, 'standard');
 });
 
 test('il B2B è un margine, non uno sconto', () => {

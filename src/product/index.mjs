@@ -62,10 +62,22 @@ export const PRODUCT_FILES = [
   'material-cost.js',
   'machine-cost.js',
   'fisco.js',
+  /* I margini configurati: dopo il motore, di cui conserva le sole modifiche.
+     È qui e non nel motore perché il motore deve restare puro. */
+  'pricing-policies.js',
+  /* Preventivato contro reale: puro, non recupera niente. */
+  'scostamento.js',
   'tema.js',
   'tema-view.js',
   'cliente-integrita.js',
   'clienti.js',
+  /* Il renderer unico della riga cliente (CRM-05): puro, prima delle viste
+     che lo usano. Non legge dati, quindi non dipende da `clienti.js` — ma
+     stargli accanto dice che appartengono allo stesso consolidamento. */
+  'cliente-riga.js',
+  /* Il lettore dei file di slicer: puro, nessuna rete. Prima della vista del
+     preventivatore, che glieli passa. */
+  'slicer-import.js',
   /* La vista del registro: dopo il registro e dopo ui.js. */
   'inventory-view.js',
   /* I template di preventivo: puri, dopo l'adapter di cui usano lo stato. */

@@ -241,18 +241,25 @@
     };
     var p = E.prezzo(c.costoPezzo, opzPrezzo);
 
-    /* Le quattro politiche, ognuna con il suo margine obiettivo. Un
-       moltiplicatore non compare da nessuna parte. */
-    /* Le cinque posizioni, con i margini che l'azienda ha configurato: chi
-       lavora su commesse lunghe e chi vende in fiera non hanno lo stesso
-       «standard», e un margine scritto nel motore non è configurabile. */
+    /* Le posizioni commerciali, con i margini che l'azienda ha configurato:
+       chi lavora su commesse lunghe e chi vende in fiera non hanno lo stesso
+       «standard», e un margine scritto nel motore non è configurabile. Un
+       moltiplicatore non compare da nessuna parte.
+
+       «Su misura» prende il margine impostato dall'utente invece del proprio:
+       è ciò che la rende una posizione dichiarata e non un margine fuori
+       politica passato in silenzio. */
     var strategieCalcolate = (E.politiche ? E.politiche(o.margini) : Object.keys(E.POLITICHE).map(function (k) { return E.POLITICHE[k]; })).map(function (pol) {
       var k = pol.id;
-      var pr = E.prezzo(c.costoPezzo, Object.assign({}, opzPrezzo, { marginePct: pol.marginTarget }));
+      var obiettivo = pol.apertaAllUtente && o.marginePct != null ? num(o.marginePct, pol.marginTarget) : pol.marginTarget;
+      var pr = E.prezzo(c.costoPezzo, Object.assign({}, opzPrezzo, { marginePct: obiettivo }));
       return {
-        id: k, label: pol.label, marginTarget: pol.marginTarget,
+        id: k, label: pol.label, marginTarget: obiettivo,
+        apertaAllUtente: !!pol.apertaAllUtente,
         prezzo: pr.netto, profitto: pr.profittoLordo,
         marginePct: pr.marginePct, ricaricoPct: pr.ricaricoPct,
+        /* Lordo e IVA per la card: l'IVA la scorpora il motore, non la vista. */
+        prezzoLordo: pr.lordo, iva: pr.iva,
         raccomandata: !!pol.recommended,
       };
     });

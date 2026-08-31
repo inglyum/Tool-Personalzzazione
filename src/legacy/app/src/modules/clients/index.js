@@ -389,53 +389,57 @@ const Clients={
       return;
     }
 
-    el.innerHTML=pageItems.map(c=>{
-      const spent = c._spent||0;
-      const orders = c._orders||0;
+    /* CRM-05 — anche questa tabella passa dal renderer unico.
+       Era la quarta copia della riga cliente, e la più difficile da vedere
+       perché non arriva a schermo: scrive in `#clients-tbody`, che nel
+       documento consegnato non esiste — `render()` esce alla prima riga.
+       Restava però il posto dove chi correggeva un difetto della riga andava
+       a cercarlo, e dove `${c.name}` finiva nel markup **senza escape**.
+       Le colonne proprie di questa vista — punteggio, ultimo acquisto,
+       ordini e speso — restano qui, dove i numeri vengono calcolati; il nome,
+       il telefono, l'email e le azioni no. */
+    var R = window.InglyClienteRiga;
+    if(!R){ el.innerHTML='<tr><td colspan="9" style="padding:30px;text-align:center;color:#f59e0b">Modulo di disegno righe non caricato.</td></tr>'; return; }
+
+    const _punteggio = (c) => {
+      const spent=c._spent||0, orders=c._orders||0;
       const daysSince = c._daysSince!=null ? c._daysSince : 999;
-      let score='D',scoreColor='#6b7280',scoreBg='#6b728020';
-      if(spent>=avgAll*2&&orders>=3&&daysSince<90){score='A';scoreColor='#22c55e';scoreBg='#22c55e20';}
-      else if(spent>=avgAll&&orders>=2&&daysSince<180){score='B';scoreColor='#3b82f6';scoreBg='#3b82f620';}
-      else if(orders>=1&&daysSince<365){score='C';scoreColor='#f59e0b';scoreBg='#f59e0b20';}
-      const lastStr = daysSince<999 ? (daysSince===0?'Oggi':daysSince+'gg fa') : '—';
-      return`<tr>
-        <td style="width:32px;padding:8px 4px">
-          <input type="checkbox" class="cl-bulk-cb" data-id="${c.id}"
-            onclick="event.stopPropagation();if(window.Clients&&window.Clients.toggleSelect)window.Clients.toggleSelect(${c.id})"
-            style="width:15px;height:15px;cursor:pointer;accent-color:var(--primary)">
-        </td>
-        <td><code style="color:var(--text-muted);font-size:11px">#${c.id}</code></td>
-        <td>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="width:32px;height:32px;background:var(--primary-dim);border:1px solid var(--primary-border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--primary);flex-shrink:0">${(c.name||'?').charAt(0).toUpperCase()}</div>
-            <div>
-              <div style="font-weight:700;font-size:13px">${c.name||'—'}</div>
-              ${c.company?`<div style="font-size:10px;color:var(--text-muted)">${c.company}</div>`:''}
-            </div>
-          </div>
-        </td>
-        <td style="padding:8px 10px;text-align:center">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:900;background:${scoreBg};color:${scoreColor};border:1.5px solid ${scoreColor}" title="Score: A=Top VIP B=Buono C=Occasionale D=Dormiente">${score}</span>
-        </td>
-        <td><a href="tel:${c.phone}" style="color:var(--text-muted);text-decoration:none;font-size:12px">${c.phone||'—'}</a></td>
-        <td><a href="mailto:${c.email}" style="color:var(--blue);text-decoration:none;font-size:12px">${c.email||'—'}</a></td>
-        <td style="font-size:11px;color:var(--text-muted)">${lastStr}</td>
-        <td>
-          <span class="badge badge-blue">${orders} ordini</span>
-          <div style="font-size:11px;color:var(--primary);font-weight:700;margin-top:2px">${fmtCur(spent)}</div>
-        </td>
-        <td>
-          <div class="act-group">
-            <button class="act-btn" style="background:var(--primary-dim);color:var(--primary);border-color:var(--primary-border)" onclick="AIMarketing.openPersona(${c.id})" title="AI Persona"><i class="fas fa-brain"></i></button>
-            <button class="act-btn" style="background:#0f172a;color:#60a5fa;border-color:#3b82f630" onclick="window.Clients&&window.Clients.showStorico(${c.id})" title="Storico acquisti"><i class="fas fa-history"></i></button>
-            <button class="act-btn act-edit" onclick="window.Clients&&window.Clients.openModal(${c.id})" title="Modifica"><i class="fas fa-edit"></i></button>
-            <button class="act-btn" onclick="Clients.renderClientPanel(${c.id})" style="background:#8b5cf615;color:#a78bfa;border-color:#8b5cf630" title="Pannello CRM completo"><i class="fas fa-user-circle"></i></button>
-            ${c.phone?`<button class="act-btn" onclick="Clients.quickWhatsApp(${c.id})" style="background:#25D36610;color:#25D366;border-color:#25D36630" title="WhatsApp"><i class="fab fa-whatsapp"></i></button>`:''}
-            <button class="act-btn act-del" onclick="window.Clients&&window.Clients.del(${c.id})" title="Elimina"><i class="fas fa-trash"></i></button>
-          </div>
-        </td>
-      </tr>`;
-    }).join('');
+      if(spent>=avgAll*2&&orders>=3&&daysSince<90) return {v:'A',col:'#22c55e'};
+      if(spent>=avgAll&&orders>=2&&daysSince<180)  return {v:'B',col:'#3b82f6'};
+      if(orders>=1&&daysSince<365)                 return {v:'C',col:'#f59e0b'};
+      return {v:'D',col:'#6b7280'};
+    };
+
+    el.innerHTML = R.righe(pageItems, {
+      prefissoId: 'cl-row-',
+      classeGruppo: 'act-group',
+      senzaAggiunte: true,
+      colonne: [
+        { html:true, valore:(c)=>`<input type="checkbox" class="cl-bulk-cb" data-id="${R.esc(c.id)}" onclick="event.stopPropagation();if(window.Clients&&window.Clients.toggleSelect)window.Clients.toggleSelect('${R.esc(c.id)}')" style="width:15px;height:15px;cursor:pointer;accent-color:var(--primary)">` },
+        'id',
+        'nome',
+        { html:true, valore:(c,o)=>{ const p=_punteggio(o.grezzo(c.id));
+            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:900;background:${p.col}20;color:${p.col};border:1.5px solid ${p.col}" title="Score: A=Top VIP B=Buono C=Occasionale D=Dormiente">${p.v}</span>`; } },
+        'telefono',
+        'email',
+        { valore:(c,o)=>{ const d=o.grezzo(c.id)._daysSince; return d==null||d>=999 ? '—' : (d===0?'Oggi':d+'gg fa'); } },
+        { html:true, valore:(c,o)=>{ const g=o.grezzo(c.id);
+            return `<span class="badge badge-blue">${g._orders||0} ordini</span><div style="font-size:11px;color:var(--primary);font-weight:700;margin-top:2px">${fmtCur(g._spent||0)}</div>`; } },
+        'azioni',
+      ],
+      azioni: [
+        { classe:'act-btn', icona:'<i class="fas fa-brain"></i>', titolo:'AI Persona', comando:(c)=>`AIMarketing.openPersona('${c.id}')`, stile:'background:var(--primary-dim);color:var(--primary);border-color:var(--primary-border)' },
+        { classe:'act-btn', icona:'<i class="fas fa-history"></i>', titolo:'Storico acquisti', comando:(c)=>`window.Clients&&window.Clients.showStorico('${c.id}')`, stile:'background:#0f172a;color:#60a5fa;border-color:#3b82f630' },
+        { classe:'act-btn act-edit', icona:'<i class="fas fa-edit"></i>', titolo:'Modifica', comando:(c)=>`window.Clients&&window.Clients.openModal('${c.id}')`, stile:'' },
+        { classe:'act-btn', icona:'<i class="fas fa-user-circle"></i>', titolo:'Pannello CRM completo', comando:(c)=>`Clients.renderClientPanel('${c.id}')`, stile:'background:#8b5cf615;color:#a78bfa;border-color:#8b5cf630' },
+        { classe:'act-btn', icona:'<i class="fab fa-whatsapp"></i>', titolo:'WhatsApp', quando:(c)=>!!c.telefono, comando:(c)=>`Clients.quickWhatsApp('${c.id}')`, stile:'background:#25D36610;color:#25D366;border-color:#25D36630' },
+        { classe:'act-btn act-del', icona:'<i class="fas fa-trash"></i>', titolo:'Elimina', comando:(c)=>`window.Clients&&window.Clients.del('${c.id}')`, stile:'background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)' },
+      ],
+      /* Il renderer non recupera dati: i campi calcolati da questa vista
+         glieli si ripassa per id, invece di lasciargli cercare il record. */
+      grezzo: (id) => pageItems.find(x=>String(x.id)===String(id)) || {},
+      vuoto: 'Nessun cliente in questa pagina.',
+    });
 
     // ── Pagination controls (shared builder) ──
     // _goPage: async IIFE — awaits render() so DOM is ready BEFORE scrolling

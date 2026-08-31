@@ -143,8 +143,8 @@ test('le politiche hanno un nome, e il numero non è cambiato', async (t) => {
   await t.test('il margine consigliato del catalogo resta il 45%', () => {
     /* Era `costPrice / (1 − 0.45)` scritto in due punti. Ora passa dal motore
        con `marginePct: 45`, ed è lo stesso numero fino all'ultimo decimale.
-       Usare la politica «premium» del motore, che punta al 55%, avrebbe alzato
-       ogni prezzo consigliato del 22% senza che nessuno lo avesse chiesto. */
+       Usare la politica «premium» del motore, che punta al 60%, alzerebbe
+       ogni prezzo consigliato del 27% senza che nessuno lo abbia chiesto. */
     for (const costo of [1, 7.5, 10, 23.4, 199]) {
       const vecchio = costo / (1 - 0.45);
       const nuovo = E.prezzo(costo, { strategia: 'margine', marginePct: 45, ivaPct: 0 }).netto;
@@ -153,7 +153,7 @@ test('le politiche hanno un nome, e il numero non è cambiato', async (t) => {
   });
 
   await t.test('e la politica premium è un\'altra cosa, di proposito', () => {
-    assert.equal(E.POLITICHE.premium.marginTarget, 55);
+    assert.equal(E.POLITICHE.premium.marginTarget, 60);
     assert.notEqual(E.POLITICHE.premium.marginTarget, 45);
   });
 });

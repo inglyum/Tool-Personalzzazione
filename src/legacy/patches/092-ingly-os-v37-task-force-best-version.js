@@ -303,34 +303,29 @@ window.ClientProfile = {
   }
 };
 
-// Inject ClientProfile button to CRM rows
+/* CRM-05 — il pulsante «profilo cliente» si registra nel renderer.
+   Due difetti in questo blocco, entrambi misurati:
+   · aspettava `CRMSmart._v31qbtn`, un contrassegno che **nessuno imposta**
+     in tutto il file: il polling ogni 700 ms non finiva mai e il pulsante non
+     veniva installato nemmeno una volta;
+   · anche se fosse partito, cercava `#crm-row-<indice>` — l'identificatore
+     che CRM-04 ha sostituito con l'id del cliente. */
 (function _injectProfileBtn(){
   function _p(){
-    if(typeof CRMSmart==='undefined'||!CRMSmart._v31qbtn){setTimeout(_p,700);return;}
-    if(CRMSmart._v37profBtn) return; CRMSmart._v37profBtn=true;
-    var _orig=CRMSmart.render.bind(CRMSmart);
-    CRMSmart.render=function(){
-      _orig();
-      setTimeout(function(){
-        var data=CRMSmart._load();
-        data.forEach(function(c,i){
-          var row=document.getElementById('crm-row-'+i);
-          if(!row||row.querySelector('.prof-btn')) return;
-          var cell=row.querySelector('td:last-child>div');
-          if(!cell) return;
-          var btn=document.createElement('button');
-          btn.className='prof-btn btn-v37 btn-ghost';
-          btn.title='Profilo cliente completo';
-          btn.style.cssText='padding:4px 8px;background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.25);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700';
-          btn.innerHTML='👤';
-          btn.onclick=(function(name){return function(){ClientProfile.open(name);};})(c.name);
-          cell.insertBefore(btn,cell.firstChild);
-        });
-      },400);
-    };
+    var R = window.InglyClienteRiga;
+    if(typeof ClientProfile==='undefined'||!R||typeof R.aggiungiAzione!=='function'){setTimeout(_p,700);return;}
+    if(R._v37profBtn) return; R._v37profBtn=true;
+    R.aggiungiAzione({
+      id:'profilo-cliente',
+      classe:'prof-btn btn-v37 btn-ghost',
+      icona:'👤', titolo:'Profilo cliente completo',
+      comando:function(c){ return "ClientProfile.open('"+String(c.nome).replace(/'/g,"")+"')"; },
+      stile:'padding:4px 8px;background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.25);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700',
+    });
   }
-  setTimeout(_p,4000);
+  setTimeout(_p,2500);
 })();
+
 
 console.log('[v37-P2] FatturaPA 1-click · Prima nota auto · CRM perf · Client profile ✅');
 

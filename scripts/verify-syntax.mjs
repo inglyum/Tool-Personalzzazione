@@ -11,7 +11,12 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 const roots = process.argv.slice(2);
-const targets = roots.length ? roots : ['src/legacy', 'src/admin/legacy', 'src/app-shell', 'scripts'];
+/* `src/product` mancava: i moduli del prodotto finiscono nel bundle come
+   script classici esattamente come i sorgenti storici, e un errore di sintassi
+   lì dentro interrompe il caricamento di tutto quel che viene dopo. Che il
+   `build` se ne accorgesse comunque non è una ragione per non controllarli:
+   `verify` è il passo che dice **dove**. */
+const targets = roots.length ? roots : ['src/legacy', 'src/admin/legacy', 'src/app-shell', 'src/product', 'scripts'];
 
 const walk = (dir, acc = []) => {
   if (!fs.existsSync(dir)) return acc;

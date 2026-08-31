@@ -294,48 +294,19 @@
       if(typeof toast!=='undefined') toast('✅ '+name+' aggiornato','success');
     };
 
-    // ── Patch _buildHTML to show tag badges per row ───────────────
-    var _origBuild = CRMSmart._buildHTML.bind(CRMSmart);
-    CRMSmart._buildHTML = function(data){
-      var html = _origBuild(data);
-      // The original _buildHTML already renders rows; we need to inject tags into name cells
-      // Instead, patch the rows themselves
-      return html;
-    };
-
-    // Re-render rows to show tag chips
-    var _origRender = CRMSmart.render.bind(CRMSmart);
-    CRMSmart.render = function(){
-      _origRender();
-      // Inject tag badges into rows after render
-      var self = this;
-      setTimeout(function(){
-        var data = self._load();
-        data.forEach(function(c,i){
-          if(!c.tags) return;
-          var nameCell = document.querySelector('#crm-row-'+i+' td:nth-child(2)');
-          if(!nameCell) return;
-          var tagsDiv = nameCell.querySelector('.crm-row-tags');
-          if(tagsDiv) return; // already there
-          var div = document.createElement('div');
-          div.className='crm-row-tags';
-          div.style.cssText='display:flex;gap:3px;flex-wrap:wrap;margin-top:3px';
-          c.tags.split(',').forEach(function(tag){
-            tag = tag.trim(); if(!tag) return;
-            var preset = self.PRESET_TAGS.find(function(t){ return t.label===tag; });
-            var color = preset?preset.color:'#6366f1';
-            var span=document.createElement('span');
-            span.style.cssText='background:'+color+'20;color:'+color+';padding:1px 6px;border-radius:20px;font-size:9px;font-weight:700;border:1px solid '+color+'40';
-            span.textContent=tag;
-            div.appendChild(span);
-          });
-          nameCell.appendChild(div);
-          // Update import button accept
-          var fileInp = document.getElementById('crm-file-inp');
-          if(fileInp) fileInp.setAttribute('accept','.vcf,.vcard,.csv,.xlsx,.xls,.txt');
-        });
-      },200);
-    };
+    /* CRM-05 — ritirati i due innesti sui tag.
+       Qui c'erano un `_buildHTML` che chiamava l'originale e ne restituiva il
+       risultato senza toccarlo (una copia inutile, ma pur sempre un secondo
+       proprietario del markup) e un `render` che 200 ms dopo cercava
+       `#crm-row-<indice>` per appendere i chip nella cella del nome.
+       Da CRM-04 le righe hanno `id="crm-row-<id del cliente>"`: il selettore
+       non trovava più niente e i tag avevano semplicemente smesso di
+       comparire — senza errori, senza avvisi. È il difetto tipico di due
+       funzioni che disegnano la stessa riga: una cambia identificatore e
+       l'altra non lo sa.
+       Adesso i tag li disegna `InglyClienteRiga`, dentro la cella del nome,
+       nella stessa chiamata che costruisce la riga. I preset dei colori
+       restano qui, dove sono definiti, e vengono passati al renderer. */
 
     console.log('[CRM v27] Tag chips + Note presets attivati');
   }

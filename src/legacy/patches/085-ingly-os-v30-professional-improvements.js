@@ -426,20 +426,19 @@ window.MarginAlert = {
       +'</body></html>');
     w.document.close();
   },
+  /* CRM-05 — il pulsante «storico comunicazioni» si registra nel renderer
+     invece di appendersi alla riga dopo il disegno. Cercava `#crm-row-<indice
+     nell'array>`, e da CRM-04 le righe hanno l'id del cliente: non trovava più
+     niente e il pulsante era sparito senza un errore. */
   _addBtn:function(){
-    // Add storico button to CRM rows
-    if(typeof CRMSmart==='undefined') return;
-    var data=CRMSmart._load();
-    data.forEach(function(c,i){
-      var row=document.getElementById('crm-row-'+i);
-      if(!row||row.querySelector('.crm-hist-btn')) return;
-      var cell=row.querySelector('td:last-child>div'); if(!cell) return;
-      var btn=document.createElement('button');
-      btn.className='crm-hist-btn'; btn.title='Storico comunicazioni';
-      btn.style.cssText='padding:4px 8px;background:rgba(100,116,139,.1);color:#94a3b8;border:1px solid rgba(100,116,139,.25);border-radius:6px;cursor:pointer;font-size:11px';
-      btn.textContent='📋';
-      btn.onclick=(function(name){return function(){CommHistory.showForClient(name);};})(c.name);
-      cell.appendChild(btn);
+    var R = window.InglyClienteRiga;
+    if(!R || typeof R.aggiungiAzione!=='function') return;
+    R.aggiungiAzione({
+      id:'storico-comunicazioni',
+      classe:'crm-hist-btn',
+      icona:'📋', titolo:'Storico comunicazioni',
+      comando:function(c){ return "CommHistory.showForClient('"+String(c.nome).replace(/'/g,"")+"')"; },
+      stile:'padding:4px 8px;background:rgba(100,116,139,.1);color:#94a3b8;border:1px solid rgba(100,116,139,.25);border-radius:6px;cursor:pointer;font-size:11px',
     });
   }
 };
@@ -697,15 +696,15 @@ window.DigitalSignature = {
 // ─── CommHistory auto-inject into CRM ────────────────────────────
 (function _injectHistoryBtns(){
   function _p(){
-    if(typeof CRMSmart==='undefined'||!CRMSmart._v31qbtn){setTimeout(_p,700);return;}
-    if(CRMSmart._v31histInjected) return; CRMSmart._v31histInjected=true;
-    var _origRender=CRMSmart.render.bind(CRMSmart);
-    CRMSmart.render=function(){
-      _origRender();
-      setTimeout(function(){
-        CommHistory._addBtn&&CommHistory._addBtn();
-      },400);
-    };
+    /* Aspettava `CRMSmart._v31qbtn`, che **nessuno imposta** in tutto il
+       file: il polling non terminava mai e il pulsante non veniva installato
+       nemmeno una volta. Ora la condizione è quella vera — il renderer. */
+    var R = window.InglyClienteRiga;
+    if(typeof CommHistory==='undefined'||!R||typeof R.aggiungiAzione!=='function'){setTimeout(_p,700);return;}
+    if(R._v31histInjected) return; R._v31histInjected=true;
+    /* CRM-05 — nessun override di `render` e nessun `setTimeout`: si registra
+       il pulsante una volta, e lo disegna chi disegna la riga. */
+    CommHistory._addBtn&&CommHistory._addBtn();
   }
   setTimeout(_p,3000);
 })();

@@ -66,11 +66,16 @@ const esito = await page.evaluate(async () => {
 
   /* ═══ Le strategie sono scelte, non numeri nascosti ═══════════════════ */
   const t = testo();
-  dico('le quattro strategie sono a schermo con il loro margine',
-    /Competitivo/.test(t) && /Standard/.test(t) && /Premium/.test(t) && /Luxury/.test(t));
+  dico('le posizioni commerciali sono a schermo con il loro margine',
+    /Competitivo/.test(t) && /Standard/.test(t) && /Premium/.test(t) && /Luxury/.test(t)
+    && /Ingrosso/.test(t) && /B2B/.test(t));
   dico('e il vecchio ×3,5 resta come «Storico», dichiarato per quello che è', /Storico/.test(t));
 
-  for (const [id, m] of [['competitive', 25], ['premium', 55], ['luxury', 70]]) {
+  /* I margini vengono dal motore, non da questo file: se un giorno l'azienda
+     riconfigura «Premium» il collaudo deve seguirla, non contraddirla. */
+  const attesi = Object.fromEntries(E.politiche({}).map((p) => [p.id, p.marginTarget]));
+  for (const [id, m] of [['wholesale', attesi.wholesale], ['competitive', attesi.competitive],
+                         ['b2b', attesi.b2b], ['premium', attesi.premium], ['luxury', attesi.luxury]]) {
     Print3DQuoter.setStrategia(id); await a(300);
     const s2 = Print3DQuoter._state();
     dico(`la strategia ${id} applica davvero il suo margine (${s2.margine.toFixed(0)}%)`,

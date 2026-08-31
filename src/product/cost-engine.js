@@ -38,6 +38,10 @@
      perché la UI deve **leggerle**, non riscriverle — era proprio la loro
      assenza a far nascere ricarichi diversi in schermate diverse. */
   var POLITICHE = {
+    /* Ordinate per margine crescente: è la scala che l'utente vede, e una
+       scala che non sale è una scala che confonde. «Su misura» sta fuori
+       perché non ha un margine proprio — prende quello impostato. */
+    wholesale:   { id: 'wholesale',   label: 'Ingrosso',    marginTarget: 20, maxDiscount: 25, floorMargin: 12, recommended: false },
     competitive: { id: 'competitive', label: 'Competitivo', marginTarget: 25, maxDiscount: 10, floorMargin: 12, recommended: false },
     /* Il B2B non è «uno sconto ai rivenditori»: è un margine più basso su
        volumi più alti, e va detto come margine perché resti visibile quando
@@ -45,14 +49,20 @@
        in cui il volume non compensa più. */
     b2b:         { id: 'b2b',         label: 'B2B',         marginTarget: 30, maxDiscount: 20, floorMargin: 15, recommended: false },
     standard:    { id: 'standard',    label: 'Standard',    marginTarget: 40, maxDiscount: 15, floorMargin: 20, recommended: true },
-    premium:     { id: 'premium',     label: 'Premium',     marginTarget: 55, maxDiscount: 20, floorMargin: 30, recommended: false },
-    luxury:      { id: 'luxury',      label: 'Luxury',      marginTarget: 70, maxDiscount: 25, floorMargin: 45, recommended: false },
+    premium:     { id: 'premium',     label: 'Premium',     marginTarget: 60, maxDiscount: 20, floorMargin: 30, recommended: false },
+    luxury:      { id: 'luxury',      label: 'Luxury',      marginTarget: 80, maxDiscount: 25, floorMargin: 45, recommended: false },
+    custom:      { id: 'custom',      label: 'Su misura',   marginTarget: 40, maxDiscount: 100, floorMargin: 10, recommended: false, apertaAllUtente: true },
   };
   var MARGINE_MINIMO = 10;   // % — nessuna politica scende sotto
 
   /* I cinque margini sono una decisione commerciale, non una costante di
      natura: chi lavora su commesse lunghe e chi vende in fiera non hanno lo
      stesso «standard». Si possono riconfigurare, e il pavimento resta. */
+  /* Il motore non legge la configurazione: la riceve. Chi la conserva è
+     `InglyPricingPolicies`, e la separazione non è formale — `tests/
+     cost-engine.test.mjs` verifica che questo file non nomini `localStorage`,
+     perché un motore che legge lo stato del browser smette di essere
+     riproducibile e con lui smettono di esserlo i preventivi. */
   function politiche(override) {
     var o = override || {};
     return Object.keys(POLITICHE).map(function (k) {
@@ -192,6 +202,21 @@
         var prezzoKg = pos(i.materialPricePerKg);
         if (!prezzoKg && i.spoolPrice && i.spoolGrams) prezzoKg = (pos(i.spoolPrice) / pos(i.spoolGrams)) * 1000;
 
+        /* ── Più materiali sullo stesso pezzo ───────────────────────────
+           Un pezzo bicolore non costa il peso totale al prezzo di uno dei
+           due: costa la somma di `grammi × €/kg` di ognuno. Quando
+           `materials` è dichiarato comanda lui, e il prezzo singolo si fa da
+           parte — sommarli conterebbe lo stesso filamento due volte. */
+        var multi = Array.isArray(i.materials) ? i.materials.filter(function (m) {
+          return m && pos(m.grams) > 0;
+        }) : [];
+        var costoMulti = multi.reduce(function (a, m) {
+          var pk = pos(m.pricePerKg) > 0 ? pos(m.pricePerKg) : prezzoKg;
+          return a + (pos(m.grams) / 1000) * pk;
+        }, 0);
+        var grammiMulti = multi.reduce(function (a, m) { return a + pos(m.grams); }, 0);
+        var sprecoFattore = 1 + frazione(i.materialWasteRate != null ? i.materialWasteRate / 100 : 0);
+
         return [
           /* ── Due sprechi diversi, che non vanno confusi ────────────────
              `materialWasteRate` è filamento che si consuma e non finisce nel
@@ -203,11 +228,17 @@
              filamento; tenerli separati è l'unico modo per configurarne uno
              senza gonfiare l'altro. */
           { id: 'materiale', label: 'Materiale',
-            value: ((grammi + supporti + spurgo) * (1 + frazione(i.materialWasteRate != null ? i.materialWasteRate / 100 : 0)) / 1000) * prezzoKg,
-            detail: Math.round(grammi + supporti + spurgo) + ' g' +
-              (pos(i.materialWasteRate) > 0 ? ' + ' + fmt(i.materialWasteRate) + '% di spreco' : '') +
-              (supporti ? ' · supporti ' + Math.round(supporti) + ' g' : '') +
-              (spurgo ? ' · spurgo ' + Math.round(spurgo) + ' g' : '') },
+            value: multi.length
+              ? costoMulti * sprecoFattore
+              : ((grammi + supporti + spurgo) * sprecoFattore / 1000) * prezzoKg,
+            detail: multi.length
+              ? multi.length + ' materiali · ' + Math.round(grammiMulti) + ' g (' +
+                multi.map(function (m) { return (m.name || m.type || 'materiale') + ' ' + Math.round(pos(m.grams)) + ' g'; }).join(' + ') + ')' +
+                (pos(i.materialWasteRate) > 0 ? ' + ' + fmt(i.materialWasteRate) + '% di spreco' : '')
+              : Math.round(grammi + supporti + spurgo) + ' g' +
+                (pos(i.materialWasteRate) > 0 ? ' + ' + fmt(i.materialWasteRate) + '% di spreco' : '') +
+                (supporti ? ' · supporti ' + Math.round(supporti) + ' g' : '') +
+                (spurgo ? ' · spurgo ' + Math.round(spurgo) + ' g' : '') },
           { id: 'energia', label: 'Energia', value: energia(i, ore), detail: consumo(i, ore).detail },
           { id: 'macchina', label: 'Ammortamento macchina', value: oraMacchina(i) * ore,
             detail: pos(i.machineLifeHours) ? pos(i.machineLifeHours) + ' h di vita utile' : 'vita utile non indicata' },
@@ -642,7 +673,16 @@
     } else if (livello.overhead && pos(i.overheadPct) > 0) {
       overhead = costoPezzo * (Math.max(0, pos(i.overheadPct)) / 100);
       overheadModo = 'percentuale';
+    } else if (livello.overhead && pos(i.overheadPerJob) > 0) {
+      /* Un importo fisso per commessa: si divide per la quantità, come
+         l'avviamento. Su cento pezzi pesa un centesimo di quel che pesa su
+         uno — che è esattamente ciò che «per lavoro» vuol dire. */
+      overhead = pos(i.overheadPerJob) / qty;
+      overheadModo = 'per lavoro';
     }
+    /* I tre modi sono alternativi, mai sommati: `else if` non è una
+       scorciatoia di scrittura, è la regola. Chi dichiara due modi vede
+       applicato il primo, e il dettaglio dice quale. */
     costoPezzo += overhead;
 
     return {
@@ -958,13 +998,13 @@
   var CAMPI = {
     comuni: ['qty', 'machinePrice', 'residualValue', 'machineLifeHours', 'watt', 'kwhPrice',
       'dutyCycle', 'maintenancePerHour', 'laborPerHour', 'setupMin', 'failureRate',
-      'packagingPerUnit', 'overheadPct', 'overheadPerHour',
+      'packagingPerUnit', 'overheadPct', 'overheadPerHour', 'overheadPerJob',
       /* Fase redesign: i due sprechi separati, la ferramenta e i materiali di
          confezionamento come elenchi, e la provenienza del peso dichiarata. */
       'materialWasteRate', 'hardware', 'packagingItems',
       'filamentWeightSource', 'totalFilamentGrams',
       'measuredEnergyKwh', 'averagePowerW', 'ratedPowerW',
-      'slicerTotalCost', 'slicerMaterialCost', 'fonti', 'fontiAggiornate',
+      'slicerTotalCost', 'slicerMaterialCost', 'materials', 'fonti', 'fontiAggiornate',
       'ivaPct', 'livelloCosto'],
     print3d: ['grams', 'volumeCm3', 'density', 'material', 'supportGrams', 'purgeGrams',
       'materialPricePerKg', 'spoolPrice', 'spoolGrams', 'hours', 'washCureMin',
@@ -1502,6 +1542,8 @@
     version: VERSIONE,
     POLITICHE: POLITICHE,
     politiche: politiche,
+    MARGINE_MINIMO_POLITICA: MARGINE_MINIMO,
+    POLITICHE_PREDEFINITE: POLITICHE,
     MARGINE_MINIMO: MARGINE_MINIMO,
     avvisi: avvisi,
     consigli: consigli,

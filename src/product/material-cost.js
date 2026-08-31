@@ -62,6 +62,25 @@
   /** L'unità di un articolo, dedotta da come è stato registrato. Dedurre è
       lecito qui perché il risultato è **dichiarato** nel ritorno: chi legge
       vede quale unità è stata usata e può correggerla. */
+  function pos(v) { var n = parseFloat(v); return isFinite(n) && n > 0 ? n : 0; }
+
+  /* ── Le quattro politiche di costo, dichiarate ────────────────────────────
+     Non sono quattro opinioni sullo stesso numero: rispondono a domande
+     diverse, e chi preventiva deve poter dire a quale sta rispondendo.
+     `manuale` non è l'assenza di una politica — è la dichiarazione che il
+     numero non viene dal registro, ed è ciò che rende onesta l'etichetta
+     «non verificato» accanto al prezzo. */
+  var POLITICHE = [
+    { id: 'fifo',    label: 'FIFO',              spiega: 'Consuma i lotti nell\'ordine in cui sono entrati: 500 g presi da un lotto di 420 g a € 15,99 e uno a € 19,50 costano 420×15,99 + 80×19,50.' },
+    { id: 'media',   label: 'Costo medio',       spiega: 'Media ponderata di tutti gli acquisti valorizzati. È la più stabile e la meno sensibile a un singolo acquisto fuori mercato.' },
+    { id: 'ultimo',  label: 'Ultimo acquisto',   spiega: 'Il prezzo dell\'ultima entrata a registro. Segue il mercato, e con esso oscilla.' },
+    { id: 'manuale', label: 'Prezzo a mano',     spiega: 'Il numero scritto nel campo. Non viene dal registro e resta dichiarato «non verificato».' },
+  ];
+  function politica(id) {
+    for (var i = 0; i < POLITICHE.length; i++) if (POLITICHE[i].id === id) return POLITICHE[i];
+    return POLITICHE[1];
+  }
+
   function unitaDi(articolo) {
     var a = articolo || {};
     var esplicita = String(a.costUnit || a.unitaCosto || '').toLowerCase();
@@ -226,7 +245,17 @@
     /* Il registro è la fonte: il resolver sa già leggere ultimo, media e
        FIFO, e non c'è ragione di riscrivere quella matematica qui. */
     var id = idDi(chiave);
-    var esito = R ? R.risolvi(movimenti, id, { policy: o.politica || 'media', warehouseId: o.warehouseId }) : null;
+    /* La quantità consumata serve al FIFO, e solo a lui: prelevare 500 g da
+       un lotto di 420 g a € 15,99 e uno da 1,2 kg a € 19,50 costa
+       420×15,99 + 80×19,50, non 500 volte una media. Senza `quantita` il
+       resolver risponde con il costo dei lotti residui, che è un'altra
+       domanda — corretta, ma non questa. */
+    var politica = o.politica || 'media';
+    var esito = R ? R.risolvi(movimenti, id, {
+      policy: politica,
+      warehouseId: o.warehouseId,
+      richiesta: politica === 'fifo' && pos(o.quantita) > 0 ? pos(o.quantita) : undefined,
+    }) : null;
     var st = storico(movimenti, id, o.warehouseId);
 
     if (!esito || !esito.disponibile) {
@@ -419,7 +448,7 @@
         'Registra l\'acquisto con il suo importo, oppure inserisci il prezzo a mano.');
     }
     return perPreventivo({ movimenti: movimenti, itemKey: id,
-      politica: o.politica, warehouseId: o.warehouseId,
+      politica: o.politica, quantita: o.quantita, warehouseId: o.warehouseId,
       articolo: o.articolo || CACHE.articoli[id] || {} });
   }
 
@@ -490,6 +519,8 @@
   function svuotaCache() { CACHE = { pronta: false, quando: null, perId: {}, articoli: {} }; }
 
   global.InglyMaterialCost = {
+    POLITICHE: POLITICHE,
+    politica: politica,
     version: VERSIONE,
     UNITA: UNITA,
     unitaDi: unitaDi,

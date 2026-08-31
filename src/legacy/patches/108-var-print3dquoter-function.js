@@ -121,6 +121,53 @@ var R=null;
 var CALIB_RIF=0;
 var SK='p3dq_v4';
 
+/* ── Il progetto ───────────────────────────────────────────────────────────
+   Nome, descrizione e tecnologia stavano sparsi: il nome in un campo dentro
+   «dettagli stampa», la tecnologia in due pulsanti, la descrizione da nessuna
+   parte. Un preventivo che arriva al cliente senza dire che cosa sta
+   preventivando è un numero senza oggetto. */
+var PROGETTO={ nome:'', descrizione:'' };
+
+/* ── Le due modalità di compilazione ───────────────────────────────────────
+   `rapida` mostra i cinque campi che bastano a un numero onesto: materiale,
+   peso, tempo, macchina, prezzo al chilo. `professionale` apre tutto il
+   resto. Non sono due preventivatori: sono lo stesso, con meno campi a
+   schermo. Il calcolo è identico — quel che non si vede usa il proprio
+   valore, e il dettaglio dei costi lo dichiara comunque. */
+var MODALITA='professionale';
+
+/* ── Le spese generali ─────────────────────────────────────────────────────
+   Tre modi di ripartirle, e uno solo per volta: affitto e commercialista si
+   contano una volta, non tre. `nessuna` è un valore legittimo — chi non le
+   ha ripartite lo dichiara invece di lasciarle sottintese a zero. */
+var OVERHEAD={ modo:'nessuna', valore:0 };
+
+/* La politica di costo del materiale: FIFO, media, ultimo acquisto o prezzo
+   scritto a mano. Il calcolo lo fa il resolver del magazzino; qui si sceglie
+   a quale domanda si sta rispondendo. */
+var POLITICA_MAT='media';
+
+/* ── Gli scaglioni di quantità ─────────────────────────────────────────────
+   Nove, fino a mille, come nel benchmark. Sei righe non bastano a rispondere
+   alla domanda vera del laboratorio — «da quanti pezzi in poi conviene?» —
+   perché il punto in cui la curva si appiattisce cade quasi sempre fra 100 e
+   500, cioè fuori dalla tabella corta. */
+var SCAGLIONI=[1,5,10,25,50,100,250,500,1000];
+
+/* ── Più materiali sullo stesso pezzo ──────────────────────────────────────
+   Un pezzo bicolore non costa il peso totale al prezzo del PLA più caro né a
+   quello del più economico: costa la somma dei suoi materiali, ognuno al suo
+   prezzo. Finché la lista è vuota comanda il campo singolo — che è il caso
+   normale, e non deve diventare più complicato per fare posto a quello raro. */
+var MULTIMAT=[];
+
+/* ── Più piatti nello stesso progetto ──────────────────────────────────────
+   Un 3MF di Bambu o Orca può contenerne diversi, e ognuno è una stampa a sé:
+   un avviamento, un tempo macchina, un peso. Sommarli in un numero solo
+   nasconde quanti avviamenti servono davvero — che è la voce che fa la
+   differenza fra un pezzo e cento. */
+var PIATTI=[];
+
 function persist(){try{localStorage.setItem(SK,JSON.stringify({mats:MATS,saved:SAVED}));}catch(e){}}
 function hydrate(){
   try{
@@ -308,8 +355,12 @@ function render(){
 
   // ─── COL 1 ───────────────────────────────────────────────────
   +'<div class="p3-col">'
+    // ── A · che cosa si sta preventivando ───────────────────────────
+    +cardProgetto()
+    +barraModalita()
     // ── Importa dallo slicer ────────────────────────────────────────
     +cardSlicer()
+    +cardPiatti()
     // Tipo + macchina
     +'<div class="p3-card cyan">'
       +'<div class="p3-ct c">⚙️ CONFIGURA STAMPA</div>'
@@ -377,11 +428,18 @@ function render(){
       +'<div class="p3-fg" style="margin-top:10px"><label class="p3-fl">📦 QTÀ ORDINE</label><input class="p3-fc" id="p3d-qty" type="number" value="1" min="1" oninput="Print3DQuoter.calc()"></div>'
       +'<button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;letter-spacing:.3px;background:#22d3ee;color:#000;margin-top:4px" onclick="Print3DQuoter.addLine()"><i class="fas fa-plus-circle"></i> AGGIUNGI AL PREVENTIVO</button>'
     +'</div>'
-    // ── Il lavoro umano, per fasi ────────────────────────────────────
-    +cardLavoro()
-    // ── Componenti e confezione ──────────────────────────────────────
-    +cardRighe('🔩 COMPONENTI', HARDWARE, 'Hw', 'magnete, vite, inserto, LED…')
-    +cardRighe('📦 CONFEZIONE', IMBALLO, 'Pk', 'scatola, busta, etichetta, protezione…')
+    /* Le voci avanzate: in modalità rapida non si vedono, ma i loro valori
+       continuano a contare — il costo non è una stima ridotta. */
+    +((MODALITA==='professionale') ? ''
+      // ── Il lavoro umano, per fasi ─────────────────────────────────
+      +cardLavoro()
+      // ── Componenti e confezione ───────────────────────────────────
+      +cardRighe('🔩 COMPONENTI', HARDWARE, 'Hw', 'magnete, vite, inserto, LED…')
+      +cardRighe('📦 CONFEZIONE', IMBALLO, 'Pk', 'scatola, busta, etichetta, protezione…')
+      +cardMultiMateriale()
+      +cardOverhead()
+      +cardPoliticaMateriale()
+      : '')
     // Macchine rapide
     +'<div class="p3-card"><div class="p3-ct">🤖 MACCHINE RAPIDE</div><div class="p3-mg">'+machBtns+'</div></div>'
   +'</div>'
@@ -410,6 +468,10 @@ function render(){
     +'<div id="p3d-costoper"></div>'
     // ── E · le quantità: l'avviamento si divide, il pezzo no ──────────
     +'<div class="p3-card"><div class="p3-ct">📦 QUANTITÀ — quanto conviene stampare</div><div id="p3d-scaglioni"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div></div></div>'
+    // ── Le posizioni di prezzo, una card per politica ────────────────
+    +'<div class="p3-card"><div class="p3-ct">💶 POSIZIONI DI PREZZO</div><div id="p3d-politiche"><div class="p3-ht">Inserisci i dati per vedere le posizioni.</div></div></div>'
+    // ── La distinta base ─────────────────────────────────────────────
+    +((MODALITA==='professionale') ? cardBom() : '')
     // ── F · calibrazione contro un riferimento esterno ────────────────
     +'<div class="p3-card"><div class="p3-ct" style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
       +'<span>🎯 CONFRONTA CON LO SLICER</span>'
@@ -562,6 +624,51 @@ function bandaMateriale(){
 
 /** Scrivere il prezzo a mano è legittimo, e disattiva la lettura dal registro:
     un numero digitato non può continuare a essere presentato come verificato. */
+/* ── Leggere un file di slicer ─────────────────────────────────────────────
+   Il parser è `InglySlicerImport`, e sta fuori di qui perché è puro e
+   collaudabile senza una pagina. Questa funzione fa solo tre cose: gli passa
+   il file, riversa il risultato nella card slicer, e **dichiara** che cosa ha
+   letto e da dove — un import muto è il modo in cui un peso sbagliato entra
+   in un preventivo senza che nessuno possa risalire a come. */
+var SLICER_FILE=null;
+function leggiFile(inp){
+  var f=inp&&inp.files&&inp.files[0]; if(!f) return;
+  var S=(typeof window!=='undefined') && window.InglySlicerImport;
+  var box=el('p3d-file-esito');
+  var avviso=function(colore,testo){
+    if(box) box.innerHTML='<div style="padding:8px 10px;border-radius:8px;background:var(--bg-card2);border-left:3px solid '
+      +colore+';font-size:10px;color:var(--text-muted);line-height:1.6">'+testo+'</div>';
+  };
+  if(!S){ avviso('var(--orange)','Il lettore di file slicer non è caricato.'); return; }
+  avviso('var(--text-dim)','⏳ Lettura di '+esc3(f.name)+'…');
+
+  S.analizza(f).then(function(r){
+    inp.value='';
+    if(!r||!r.ok){ avviso('var(--orange)','⚠️ '+esc3((r&&r.motivo)||'file non leggibile')); return; }
+    SLICER_FILE=r;
+    SLICER.pesoTotale=r.grammiTotali;
+    SLICER.pesoModello=r.grammiModello;
+    SLICER.supporti=r.supporti;
+    SLICER.purge=r.purge;
+    SLICER.ore=r.ore;
+    SLICER.costo=r.costo;
+    SLICER.includeTutto=r.comprendeTutto!==false;
+    if(r.materiali&&r.materiali.length) MULTIMAT=r.dettaglioMateriali||[];
+    PIATTI=(r.piatti||[]).slice();
+    if(!PROGETTO.nome) PROGETTO.nome=String(f.name).replace(/\.[^.]+$/,'');
+    render();
+    var g=(r.grafie||{});
+    avviso('var(--green,#22c55e)','✅ <b>'+esc3(f.name)+'</b> — '+(r.formato==='3mf'?'3MF':'G-code')+'<br>'
+      +Math.round(r.grammiTotali)+' g · '+tempoDaDecimale(r.ore)
+      +(r.materiali&&r.materiali.length?' · '+esc3(r.materiali.join(', ')):'')
+      +'<br><span style="color:var(--text-dim)">peso da '+esc3(g.peso||'—')+', tempo da '+esc3(g.tempo||'—')+'</span>'
+      +(r.nota?'<br><span style="color:#22d3ee">'+esc3(r.nota)+'</span>':''));
+  }).catch(function(e){
+    inp.value='';
+    avviso('var(--orange)','⚠️ Lettura non riuscita: '+esc3(e&&e.message||'errore'));
+  });
+}
+
 function setPrezzoMat(v){
   if(MAT_REG && MAT_REG.disponibile && Math.abs(parseFloat(v)-MAT_REG.costoUnitario)>0.005) MAT_REG=null;
   calc();
@@ -587,6 +694,13 @@ function cardSlicer(){
       +'<span>📥 IMPORTA DALLO SLICER</span>'
       +(attivo?'<button class="btn btn-secondary btn-sm" onclick="Print3DQuoter.svuotaSlicer()">✕ Svuota</button>':'')
     +'</div>'
+    /* Il file si legge qui dentro. Non c'è una `fetch` e non c'è un servizio:
+       un G-code contiene la geometria di un pezzo che spesso è il lavoro di
+       un cliente, e non deve lasciare questo computer. */
+    +'<button class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:8px;border-style:dashed;color:#22d3ee;border-color:#22d3ee40" '
+      +'onclick="document.getElementById(\'p3d-file\').click()">📂 Apri file .gcode o .3mf</button>'
+    +'<input type="file" id="p3d-file" accept=".gcode,.gco,.g,.bgcode,.3mf" style="display:none" onchange="Print3DQuoter.leggiFile(this)">'
+    +'<div id="p3d-file-esito" style="margin-bottom:8px"></div>'
     +'<div class="p3-g2">'
       +campo('pesoTotale','⚖️ PESO TOTALE (g)',SLICER.pesoTotale,'1','Quello che dice lo slicer')
       +campo('ore','⏱️ TEMPO (h)',SLICER.ore,'0.25','')
@@ -793,6 +907,223 @@ function pannelloPerche(){
   +'</div>';
 }
 
+/* ── A · Il progetto ───────────────────────────────────────────────────────
+   Che cosa si sta preventivando, detto in chiaro. Il nome finisce nella riga
+   del preventivo, nel PDF e nel messaggio; la descrizione resta al preventivo
+   e non entra in nessun calcolo. */
+function cardProgetto(){
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">📁 PROGETTO</div>'
+    +'<div class="p3-fg"><label class="p3-fl">NOME</label>'
+      +'<input class="p3-fc" id="p3d-prj" value="'+esc3(PROGETTO.nome)+'" placeholder="es. Supporto telefono personalizzato" oninput="Print3DQuoter.setProgetto(\'nome\',this.value)"></div>'
+    +'<div class="p3-fg" style="margin-top:6px"><label class="p3-fl">DESCRIZIONE</label>'
+      +'<textarea class="p3-fc" id="p3d-prj-d" rows="2" style="resize:vertical" placeholder="Materiale, finitura, tolleranze, quel che il cliente deve sapere" oninput="Print3DQuoter.setProgetto(\'descrizione\',this.value)">'+esc3(PROGETTO.descrizione)+'</textarea></div>'
+    +'<div class="p3-ht" style="margin-top:6px">La tecnologia si sceglie qui sotto: cambia i valori predefiniti di potenza, materiale e post-processo.</div>'
+  +'</div>';
+}
+
+/* ── Le due modalità ───────────────────────────────────────────────────────
+   Un solo preventivatore. La modalità rapida nasconde i campi avanzati; non
+   li azzera e non li ignora — il costo resta quello completo, e il dettaglio
+   continua a mostrarlo voce per voce. Nasconderli **e** ignorarli sarebbe la
+   scorciatoia che rende il numero rapido anche sbagliato. */
+function barraModalita(){
+  var b=function(id,lab,sotto){
+    var on=MODALITA===id;
+    return '<button class="p3-tb'+(on?' afdm':'')+'" style="flex:1;text-align:left;padding:8px 12px" onclick="Print3DQuoter.setModalita(\''+id+'\')">'
+      +'<div style="font-weight:800;font-size:12px">'+lab+'</div>'
+      +'<div style="font-size:9px;opacity:.7;font-weight:600">'+sotto+'</div></button>';
+  };
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">🎚️ MODALITÀ</div>'
+    +'<div class="p3-type" style="gap:6px">'
+      +b('rapida','⚡ Rapida','materiale, peso, tempo, macchina')
+      +b('professionale','🔬 Professionale','tutte le voci di costo')
+    +'</div>'
+    +'<div class="p3-ht" style="margin-top:6px">'
+      +(MODALITA==='rapida'
+        ? 'I campi nascosti continuano a contare con i valori impostati: il costo non è una stima ridotta, è lo stesso costo con meno campi da compilare.'
+        : 'Tutte le voci sono compilabili. Quelle che lasci a zero restano a zero e il dettaglio lo dichiara.')
+    +'</div></div>';
+}
+
+/* ── Le spese generali ─────────────────────────────────────────────────────
+   Il motore le accetta come €/ora presidiata o come percentuale del costo.
+   «Per lavoro» è la terza, e si traduce in percentuale solo dopo aver
+   calcolato il costo — quindi qui si dichiara e la traduzione la fa
+   `ingresso()`, in un posto solo, dove è visibile che è una traduzione. */
+var MODI_OVERHEAD=[
+  { id:'nessuna', lab:'Nessuna',      unita:'',      aiuto:'Le spese generali non sono ripartite su questo lavoro. È una scelta, e il dettaglio la dichiara.' },
+  { id:'lavoro',  lab:'Per lavoro',   unita:'€',     aiuto:'Un importo fisso per commessa, diviso per la quantità come l\'avviamento.' },
+  { id:'ora',     lab:'Per ora macchina', unita:'€/h', aiuto:'Affitto, utenze e amministrazione divisi per le ore che la macchina lavora davvero in un anno.' },
+  { id:'percento',lab:'Percentuale',  unita:'%',     aiuto:'Una quota del costo di produzione. Comoda, ma cresce con il costo anche quando le spese generali non crescono.' },
+];
+function cardOverhead(){
+  var m=MODI_OVERHEAD.filter(function(x){return x.id===OVERHEAD.modo;})[0]||MODI_OVERHEAD[0];
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">🏢 SPESE GENERALI</div>'
+    +'<div class="p3-fg"><label class="p3-fl">COME SI RIPARTONO</label>'
+      +'<select class="p3-fc" onchange="Print3DQuoter.setOverheadModo(this.value)">'
+      +MODI_OVERHEAD.map(function(x){ return '<option value="'+x.id+'"'+(x.id===OVERHEAD.modo?' selected':'')+'>'+x.lab+'</option>'; }).join('')
+      +'</select></div>'
+    +(OVERHEAD.modo==='nessuna' ? ''
+      : '<div class="p3-fg" style="margin-top:6px"><label class="p3-fl">VALORE ('+m.unita+')</label>'
+        +'<input class="p3-fc" id="p3d-oh" type="number" step="0.5" min="0" value="'+OVERHEAD.valore+'" oninput="Print3DQuoter.setOverheadValore(this.value)"></div>')
+    +'<div class="p3-ht" style="margin-top:6px">'+m.aiuto+'</div>'
+    +'<div class="p3-ht" style="margin-top:4px;color:var(--text-dim)">Un modo solo per volta: affitto e commercialista si contano una volta, non tre.</div>'
+  +'</div>';
+}
+
+/* ── La politica di costo del materiale ────────────────────────────────────
+   Le quattro non sono opinioni sullo stesso numero: rispondono a domande
+   diverse. La matematica è del resolver di magazzino — qui si sceglie, e si
+   mostra da quali lotti è uscito il costo quando la politica è FIFO. */
+function cardPoliticaMateriale(){
+  var MC=(typeof window!=='undefined') && window.InglyMaterialCost;
+  var pol=(MC&&MC.POLITICHE)||[{id:'media',label:'Costo medio',spiega:''}];
+  var scelta=null;
+  pol.forEach(function(p){ if(p.id===POLITICA_MAT) scelta=p; });
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">🏷️ COSTO DEL MATERIALE</div>'
+    +'<div class="p3-fg"><label class="p3-fl">POLITICA</label>'
+      +'<select class="p3-fc" onchange="Print3DQuoter.setPoliticaMat(this.value)">'
+      +pol.map(function(p){ return '<option value="'+p.id+'"'+(p.id===POLITICA_MAT?' selected':'')+'>'+p.label+'</option>'; }).join('')
+      +'</select></div>'
+    +'<div class="p3-ht" style="margin-top:6px">'+(scelta?scelta.spiega:'')+'</div>'
+    +'<div id="p3d-lotti" style="margin-top:8px"></div>'
+  +'</div>';
+}
+
+/** I lotti da cui il costo è uscito. Solo con FIFO ha senso mostrarli: le
+    altre politiche non prelevano da lotti, danno un numero. */
+function disegnaLotti(){
+  var n=el('p3d-lotti'); if(!n) return;
+  if(POLITICA_MAT!=='fifo' || !MAT_REG || !MAT_REG.disponibile){ n.innerHTML=''; return; }
+  var t=MAT_REG.traccia;
+  var righe=(t&&t.righe)||[];
+  if(!righe.length){ n.innerHTML='<div class="p3-ht">Nessun lotto tracciato per questo materiale.</div>'; return; }
+  n.innerHTML='<div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">Da quali lotti</div>'
+    +righe.map(function(r){
+      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--text-muted);padding:2px 0">'
+        +'<span>'+esc3(r.quando?String(r.quando).slice(0,10):'—')+' · '+(+r.quantita||0)+' u</span>'
+        +'<span style="color:var(--text)">'+eur(r.costoUnitario)+'/u</span></div>';
+    }).join('')
+    +(t.scoperta>0?'<div class="p3-ht" style="color:var(--orange);margin-top:4px">'+t.scoperta+' unità oltre i lotti registrati: il costo vale per la parte coperta.</div>':'');
+}
+
+/* ── La distinta base ──────────────────────────────────────────────────────
+   Materiale, componenti e confezione in una lista sola, con quantità e costo
+   di ognuno. Non è una quarta lista: è la lettura, in un posto, di quelle che
+   già esistono. */
+function cardBom(){
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">📑 DISTINTA BASE</div>'
+    +'<div id="p3d-bom"><div class="p3-ht">Inserisci i dati per vedere la distinta.</div></div>'
+  +'</div>';
+}
+
+/** Le righe della distinta: una funzione, tre sorgenti già esistenti. */
+function bom(){
+  var m=pesi();
+  var q=Math.max(1,gv('p3d-qty',1));
+  var prezzoKg=gv('p3d-mkg',24), unita=gv('p3d-mu',1000)||1000;
+  var righe=[];
+  if(m.totale>0){
+    righe.push({ gruppo:'Materiale', n:(el('p3d-mat')&&el('p3d-mat').selectedOptions&&el('p3d-mat').selectedOptions[0]?el('p3d-mat').selectedOptions[0].textContent.replace(/^[^ ]+ /,''):(T==='resin'?'Resina':'Filamento')),
+      q:Math.round(m.totale*100)/100, u:(T==='resin'?'ml':'g'), costo:(m.totale/unita)*prezzoKg });
+  }
+  HARDWARE.forEach(function(h){ righe.push({ gruppo:'Componenti', n:h.n, q:h.q, u:'pz', costo:(+h.q||0)*(+h.c||0) }); });
+  IMBALLO.forEach(function(x){ righe.push({ gruppo:'Confezione', n:x.n, q:x.q, u:'pz', costo:(+x.q||0)*(+x.c||0) }); });
+  return { righe:righe, qty:q, totale:righe.reduce(function(a,r){ return a+r.costo; },0) };
+}
+
+function disegnaBom(){
+  var n=el('p3d-bom'); if(!n) return;
+  var b=bom();
+  if(!b.righe.length){ n.innerHTML='<div class="p3-ht">Nessun materiale, componente o confezione da elencare.</div>'; return; }
+  var gruppo='';
+  n.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px">'
+    +b.righe.map(function(r){
+      var testa='';
+      if(r.gruppo!==gruppo){ gruppo=r.gruppo; testa='<tr><td colspan="3" style="padding:6px 0 2px;font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">'+r.gruppo+'</td></tr>'; }
+      return testa+'<tr>'
+        +'<td style="padding:2px 0;color:var(--text)">'+esc3(r.n)+'</td>'
+        +'<td style="text-align:right;color:var(--text-muted);white-space:nowrap">'+(Math.round(r.q*100)/100)+' '+r.u+'</td>'
+        +'<td style="text-align:right;font-weight:700;color:var(--text)">'+eur(r.costo)+'</td></tr>';
+    }).join('')
+    +'</table>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:11px">'
+      +'<span style="color:var(--text-muted)">Distinta per pezzo</span>'
+      +'<span style="font-weight:800;color:var(--text)">'+eur(b.totale)+'</span></div>'
+    +(b.qty>1?'<div style="display:flex;justify-content:space-between;margin-top:2px;font-size:11px">'
+      +'<span style="color:var(--text-muted)">Per '+b.qty+' pezzi</span>'
+      +'<span style="font-weight:800;color:#22d3ee">'+eur(b.totale*b.qty)+'</span></div>':'');
+}
+
+/* ── I materiali del pezzo ─────────────────────────────────────────────────
+   Vuota, il campo singolo comanda e niente cambia. Con righe, il costo
+   materiale è la somma di `grammi × €/kg` di ognuna — e il campo singolo si
+   fa da parte invece di sommarsi, che sarebbe il doppio conteggio. */
+function cardMultiMateriale(){
+  var righe = MULTIMAT.length ? MULTIMAT.map(function(m,i){
+    return '<div style="display:flex;align-items:center;gap:4px;margin-bottom:5px">'
+      +'<input class="p3-fc" style="flex:2;font-size:11px;padding:5px 7px" value="'+esc3(m.tipo||m.n||'')+'" placeholder="PLA Rosso" oninput="Print3DQuoter.upMat2('+i+',\'tipo\',this.value)">'
+      +'<input class="p3-fc" type="number" step="1" min="0" style="flex:0.8;text-align:right;font-size:11px;padding:5px 5px" value="'+(+m.grammi||0)+'" oninput="Print3DQuoter.upMat2('+i+',\'grammi\',this.value)">'
+      +'<span style="font-size:10px;color:var(--text-dim)">g ×</span>'
+      +'<input class="p3-fc" type="number" step="0.5" min="0" style="flex:0.8;text-align:right;font-size:11px;padding:5px 5px" value="'+(+m.prezzoKg||gv('p3d-mkg',24))+'" oninput="Print3DQuoter.upMat2('+i+',\'prezzoKg\',this.value)">'
+      +'<span style="font-size:10px;color:var(--text-dim)">€/kg</span>'
+      +'<button class="btn btn-danger btn-sm" onclick="Print3DQuoter.rmMat2('+i+')">✕</button></div>';
+  }).join('') : '<div class="p3-ht">Un materiale solo: comanda il campo qui sopra.</div>';
+  var tot=costoMultiMateriale();
+  return '<div class="p3-card">'
+    +'<div class="p3-ct">🎨 PIÙ MATERIALI</div>'
+    +righe
+    +'<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px;border-style:dashed;color:#22d3ee;border-color:#22d3ee40" onclick="Print3DQuoter.addMat2()">+ Aggiungi materiale</button>'
+    +(MULTIMAT.length
+      ? '<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:11px">'
+        +'<span style="color:var(--text-muted)">Materiale del pezzo</span>'
+        +'<span style="font-weight:800;color:#22d3ee">'+eur(tot.costo)+' · '+Math.round(tot.grammi)+' g</span></div>'
+        +'<div class="p3-ht" style="margin-top:4px">Con più materiali il campo €/kg singolo non entra nel conto: il costo è la somma di queste righe.</div>'
+      : '')
+  +'</div>';
+}
+
+/** Grammi e costo dei materiali dichiarati riga per riga. */
+function costoMultiMateriale(){
+  var g=0,c=0;
+  MULTIMAT.forEach(function(m){
+    var gr=Math.max(0,parseFloat(m.grammi)||0);
+    var pk=Math.max(0,parseFloat(m.prezzoKg)||0);
+    g+=gr; c+=(gr/1000)*pk;
+  });
+  return { grammi:g, costo:c, righe:MULTIMAT.length };
+}
+
+/* ── I piatti del progetto ─────────────────────────────────────────────────
+   Ognuno con il proprio peso, tempo e — quando serve — la propria macchina.
+   Il costo del progetto è la somma dei piatti, e ogni piatto porta il proprio
+   avviamento: è la ragione per cui non si sommano in un piatto solo. */
+function cardPiatti(){
+  if(!PIATTI.length) return '';
+  var tot=PIATTI.reduce(function(a,p){ return { g:a.g+(+p.grammi||0), h:a.h+(+p.ore||0) }; },{g:0,h:0});
+  return '<div class="p3-card cyan">'
+    +'<div class="p3-ct c" style="display:flex;align-items:center;justify-content:space-between">'
+      +'<span>🗂️ PIATTI DEL PROGETTO ('+PIATTI.length+')</span>'
+      +'<button class="btn btn-secondary btn-sm" onclick="Print3DQuoter.svuotaPiatti()">✕</button></div>'
+    +PIATTI.map(function(p,i){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:11px;color:var(--text);font-weight:700">'+esc3(p.nome||('Piatto '+(i+1)))+'</span>'
+        +'<span style="font-size:10px;color:var(--text-muted)">'+Math.round(p.grammi||0)+' g · '+tempoDaDecimale(p.ore||0)+'</span>'
+        +'<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:3px 7px" onclick="Print3DQuoter.usaPiatto('+i+')">Usa</button>'
+      +'</div>';
+    }).join('')
+    +'<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px">'
+      +'<span style="color:var(--text-muted)">Progetto intero</span>'
+      +'<span style="font-weight:800;color:#22d3ee">'+Math.round(tot.g)+' g · '+tempoDaDecimale(tot.h)+'</span></div>'
+    +'<div class="p3-ht" style="margin-top:6px">Ogni piatto è una stampa a sé, con il proprio avviamento: «Usa» carica quel piatto nel conto, così l\'avviamento resta uno per piatto invece di uno per progetto.</div>'
+  +'</div>';
+}
+
 /* ── La card del lavoro ───────────────────────────────────────────────────
    Sette fasi, e una riga che dice quanto costano insieme. L'avviamento è
    marcato «per lavoro» perché è l'unico che si divide per la quantità, ed è
@@ -970,6 +1301,35 @@ function cardCostoPer(){
 }
 
 function setFase(id,v){ LAVORO[id]=Math.max(0,parseFloat(v)||0); calc(); aggiornaLavoro(); }
+
+function setProgetto(k,v){ PROGETTO[k]=String(v==null?'':v); }
+function addMat2(){ MULTIMAT.push({ tipo:'', grammi:0, prezzoKg:gv('p3d-mkg',24) }); render(); }
+function upMat2(i,k,v){ if(!MULTIMAT[i])return; MULTIMAT[i][k]=(k==='tipo')?v:(parseFloat(v)||0); calc(); }
+function rmMat2(i){ MULTIMAT.splice(i,1); render(); }
+function svuotaPiatti(){ PIATTI=[]; render(); }
+function usaPiatto(i){
+  var p=PIATTI[i]; if(!p) return;
+  /* Caricare un piatto non lo cancella dall'elenco: si può passare da uno
+     all'altro senza perdere il progetto. */
+  SLICER.pesoTotale=p.grammi||0; SLICER.pesoModello=p.grammi||0;
+  SLICER.supporti=0; SLICER.purge=0; SLICER.ore=p.ore||0; SLICER.includeTutto=true;
+  if(p.materiali&&p.materiali.length) MULTIMAT=p.materiali.map(function(m){
+    return { tipo:(m.tipo||'')+(m.colore?' '+m.colore:''), grammi:m.grammi||0, prezzoKg:gv('p3d-mkg',24) };
+  });
+  render();
+  showToastP('🗂️ '+(p.nome||('Piatto '+(i+1)))+' caricato','info');
+}
+function setModalita(m){ MODALITA=(m==='rapida')?'rapida':'professionale'; render(); }
+function setOverheadModo(m){ OVERHEAD.modo=m; render(); }
+function setOverheadValore(v){ OVERHEAD.valore=Math.max(0,parseFloat(v)||0); calc(); }
+function setPoliticaMat(p){
+  POLITICA_MAT=p;
+  /* Cambiare politica cambia il costo, quindi si rilegge il registro invece
+     di ricalcolare su un numero preso con un'altra domanda. */
+  var sel=(el('p3d-mat')||{}).value;
+  if(sel){ var m=materialeDi(sel); if(m){ MAT_REG=costoDalRegistro(m); if(MAT_REG&&MAT_REG.disponibile) sv('p3d-mkg', Math.round(MAT_REG.costoUnitario*100)/100); } }
+  render();
+}
 function addHw(){ HARDWARE.push({n:'Componente',q:1,c:0.10}); render(); }
 function upHw(i,k,v){ if(!HARDWARE[i])return; HARDWARE[i][k]=(k==='n')?v:(parseFloat(v)||0); calc(); }
 function rmHw(i){ HARDWARE.splice(i,1); render(); }
@@ -1074,7 +1434,17 @@ function costoDalRegistro(m){
   var chiave = m.itemKey ? m.itemKey
     : (/^g/.test(String(m.id)) ? String(m.id).slice(1) : null);
   if(!chiave) return null;
-  var e = MC.dallaCache(chiave, { articolo:{ unit: m.t==='resin' ? 'bottiglia' : 'bobina' } });
+  /* Il FIFO ha bisogno di sapere **quanto** si consuma: prelevare 500 g da
+     un lotto di 420 g e uno successivo non costa 500 volte una media. Le
+     altre politiche ignorano il parametro. */
+  var consumo=0;
+  try{ var pp=pesi(); consumo=pp.totale*Math.max(1,gv('p3d-qty',1)); }catch(err){ consumo=0; }
+  var e = MC.dallaCache(chiave, {
+    articolo:{ unit: m.t==='resin' ? 'bottiglia' : 'bobina' },
+    politica: POLITICA_MAT==='manuale' ? 'media' : POLITICA_MAT,
+    quantita: consumo>0?consumo:undefined,
+  });
+  if(POLITICA_MAT==='manuale') return null;   // il campo comanda, e lo dichiara
   return (e && e.disponibile) ? e : e;
 }
 
@@ -1114,6 +1484,10 @@ function ingresso(){
     measuredEnergyKwh:e.measuredEnergyKwh, averagePowerW:e.averagePowerW, ratedPowerW:e.ratedPowerW,
     slicerMaterialCost:SLICER.costo>0?SLICER.costo:undefined,
     spoolPrice:gv('p3d-mkg',24), spoolGrams:gv('p3d-mu',1000),
+    /* Con più materiali dichiarati comandano loro: il motore ignora il prezzo
+       singolo invece di sommarcelo. */
+    materials: MULTIMAT.filter(function(m){ return (parseFloat(m.grammi)||0)>0; })
+      .map(function(m){ return { name:m.tipo, grams:parseFloat(m.grammi)||0, pricePerKg:parseFloat(m.prezzoKg)||0 }; }),
     hours: SLICER.ore>0 ? SLICER.ore : gv('p3d-h',0),
     /* `watt` è il campo storico e resta il ripiego della targa. Quando si
        forza una lettura diversa non va passato: il motore lo userebbe come
@@ -1134,6 +1508,13 @@ function ingresso(){
     finishMin:LAVORO.prep+LAVORO.rimoz+LAVORO.qc+LAVORO.pack+LAVORO.altro,
     /* I due sprechi, separati: lo spreco di materiale aumenta i grammi, lo
        scarto di produzione butta il pezzo intero. */
+    /* Le spese generali, tradotte nei due campi che il motore conosce. La
+       traduzione sta qui, in un posto solo, dove si vede che è una
+       traduzione: «per lavoro» diventa una percentuale del costo del lavoro
+       intero, e resta un modo solo per volta — mai due sommati. */
+    overheadPerHour: OVERHEAD.modo==='ora' ? OVERHEAD.valore : 0,
+    overheadPct: OVERHEAD.modo==='percento' ? OVERHEAD.valore : 0,
+    overheadPerJob: OVERHEAD.modo==='lavoro' ? OVERHEAD.valore : 0,
     materialWasteRate:gv('p3d-waste',0),
     failureRate:gv('p3d-fail',0),
     hardware:HARDWARE.map(function(h){ return { name:h.n, qty:h.q, unitCost:h.c }; }),
@@ -1291,7 +1672,12 @@ function calc(){
     marginePct: MARG,
     ivaPct: IVA_ON?aliquotaIva():0,
     scontoPct: DISC,
-    quantita: [1,5,10,25,50,100],
+    /* Gli scaglioni del benchmark, fino a mille. Servono a rispondere alla
+       domanda vera del laboratorio — «da quanti pezzi in poi conviene?» —
+       che con sei righe non si vede: l'avviamento si spalma, il materiale
+       no, e il punto in cui la curva si appiattisce cade quasi sempre fra
+       100 e 500. */
+    quantita: SCAGLIONI,
     fonti: fonti(),
   }) : { indisponibile:true, motivo:'Vista preventivatore non disponibile' };
 
@@ -1378,6 +1764,33 @@ function calc(){
       ? pol+'<div class="p3-ht" style="margin-top:8px">Sono i margini che il motore consiglia. Il prezzo in alto usa il tuo: '+MARG.toFixed(1)+'%.</div>'
       : '<div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere i prezzi</div>';
   }
+
+  /* Le posizioni di prezzo, una card per politica: netto, IVA, lordo,
+     profitto, margine e ricarico. Sei numeri per card perché sono le sei
+     domande che si fanno davanti a un prezzo — e mostrarne tre costringe a
+     rifare a mente le altre tre. */
+  var pl=el('p3d-politiche');
+  if(pl){
+    var str = ok ? (R.strategie||[]) : [];
+    pl.innerHTML = str.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">'
+      +str.map(function(x){
+        var scelta = x.id===STRATEGIA;
+        return '<div style="border:1.5px solid '+(scelta?'#22d3ee':'var(--border)')+';border-radius:10px;padding:9px 10px;'
+          +'background:'+(scelta?'#22d3ee12':'var(--bg-card2)')+';cursor:pointer" onclick="Print3DQuoter.setStrategia(\''+x.id+'\')">'
+          +'<div style="font-size:11px;font-weight:800;color:'+(scelta?'#22d3ee':'var(--text)')+'">'+esc3(x.label)
+            +(x.raccomandata?' <span style="font-size:8px;color:var(--green)">CONSIGLIATA</span>':'')+'</div>'
+          +'<div style="font-size:18px;font-weight:900;color:var(--text);line-height:1.2;margin:3px 0">'+eur(x.prezzo)+'</div>'
+          +'<div style="font-size:9px;color:var(--text-muted);line-height:1.6">'
+            +(IVA_ON?'IVA '+eur(x.iva)+'<br>Lordo <b style="color:var(--text)">'+eur(x.prezzoLordo)+'</b><br>':'')
+            +'Profitto '+eur(x.profitto)+'<br>'
+            +'Margine '+(+x.marginePct||0).toFixed(1)+'% · Ricarico '+(+x.ricaricoPct||0).toFixed(1)+'%'
+          +'</div></div>';
+      }).join('')+'</div>'
+      : '<div class="p3-ht">Inserisci i dati per vedere le posizioni.</div>';
+  }
+
+  disegnaBom();
+  disegnaLotti();
 
   var co=el('p3d-calib-out');
   if(co){
@@ -1619,6 +2032,15 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   setPrezzoManuale:setPrezzoManuale, setMargineMinimo:setMargineMinimo,
   setTempo:setTempo, tempoDaDecimale:tempoDaDecimale,
   addPk:addPk, upPk:upPk, rmPk:rmPk,
+  setProgetto:setProgetto, setModalita:setModalita,
+  addMat2:addMat2, upMat2:upMat2, rmMat2:rmMat2,
+  svuotaPiatti:svuotaPiatti, usaPiatto:usaPiatto, leggiFile:leggiFile,
+  _multimat:costoMultiMateriale,
+  setOverheadModo:setOverheadModo, setOverheadValore:setOverheadValore,
+  setPoliticaMat:setPoliticaMat,
+  /* Letta dal collaudo: la distinta è una lettura delle liste che già
+     esistono, e il collaudo deve poter verificare che sommi al costo. */
+  _bom:bom,
   setEnergia:setEnergia,setSlicer:setSlicer,svuotaSlicer:svuotaSlicer,togglePerche:togglePerche,
   aggiornaRegistro:aggiornaRegistro,
   /* Letto dal collaudo per verificare l'ingresso senza ricostruirlo: un
@@ -1630,6 +2052,14 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
      trovava: `_state` non è mai stato esportato, e il pulsante salvava a
      costo 0 un prodotto il cui prezzo leggeva per scraping di una dimensione
      di carattere che nel frattempo era cambiata. */
-  _state:function(){ return { cost:COST, price:PRICE, margine:MARG, modo:MODO, lines:LINES.slice(), mats:MATS.slice() }; },
+  _state:function(){ return {
+    cost:COST, price:PRICE, margine:MARG, modo:MODO,
+    lines:LINES.slice(), mats:MATS.slice(),
+    progetto:{ nome:PROGETTO.nome, descrizione:PROGETTO.descrizione, tecnologia:T },
+    modalita:MODALITA, strategia:STRATEGIA,
+    overhead:{ modo:OVERHEAD.modo, valore:OVERHEAD.valore },
+    politicaMateriale:POLITICA_MAT,
+    materiali:MULTIMAT.slice(), piatti:PIATTI.slice(),
+  }; },
 };
 })();

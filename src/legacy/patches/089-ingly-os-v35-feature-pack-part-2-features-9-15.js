@@ -322,32 +322,33 @@ window.ClienteNoteInterne = {
   },
 };
 // Inject note interne button in CRM rows
+/* CRM-05 — il pulsante «note interne» si registra nel renderer.
+   Prima: override di `render`, `setTimeout(500)`, e la riga cercata per
+   `#crm-row-<indice>` — un identificatore che CRM-04 ha sostituito con l'id
+   del cliente. Il pulsante non compariva più. Le note si leggono una volta
+   per tabella (`prepara`), non una per riga. */
 (function _injectNoteBtn(){
   function _p(){
-    if(typeof CRMSmart==='undefined'||!CRMSmart._v31qbtn){setTimeout(_p,700);return;}
-    if(CRMSmart._v35noteBtn) return; CRMSmart._v35noteBtn=true;
-    var _orig=CRMSmart.render.bind(CRMSmart);
-    CRMSmart.render=function(){
-      _orig();
-      setTimeout(function(){
-        var notes=ClienteNoteInterne.load();
-        var data=CRMSmart._load();
-        data.forEach(function(c,i){
-          var row=document.getElementById('crm-row-'+i); if(!row) return;
-          if(row.querySelector('.note-int-btn')) return;
-          var cell=row.querySelector('td:last-child>div'); if(!cell) return;
-          var key=(c.name||'').toLowerCase().trim();
-          var hasNote=notes[key]?.notes;
-          var flag=notes[key]?.flag;
-          var btn=document.createElement('button'); btn.className='note-int-btn';
-          btn.title='Note interne';
-          btn.style.cssText='padding:4px 8px;background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.25);border-radius:6px;cursor:pointer;font-size:11px'+(hasNote?';outline:2px solid rgba(245,158,11,.5)':'');
-          btn.textContent=flag==='vip'?'⭐':flag==='lento'?'🐌':flag==='attenzione'?'⚠️':'🔒';
-          btn.onclick=(function(name){return function(){ClienteNoteInterne.openModal(name);};})(c.name);
-          cell.appendChild(btn);
-        });
-      },500);
-    };
+    var R = window.InglyClienteRiga;
+    if(typeof ClienteNoteInterne==='undefined'||!R||typeof R.aggiungiAzione!=='function'){setTimeout(_p,700);return;}
+    if(R._v35noteBtn) return; R._v35noteBtn=true;
+    R.aggiungiAzione({
+      id:'note-interne',
+      classe:'note-int-btn',
+      prepara:function(){ try{ return ClienteNoteInterne.load()||{}; }catch(e){ return {}; } },
+      titolo:'Note interne',
+      icona:function(c,notes){
+        var n=(notes||{})[String(c.nome).toLowerCase().trim()];
+        var f=n&&n.flag;
+        return f==='vip'?'⭐':f==='lento'?'🐌':f==='attenzione'?'⚠️':'🔒';
+      },
+      stile:function(c,notes){
+        var n=(notes||{})[String(c.nome).toLowerCase().trim()];
+        return 'padding:4px 8px;background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.25);border-radius:6px;cursor:pointer;font-size:11px'
+          + ((n&&n.notes)?';outline:2px solid rgba(245,158,11,.5)':'');
+      },
+      comando:function(c){ return "ClienteNoteInterne.openModal('"+String(c.nome).replace(/'/g,"")+"')"; },
+    });
   }
   setTimeout(_p,3000);
 })();
@@ -402,31 +403,29 @@ window.PreventivoArchivio = {
   },
 };
 // Add archivio button to CRM rows
+/* CRM-05 — idem per «archivio preventivi». Questo era il peggiore dei tre:
+   rileggeva e ri-parsava **tutti** i preventivi da `localStorage` una volta
+   per ogni riga della tabella. Ora li conta una volta sola, in `prepara`. */
 (function _injectArchivioBtn(){
   function _p(){
-    if(typeof CRMSmart==='undefined'||!CRMSmart._v35noteBtn){setTimeout(_p,500);return;}
-    if(CRMSmart._v35archBtn) return; CRMSmart._v35archBtn=true;
-    var _orig=CRMSmart.render.bind(CRMSmart);
-    CRMSmart.render=function(){
-      _orig();
-      setTimeout(function(){
-        var data=CRMSmart._load();
-        data.forEach(function(c,i){
-          var row=document.getElementById('crm-row-'+i); if(!row) return;
-          if(row.querySelector('.arch-btn')) return;
-          var cell=row.querySelector('td:last-child>div'); if(!cell) return;
-          var quotes=[]; try{quotes=JSON.parse(localStorage.getItem('lb2b_quotes_v1')||'[]');}catch(e){}
-          var n=quotes.filter(function(q){return q.client===c.name;}).length;
-          if(!n) return;
-          var btn=document.createElement('button'); btn.className='arch-btn';
-          btn.title='Archivio preventivi ('+n+')';
-          btn.style.cssText='padding:4px 8px;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.25);border-radius:6px;cursor:pointer;font-size:11px';
-          btn.innerHTML='📂'+n;
-          btn.onclick=(function(name){return function(){PreventivoArchivio.openForClient(name);};})(c.name);
-          cell.appendChild(btn);
-        });
-      },600);
-    };
+    var R = window.InglyClienteRiga;
+    if(typeof PreventivoArchivio==='undefined'||!R||typeof R.aggiungiAzione!=='function'){setTimeout(_p,500);return;}
+    if(R._v35archBtn) return; R._v35archBtn=true;
+    R.aggiungiAzione({
+      id:'archivio-preventivi',
+      classe:'arch-btn',
+      prepara:function(){
+        var quotes=[]; try{quotes=JSON.parse(localStorage.getItem('lb2b_quotes_v1')||'[]');}catch(e){}
+        var per={};
+        quotes.forEach(function(q){ var k=String(q&&q.client||''); if(k) per[k]=(per[k]||0)+1; });
+        return per;
+      },
+      quando:function(c,per){ return !!((per||{})[c.nome]); },
+      icona:function(c,per){ return '📂'+((per||{})[c.nome]||0); },
+      titolo:function(c,per){ return 'Archivio preventivi ('+((per||{})[c.nome]||0)+')'; },
+      comando:function(c){ return "PreventivoArchivio.openForClient('"+String(c.nome).replace(/'/g,"")+"')"; },
+      stile:'padding:4px 8px;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.25);border-radius:6px;cursor:pointer;font-size:11px',
+    });
   }
   setTimeout(_p,3500);
 })();

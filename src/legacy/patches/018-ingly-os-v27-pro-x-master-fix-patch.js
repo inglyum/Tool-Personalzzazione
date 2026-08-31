@@ -209,6 +209,51 @@
     var newClients = clients.filter(function(c){ return daysDiff(c.createdAt)>-30; });
     var totalRev = enriched.reduce(function(s,c){ return s+c.totalRev; },0);
 
+    var clientRows = _proxRigheCRM(enriched.slice(0,20));
+
+    return '<div class="prox-section" style="padding:20px">'
+      +'<div class="prox-ph">🧠 Command Center</div>'
+      +'<div class="prox-sub">Il tuo centro di controllo intelligente — Tutto sotto controllo</div>'
+      +'<div class="prox-grid">'
+      +'<div class="prox-kpi"><div class="prox-kpi-val">'+active.length+'</div><div class="prox-kpi-lbl">Ordini attivi</div><div class="prox-kpi-trend" style="color:'+(urgenti.length?'#ef4444':'#22c55e')+'">'+urgenti.length+' urgenti</div></div>'
+      +'<div class="prox-kpi"><div class="prox-kpi-val">'+fmtEur(totalRev)+'</div><div class="prox-kpi-lbl">Revenue totale</div><div class="prox-kpi-trend" style="color:#22c55e">Completati</div></div>'
+      +'<div class="prox-kpi"><div class="prox-kpi-val">'+clients.length+'</div><div class="prox-kpi-lbl">Clienti totali</div><div class="prox-kpi-trend" style="color:#3b82f6">Nel CRM</div></div>'
+      +'<div class="prox-kpi"><div class="prox-kpi-val" style="color:'+(alerts?'#ef4444':'#22c55e')+'">'+(alerts||'✓')+'</div><div class="prox-kpi-lbl">Alert attivi</div><div class="prox-kpi-trend" style="color:'+(alerts?'#ef4444':'#22c55e')+'">'+(alerts?'Azione richiesta':'Tutto ok')+'</div></div>'
+      +'</div>'
+      +'<div class="prox-two-col">'
+      +'<div class="prox-card"><div class="prox-card-title">📋 Ordini Prioritari</div>'+priorityRows+'</div>'
+      +'<div><div class="prox-card"><div class="prox-card-title">🚨 Alert & Azioni</div>'+alertRows+'</div>'
+      +'<div class="prox-card" style="margin-top:12px"><div class="prox-card-title">⚡ Accesso Rapido</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+      +'<button class="prox-btn prox-btn-secondary" style="justify-content:center" onclick="App.navigate(\'quoter\')">📄 Nuovo Preventivo</button>'
+      +'<button class="prox-btn prox-btn-secondary" style="justify-content:center" onclick="App.navigate(\'clients\')">👤 Nuovo Cliente</button>'
+      +'<button class="prox-btn prox-btn-secondary" style="justify-content:center" onclick="App.navigate(\'gestione_ordini\')">📋 Ordini</button>'
+      +'<button class="prox-btn prox-btn-secondary" style="justify-content:center" onclick="App.navigate(\'items\')">📦 Magazzino</button>'
+      +'</div></div></div>'
+      +'</div>'
+      +'</div>';
+  }
+  function bindCommandCenter(){}
+
+  /* 2. CRM PRO ─────────────────────────────────────────────────── */
+  function buildCRMPro(){
+    var clients = STORE.arr('ingly_clients');
+    var orders = STORE.arr('ingly_orders');
+
+    // Compute per-client revenue
+    var revMap = {};
+    orders.forEach(function(o){
+      if(!o.clientId) return;
+      revMap[o.clientId] = (revMap[o.clientId]||0)+(o.amount||o.value||0);
+    });
+    var enriched = clients.map(function(c){
+      return Object.assign({}, c, { totalRev: revMap[c.id]||0 });
+    }).sort(function(a,b){ return b.totalRev-a.totalRev; });
+
+    var champions = enriched.filter(function(c){ return c.totalRev > 500; });
+    var newClients = clients.filter(function(c){ return daysDiff(c.createdAt)>-30; });
+    var totalRev = enriched.reduce(function(s,c){ return s+c.totalRev; },0);
+
     var clientRows = enriched.slice(0,20).map(function(c){
       var tag = c.totalRev>1000?'<span class="prox-tag prox-badge-yellow">🏆 Champion</span>':
                 c.totalRev>300?'<span class="prox-tag prox-badge-blue">⭐ Regular</span>':'<span class="prox-tag prox-badge-purple">🆕 New</span>';
@@ -245,6 +290,43 @@
       +'<tbody id="prox-crm-tbody">'+clientRows+'</tbody>'
       +'</table></div></div></div>';
   }
+  /* CRM-05 — le righe di CRM Pro passano dal renderer unico.
+     Erano due copie della stessa riga (una qui, una in `_proxCRMFilter`), con
+     le loro grafie dei campi: `name || ragione_sociale`, `phone || tel`. Ora
+     la traduzione dei nomi di campo è del renderer, e le colonne proprie di
+     questa tabella — fatturato e livello — sono descritte come dati. */
+  function _proxColonneCRM(){
+    var badge = function(c){
+      var r = c._rev||0;
+      return r>1000?'<span class="prox-tag prox-badge-yellow">🏆 Champion</span>'
+        : r>300 ?'<span class="prox-tag prox-badge-blue">⭐ Regular</span>'
+        : '<span class="prox-tag prox-badge-purple">🆕 New</span>';
+    };
+    return ['nome','email','telefono',
+      { html:true, valore:function(c,o){ return '<span style="font-weight:700;color:#22c55e">'+fmtEur(o.fatturato(c.id))+'</span>'; } },
+      { html:true, valore:function(c,o){ return badge({_rev:o.fatturato(c.id)}); } },
+      'azioni'];
+  }
+  var _PROX_AZIONI_CRM = [{
+    icona:'Dettaglio', titolo:'Dettaglio cliente',
+    comando:function(c){ return "_proxCRMDetail('"+c.id+"')"; },
+    stile:'padding:4px 8px;font-size:10px',
+  }];
+  function _proxRigheCRM(enriched, vuoto){
+    var R = window.InglyClienteRiga;
+    if(!R) return '<tr><td colspan="6"><div class="prox-empty">Modulo di disegno righe non caricato</div></td></tr>';
+    var rev = {};
+    enriched.forEach(function(c){ rev[String(c.id)] = c.totalRev||0; });
+    return R.righe(enriched, {
+      colonne: _proxColonneCRM(),
+      azioni: _PROX_AZIONI_CRM,
+      prefissoId: 'prox-crm-row-',
+      senzaAggiunte: true,
+      fatturato: function(id){ return rev[String(id)]||0; },
+      vuoto: vuoto || 'Nessun cliente — Aggiungine uno dal CRM',
+    });
+  }
+
   function bindCRMPro(){
     window._proxCRMFilter = function(q){
       var filter=document.getElementById('prox-crm-filter');
@@ -264,10 +346,7 @@
       }).sort(function(a,b){return b.totalRev-a.totalRev;});
       var tbody=document.getElementById('prox-crm-tbody');
       if(!tbody) return;
-      tbody.innerHTML=filtered.slice(0,20).map(function(c){
-        var tag=c.totalRev>1000?'<span class="prox-tag prox-badge-yellow">🏆 Champion</span>':c.totalRev>300?'<span class="prox-tag prox-badge-blue">⭐ Regular</span>':'<span class="prox-tag prox-badge-purple">🆕 New</span>';
-        return '<tr><td style="font-weight:600">'+esc(c.name||c.ragione_sociale||'—')+'</td><td>'+esc(c.email||'—')+'</td><td>'+esc(c.phone||c.tel||'—')+'</td><td style="font-weight:700;color:#22c55e">'+fmtEur(c.totalRev)+'</td><td>'+tag+'</td><td><button class="prox-btn prox-btn-secondary" style="padding:4px 8px;font-size:10px" onclick="_proxCRMDetail(\''+esc(c.id||'')+'\')">Dettaglio</button></td></tr>';
-      }).join('')||'<tr><td colspan="6"><div class="prox-empty">Nessun risultato</div></td></tr>';
+      tbody.innerHTML=_proxRigheCRM(filtered.slice(0,20), 'Nessun risultato');
     };
     window._proxCRMDetail = function(id){
       var clients=STORE.arr('ingly_clients');

@@ -2785,7 +2785,15 @@ const TaxCalendar = {
 // ═══════════════════════════════════════════════════════
 // v67 — SPRINT 3: WEEKLY REPORT
 // ═══════════════════════════════════════════════════════
-const RealCostEngine = {
+/* ── Non è un motore di costo ──────────────────────────────────────────────
+   Il nome mentiva, ed è il tipo di bugia che costa caro in questo progetto:
+   qui non si calcola il costo di un preventivo — quello lo fa
+   `InglyCostEngine`, e uno solo. Qui si **registrano i costi realmente
+   sostenuti** su una commessa e si confronta il margine reale con quello
+   preventivato. È il lato «consuntivo» del conto, non un secondo motore.
+   Il nome storico resta come alias perché è esposto su `window` e potrebbe
+   essere usato da qualcosa di non censito. */
+const InglyActualCost = {
   async logCost(orderId, type, amount, desc, minutes=0) {
     const entry = { id: Date.now(), orderId, type, amount: +amount, desc, minutes: +minutes, date: new Date().toISOString() };
     await IDB.put('cost_entries', entry);
@@ -2991,6 +2999,9 @@ window.FiscalRadar = FiscalRadar;
 if(typeof RevSim!==typeof undefined) window.RevSim = RevSim;
 window.FinancialForecaster = FinancialForecaster;
 window.TaxCalendar = TaxCalendar;
-window.RealCostEngine = RealCostEngine;
+window.InglyActualCost = InglyActualCost;
+/* Alias storico: stesso oggetto, non una copia. Due oggetti con lo stesso
+   contenuto sarebbero di nuovo due sistemi che possiedono un concetto. */
+window.RealCostEngine = InglyActualCost;
 window.PaymentWizard = PaymentWizard;
 

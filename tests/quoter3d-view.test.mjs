@@ -106,9 +106,9 @@ test('le tre modalità rispondono a tre domande', async (t) => {
 test('le cinque posizioni di prezzo puntano a un margine', async (t) => {
   const r = V.calcola(CASO, { modalita: 'macchina', marginePct: 40 });
 
-  await t.test('ce ne sono quattro, e una è consigliata', () => {
-    /* Competitivo, B2B, Standard, Premium, Luxury: cinque posizioni
-       commerciali, non cinque moltiplicatori. */
+  await t.test('ce n\'è una per politica, e una sola è consigliata', () => {
+    /* Ingrosso, Competitivo, B2B, Standard, Premium, Luxury, Su misura:
+       posizioni commerciali, non moltiplicatori. */
     assert.equal(r.strategie.length, Object.keys(E.POLITICHE).length);
     assert.ok(r.strategie.some((s) => s.id === 'b2b'), 'il B2B è una posizione, non uno sconto');
     assert.equal(r.strategie.filter((s) => s.raccomandata).length, 1);
@@ -120,7 +120,10 @@ test('le cinque posizioni di prezzo puntano a un margine', async (t) => {
   });
 
   await t.test('i prezzi crescono con il margine obiettivo', () => {
-    const ordinate = r.strategie.slice().sort((a, b) => a.marginTarget - b.marginTarget);
+    /* «Su misura» resta fuori: il suo margine è quello impostato, quindi
+       coincide con un'altra posizione ogni volta che l'utente la sceglie. */
+    const ordinate = r.strategie.filter((x) => !x.apertaAllUtente)
+      .slice().sort((a, b) => a.marginTarget - b.marginTarget);
     for (let i = 1; i < ordinate.length; i++) {
       assert.ok(ordinate[i].prezzo > ordinate[i - 1].prezzo,
         ordinate[i].label + ' non costa più di ' + ordinate[i - 1].label);

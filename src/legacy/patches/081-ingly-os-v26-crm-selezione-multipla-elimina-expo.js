@@ -119,31 +119,25 @@
       var withPhone = (ctx.tutti||[]).filter(function(c){ return c.phone; }).length;
       var esc = function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x];}); };
 
-      var rows = data.length ? data.map(function(c){
-        var i = esc(c.id);
-        return '<tr id="crm-row-'+i+'" style="border-bottom:1px solid var(--border);transition:.12s'
-          +(CRMSmart._selected&&CRMSmart._selected.has(c.id)?';background:rgba(99,102,241,.06)':'')+'">'
-          +'<td style="padding:8px 10px;text-align:center;width:36px">'
-          +'<input type="checkbox" id="crm-chk-'+i+'" data-id="'+i+'" '
-          +(CRMSmart._selected&&CRMSmart._selected.has(c.id)?'checked ':'')
-          +'onchange="CRMSmart._onCheck(\''+i+'\',this.checked)" '
-          +'style="width:15px;height:15px;cursor:pointer;accent-color:var(--primary)"></td>'
-          +'<td style="padding:8px 12px">'
-          +'<div style="font-size:13px;font-weight:700;color:var(--text)">'+c.name+'</div>'
-          +(c.company?'<div style="font-size:10px;color:var(--text-muted)">'+c.company+'</div>':'')
-          +'</td>'
-          +'<td style="padding:8px 12px">'
-          +(c.phone?'<a href="tel:'+c.phone+'" style="color:var(--primary);text-decoration:none;font-size:13px">'+c.phone+'</a>':'<span style="color:var(--text-dim)">—</span>')
-          +'</td>'
-          +'<td style="padding:8px 12px;color:var(--text-muted);font-size:12px">'+(c.email||'—')+'</td>'
-          +'<td style="padding:8px 12px;font-size:11px;color:var(--text-dim);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(c.notes||'—')+'</td>'
-          +'<td style="padding:8px 10px;text-align:center">'
-          +'<div style="display:flex;gap:4px;justify-content:center">'
-          +(c.phone?'<button onclick="WAQuick&&WAQuick.openPanel(\''+c.phone.replace(/\D/g,'')+'\',\'Ciao '+c.name+'! \')" title="WhatsApp" style="padding:4px 8px;background:#25D36615;color:#25D366;border:1px solid #25D36630;border-radius:6px;cursor:pointer;font-size:11px">💬</button>':'')
-          +'<button onclick="CRMSmart._editClient(\''+i+'\')" title="Modifica" style="padding:4px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px">✏️</button>'
-          +'<button onclick="CRMSmart._deleteClient(\''+i+'\')" title="Elimina" style="padding:4px 8px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);border-radius:6px;cursor:pointer;font-size:11px">🗑</button>'
-          +'</div></td></tr>';
-      }).join('') : '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-dim)">Nessun cliente ancora. Aggiungi manualmente o importa un file VCF/CSV.</td></tr>';
+      /* CRM-05 — le righe le disegna `InglyClienteRiga`, e nessun altro.
+         Prima erano quattro copie: questa, i tag riappesi 200 ms dopo dalla
+         patch 082 su `#crm-row-<indice>` (che dopo CRM-04 non esiste più),
+         la tabella di CRM Pro e quella di `mod:clients`. Il renderer non
+         legge dati e non inventa id: riceve la pagina già scelta da
+         `_pipeline()`. Senza il modulo la tabella lo dichiara invece di
+         disegnare una riga di scorta con un'altra grafia. */
+      var R = window.InglyClienteRiga;
+      var rows;
+      if (R) {
+        rows = R.righe(data, {
+          selezionati: function(c){ return !!(CRMSmart._selected && CRMSmart._selected.has(c.id)); },
+          presetTag: CRMSmart.PRESET_TAGS,
+        });
+      } else {
+        rows = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#f59e0b">'
+          + 'Modulo di disegno righe non caricato: l\'elenco non viene mostrato'
+          + ' per non disegnarlo in un secondo modo.</td></tr>';
+      }
 
       return '<div style="padding:16px 20px;max-width:1100px;margin:0 auto">'
         // Header
