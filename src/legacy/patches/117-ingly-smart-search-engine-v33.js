@@ -218,6 +218,34 @@ var INDEX = [
    tags:['3d','stampa 3d','fdm','resina','filamento','costi stampa','bambu','prusa','pla','petg']},
 ];
 
+/* ── UN SOLO NOME PER SEZIONE ──────────────────────────────────────────────
+   Questo elenco portava un secondo nome per ogni sezione: 52 su 95 non
+   coincidevano con l'etichetta del menu. La stessa funzione si chiamava
+   «Banca & fondi» nella barra laterale e «Bank & Funds» nei risultati, e chi
+   la cercava con il nome che vedeva nella sezione non la trovava nel menu.
+
+   Il nome mostrato lo decide ora la tassonomia (`src/app-shell/nav-map.js`),
+   che è anche quella che disegna il menu. Quello che questo elenco possiede
+   davvero — i sinonimi con cui la gente cerca — resta qui, e il nome storico
+   diventa un sinonimo in più invece di essere un secondo titolo. */
+(function allineaAllaTassonomia(){
+  var Nav = window.InglyNav;
+  if(!Nav || typeof Nav.allItems !== 'function') return;
+  var voci = {};
+  Nav.allItems().forEach(function(it){ voci[it.id] = it; });
+  INDEX.forEach(function(item){
+    var it = voci[item.s];
+    if(!it) return;
+    var storico = item.n;
+    item.n = it.label;
+    var sinonimi = [].concat(it.aka || []);
+    if(storico && storico !== it.label) sinonimi.push(storico);
+    sinonimi.forEach(function(nome){
+      if(item.tags.indexOf(nome) === -1) item.tags.push(nome);
+    });
+  });
+})();
+
 /* ── UTILS ────────────────────────────────────────────────── */
 function normalize(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 function highlight(text, query){

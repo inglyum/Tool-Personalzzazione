@@ -5315,12 +5315,13 @@ Bus.on('order:saved', ()=>{
 // AI STUDIO — Generatore contenuti AI
 // ══════════════════════════════════════════════════════════════════
 const NavPrefs = {
-  _prefs: { favorites: [], hidden: [] },
+  _prefs: { favorites: [], hidden: [], usi: {} },
   _loaded: false,
 
   async load() {
     const saved = await IDB.get('settings', 'nav_prefs').catch(() => null);
     if (saved) this._prefs = { favorites: saved.favorites || [], hidden: saved.hidden || [],
+      usi: saved.usi || {},
       migratoDaFavs3: !!saved.migratoDaFavs3 };
 
     /* Fino alla v88 esistevano due sistemi di preferiti che non si parlavano:
@@ -5424,6 +5425,71 @@ const NavPrefs = {
     this.save().catch(()=>{});
     this.apply();
     toast('✅ Tutte le sezioni ripristinate!', 'success');
+  },
+
+  /* ── Quali sezioni usi davvero ────────────────────────────────────────
+     `Favs.trackVisit` teneva soltanto l'ordine delle ultime otto: dice qual è
+     stata l'ultima, non quale torna ogni giorno. Per proporre un preferito
+     sensato serve la seconda cosa.
+
+     Il conteggio vive dentro `nav_prefs`, accanto ai preferiti: stesso store,
+     stesso salvataggio, nessun secondo archivio da tenere allineato. */
+  segnaUso(section) {
+    if (!section || section === 'dashboard') return;
+    if (!this._prefs.usi) this._prefs.usi = {};
+    this._prefs.usi[section] = (this._prefs.usi[section] || 0) + 1;
+    /* Si salva ogni tanto, non a ogni clic: una scrittura su IndexedDB per
+       ogni navigazione è un costo che nessuno ha chiesto. */
+    if (this._prefs.usi[section] % 3 === 1) this.save().catch(() => {});
+  },
+
+  /** Le sezioni che usi spesso e che non sono ancora fra i preferiti.
+      Non è un elenco lungo: è il suggerimento successivo, uno per volta. */
+  daProporre(minimo) {
+    const soglia = minimo || 4;
+    const usi = this._prefs.usi || {};
+    const gia = new Set(this.favorites());
+    return Object.keys(usi)
+      .filter((s) => usi[s] >= soglia && !gia.has(s))
+      .sort((a, b) => usi[b] - usi[a]);
+  },
+
+  /** Il preferito in posizione n (1-based): serve alle scorciatoie. */
+  preferitoN(n) {
+    const f = this.favorites();
+    return (n >= 1 && n <= f.length) ? f[n - 1] : null;
+  },
+
+  /* ── Alt+1…9 ──────────────────────────────────────────────────────────
+     Un preferito serve a tornarci spesso; se per arrivarci bisogna comunque
+     spostare il mouse fino alla barra laterale, metà del vantaggio è persa.
+     Alt non era usato da nessuna scorciatoia del programma — verificato prima
+     di prenderlo — e i numeri sono scritti accanto ai primi nove preferiti,
+     perché una scorciatoia che nessuno vede non esiste.
+
+     Non si intercetta la digitazione dentro un campo: chi sta scrivendo un
+     nome cliente ha diritto a scriverlo. */
+  scorciatoie() {
+    if (this._scorciatoieAttive) return;
+    this._scorciatoieAttive = true;
+    document.addEventListener('keydown', (e) => {
+      /* `ctrlKey` esclude AltGr, che su molte tastiere arriva come Ctrl+Alt e
+         serve a scrivere @ e # sopra le cifre: intercettarlo significherebbe
+         impedire di digitarli.
+
+         Dentro un campo di testo invece la scorciatoia resta attiva. La prima
+         versione la disattivava, per prudenza — ma con Alt premuto la cifra
+         non viene inserita comunque, quindi quella prudenza non proteggeva
+         nessuna digitazione e rinunciava alla scorciatoia proprio nel caso più
+         frequente: il fuoco che sta in un campo qualsiasi della pagina. */
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      const n = parseInt(e.key, 10);
+      if (!(n >= 1 && n <= 9)) return;
+      const sezione = this.preferitoN(n);
+      if (!sezione) return;
+      e.preventDefault();
+      try { App.navigate(sezione); } catch (err) {}
+    });
   },
 
   isFav(section) { return this._prefs.favorites.includes(section); },
@@ -5607,7 +5673,7 @@ const NavPrefs = {
 
 // Auto-load NavPrefs when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => NavPrefs.load().catch(console.warn), 1000);
+  setTimeout(() => NavPrefs.load().then(() => NavPrefs.scorciatoie()).catch(console.warn), 1000);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -6841,9 +6907,29 @@ const Favs = {
       let ico = imgEl
         ? `<img src="${imgEl.src}" style="width:14px;height:14px;border-radius:50%;flex-shrink:0;object-fit:contain">`
         : `<i class="${iEl?iEl.className:'fas fa-circle'}" style="width:16px;text-align:center;font-size:13px;flex-shrink:0"></i>`;
-      const tmp = el.cloneNode(true);
-      tmp.querySelectorAll('.nav-pin,.nav-badge,img').forEach(x=>x.remove());
-      const label = tmp.textContent.trim();
+      /* Il nome si chiedeva al DOM: si prendeva il testo della voce, ripulito
+         di quel che si sapeva togliere. Due conseguenze misurate — la stella
+         disegnata da NavPrefs non è né `.nav-pin` né `.nav-badge`, quindi
+         finiva dentro il nome («Items☆»); e fra due elementi con la stessa
+         `data-section` vinceva l'ultimo incontrato, che poteva essere una voce
+         lasciata da una patch.
+
+         Il nome lo possiede la tassonomia, che è anche quella che disegna il
+         menu. Il DOM resta la riserva per le sezioni che la tassonomia non
+         conosce — quelle aggiunte dalle patch — e lì si ripulisce meglio. */
+      let label = '';
+      try {
+        const nav = window.InglyNav;
+        if (nav && typeof nav.allItems === 'function') {
+          const voce = nav.allItems().find((it) => it.id === s);
+          if (voce && voce.label) label = voce.label;
+        }
+      } catch (e) {}
+      if (!label) {
+        const tmp = el.cloneNode(true);
+        tmp.querySelectorAll('.nav-pin,.nav-badge,img,button,kbd,.fav-ord-group,.nav-actions').forEach(x=>x.remove());
+        label = tmp.textContent.replace(/[★☆▲▼]/g, '').trim();
+      }
       const col = el.style.color||'';
       if(label) this._cat[s] = {ico, label, col};
     });
@@ -6937,7 +7023,9 @@ const Favs = {
        Vuota, il gruppo sparisce: una riga «nessun preferito» in cima alla
        sidebar occupa spazio per non dire niente. */
     const fg = eid('nav-favs-group'), fl = eid('nav-favs-list'), fc = eid('nav-favs-count');
-    if(fg) fg.style.display = favs.length ? '' : 'none';
+    const haSuggerimento = (typeof NavPrefs !== 'undefined' && NavPrefs.daProporre)
+      ? NavPrefs.daProporre().length > 0 : false;
+    if(fg) fg.style.display = (favs.length || haSuggerimento) ? '' : 'none';
     if(fc) fc.textContent = favs.length ? '· ' + favs.length : '';
     if(fl) fl.innerHTML = favs.map((s, idx)=>{
       const d = this._cat[s] || { ico:'<i class="fas fa-circle" style="width:16px;text-align:center;font-size:13px;flex-shrink:0"></i>', label:s, col:'' };
@@ -6961,6 +7049,7 @@ const Favs = {
         ${isActive?'background:var(--primary-dim);border-left:3px solid var(--primary);padding-left:7px;':''}">
         ${d.ico}
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:13px">${etichetta}</span>
+        ${idx<9?`<kbd title="Alt+${idx+1}" style="font:600 9px ui-monospace,monospace;opacity:.45;flex-shrink:0;padding:1px 4px;border:1px solid var(--border);border-radius:4px">${idx+1}</kbd>`:''}
         ${nascosta?'<i class="fas fa-eye-slash" title="Nascosta dal menu, raggiungibile da qui" style="font-size:9px;opacity:.5;flex-shrink:0"></i>':''}
         <span class="fav-ord-group" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:1px">
           ${cmd('&#9650;','Sposta su',`NavPrefs.moveFavorite('${q(s)}',-1)`, idx===0)}
@@ -6969,6 +7058,37 @@ const Favs = {
         </span>
       </div>`;
     }).join('');
+
+    /* ── Il preferito che manca ───────────────────────────────────────────
+       Con 95 sezioni, di cui la maggior parte sotto «Altro», scegliere i
+       preferiti a mano significa ricordarsi che esistono. Qui il programma
+       propone la sezione che si apre più spesso e che non è ancora fra i
+       preferiti — una sola, non un elenco: un suggerimento che occupa una riga
+       si accetta o si ignora, dieci suggerimenti sono un'altra lista da
+       leggere.
+
+       Il dato non è nuovo: è il conteggio che NavPrefs tiene accanto ai
+       preferiti, nello stesso `nav_prefs`. */
+    const sg = eid('nav-fav-suggerito');
+    if (sg) {
+      const proposte = (typeof NavPrefs !== 'undefined' && NavPrefs.daProporre) ? NavPrefs.daProporre() : [];
+      const sez = proposte[0];
+      const dd = sez ? this._cat[sez] : null;
+      if (sez && dd) {
+        const qq = (x)=>String(x).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+        sg.style.display = '';
+        sg.innerHTML = `<button type="button" class="nav-item" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;opacity:.72;font-size:12px;padding-right:8px"
+          title="La apri spesso: vuoi tenerla in cima?"
+          onclick="Favs.togglePin('${qq(sez)}',event)">
+          <span aria-hidden="true" style="width:16px;text-align:center;flex-shrink:0">☆</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0">Aggiungi ${qq(dd.label)}</span>
+          <span style="font-size:9px;color:var(--text-dim);flex-shrink:0">la apri spesso</span>
+        </button>`;
+      } else {
+        sg.style.display = 'none';
+        sg.innerHTML = '';
+      }
+    }
 
     // --- Recenti ---
     const rg = eid('nav-recent-group'), rl = eid('nav-recent-list');

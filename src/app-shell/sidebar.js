@@ -295,6 +295,23 @@
     applicaStato(group, nowCollapsed);
   }
 
+  /* Il filtro confrontava solo l'etichetta mostrata. Ma la stessa sezione ha
+     più di un nome: quello del menu, quello che la sezione scrive nella sua
+     intestazione, quello con cui la ricerca la restituisce. Chi cerca «Bank»
+     non trovava «Banca & fondi», e chi cerca «Ispirazione» non trovava
+     «Idee & prototipi» — pur essendo entrambe lì, a due centimetri.
+
+     Il nome mostrato resta uno solo: lo decide nav-map. Gli altri nomi vivono
+     accanto, in `aka`, e servono solo a farsi trovare. */
+  var alias = (function () {
+    var m = {};
+    (Nav.allItems ? Nav.allItems() : []).forEach(function (it) {
+      var nomi = [it.label].concat(it.aka || []);
+      m[it.id] = nomi.join(' ').toLowerCase() + ' ' + it.id.replace(/_/g, ' ');
+    });
+    return m;
+  })();
+
   function filter(query) {
     var q = query.trim().toLowerCase();
     var groups = document.querySelectorAll('#sidebar-nav .nav-group');
@@ -302,7 +319,9 @@
       var visible = 0;
       var links = groups[i].querySelectorAll('.nav-item[data-section]');
       for (var j = 0; j < links.length; j += 1) {
-        var match = !q || links[j].textContent.toLowerCase().indexOf(q) !== -1;
+        var sez = links[j].getAttribute('data-section');
+        var cercabile = links[j].textContent.toLowerCase() + ' ' + (alias[sez] || '');
+        var match = !q || cercabile.indexOf(q) !== -1;
         links[j].hidden = !match;
         if (match) visible += 1;
       }

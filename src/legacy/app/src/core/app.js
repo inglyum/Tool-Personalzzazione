@@ -205,6 +205,10 @@ const App={
     
     // Tracking e callbacks
     Favs.trackVisit(section);
+    /* `trackVisit` tiene l'ordine delle ultime otto: dice qual è stata
+       l'ultima, non quale torni ad aprire ogni giorno. Il conteggio serve a
+       proporre un preferito sensato, e vive accanto ai preferiti stessi. */
+    try { if (typeof NavPrefs !== 'undefined' && NavPrefs.segnaUso) NavPrefs.segnaUso(section); } catch (e) {}
     // v17 SSOT: redirect legacy sections to unified gestione_ordini
     /* `crm_pipeline` aggiunto: senza di lui la sezione apriva una vista vuota.
        Lo store pipeline era un mirror di orders, quindi la destinazione giusta
