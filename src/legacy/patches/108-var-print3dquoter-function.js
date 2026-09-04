@@ -189,11 +189,31 @@ var MACCHINA_IMPORTATA=null;  // il modello dichiarato dal file, se c'è
    motivo per cui lo snapshot è congelato.
 
    La chiave è l'id della riga, che è già unico e già salvato con essa. */
+/* ── Il consuntivo non è più roba di questo file ───────────────────────────
+   `p3d_consuntivo_v1` era l'archivio del solo preventivatore 3D. Quando è
+   arrivato il momento di dare il consuntivo anche al tessile, la strada breve
+   era dargliene uno suo — e sarebbe stato l'ennesimo archivio doppio.
+
+   Il proprietario ora è `InglyConsuntivo` (src/product/consuntivo.js), che
+   distingue le commesse per modulo invece che per archivio. Così i due
+   preventivatori si leggono insieme: un laboratorio vuole sapere se sfora sul
+   3D o sul tessile, e per saperlo i numeri devono stare nello stesso registro.
+
+   La vecchia chiave non si cancella: viene assorbita una volta sola.
+   Qui restano due funzioni con i nomi di prima, che ora delegano. */
 var CONSUNTIVO_K='p3d_consuntivo_v1';
+var MODULO_CONSUNTIVO='3d';
+function registro(){ return (typeof window!=='undefined') && window.InglyConsuntivo; }
 function consuntivi(){
+  var R=registro();
+  if(R) return R.perModulo(MODULO_CONSUNTIVO);
+  /* Senza il registro si legge ancora la chiave storica: meglio un dato
+     vecchio che nessun dato. */
   try{ return JSON.parse(localStorage.getItem(CONSUNTIVO_K)||'{}')||{}; }catch(e){ return {}; }
 }
 function salvaConsuntivo(id,dati){
+  var R=registro();
+  if(R){ R.salva(MODULO_CONSUNTIVO,id,dati); return; }
   var tutti=consuntivi();
   tutti[String(id)]=Object.assign({}, tutti[String(id)], dati, { quando:new Date().toISOString() });
   try{ localStorage.setItem(CONSUNTIVO_K, JSON.stringify(tutti)); }catch(e){}

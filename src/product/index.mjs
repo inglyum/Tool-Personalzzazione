@@ -67,6 +67,9 @@ export const PRODUCT_FILES = [
   'pricing-policies.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
+  /* Il registro di com'è andata davvero: un proprietario solo per tutti i
+     preventivatori. Prima dei preventivatori che lo interrogano. */
+  'consuntivo.js',
   'tema.js',
   'tema-view.js',
   'cliente-integrita.js',

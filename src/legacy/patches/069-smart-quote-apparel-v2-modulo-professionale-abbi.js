@@ -278,6 +278,139 @@ var ApparelQuoter = (function () {
     };
   }
 
+  /* ── Scaglioni ────────────────────────────────────────────────────────────
+     La griglia delle quantità c'era già e i conti erano giusti. Quello che
+     mancava è che ogni riquadro mostrava **solo il totale**: `×50 → €412`.
+     Costo per pezzo, prezzo per pezzo e margine `calcQuote` li calcolava e li
+     buttava via.
+
+     E soprattutto non diceva **quale scaglione conviene**, che è la domanda
+     vera di chi sta al telefono. Sono tre ordinamenti su numeri già in mano:
+
+       · il costo per pezzo più basso — dove la produzione è più efficiente;
+       · il profitto totale più alto — che non è lo stesso scaglione, ed è
+         quello che conviene a chi vende;
+       · il prezzo per pezzo più basso — quello che conviene al cliente.
+
+     Quando i tre coincidono l'offerta si fa da sé. Quando divergono, è lì che
+     si tratta — e saperlo prima è tutto il vantaggio. */
+  function scaglioni(q, s) {
+    var righe = (q.lines || []);
+    if (!righe.length) return { voci: [], migliori: {} };
+
+    var voci = QTY_BREAKS.map(function (qty) {
+      var tq = Object.assign({}, q, {
+        lines: righe.map(function (l) { return Object.assign({}, l, { qty: qty }); }),
+      });
+      var r = calcQuote(tq, s);
+      /* I pezzi totali non sono la quantità: sono la quantità per ogni riga.
+         Dividere per `qty` darebbe il prezzo di una riga, non di un pezzo. */
+      var pezzi = qty * righe.length;
+      return {
+        qty: qty,
+        pezzi: pezzi,
+        indisponibile: !!r.indisponibile,
+        costoPezzo: pezzi > 0 ? r.totalCost / pezzi : 0,
+        prezzoPezzo: pezzi > 0 ? r.afterDisc / pezzi : 0,
+        totale: r.grand,
+        netto: r.afterDisc,
+        profitto: r.profit,
+        marginePct: r.profitPct,
+        scontoPct: s.qtyDiscounts[qty] || 0,
+        pavimentoScattato: !!r.pavimentoScattato,
+        inPerdita: !!r.inPerdita,
+      };
+    });
+
+    var validi = voci.filter(function (v) { return !v.indisponibile && v.prezzoPezzo > 0; });
+    var minimo = function (campo) {
+      return validi.slice().sort(function (a, b) { return a[campo] - b[campo]; })[0];
+    };
+    var massimo = function (campo) {
+      return validi.slice().sort(function (a, b) { return b[campo] - a[campo]; })[0];
+    };
+    var migliori = validi.length ? {
+      unitario: minimo('costoPezzo').qty,
+      profitto: massimo('profitto').qty,
+      cliente: minimo('prezzoPezzo').qty,
+    } : {};
+
+    return { voci: voci, migliori: migliori };
+  }
+
+  /* ── Consuntivo ───────────────────────────────────────────────────────────
+     Sul tessile lo scarto reale — capi bruciati, stampe storte, taglie
+     sbagliate — è la voce che mangia il margine, ed era l'unica che nessuno
+     misurava: il preventivatore diceva quanto *dovrebbe* costare e nessuno
+     tornava mai a dire quanto è costato.
+
+     Il registro è quello condiviso (`InglyConsuntivo`), non uno nuovo: le
+     commesse tessili e quelle 3D si leggono insieme, che è il punto — un
+     laboratorio vuole sapere su quale delle due sfora.
+
+     Il confronto lo fa `InglyScostamento`, che è già il proprietario di quella
+     matematica. Qui si raccoglie e si mostra. */
+  var MODULO = 'apparel';
+
+  function registroConsuntivi() {
+    return (typeof window !== 'undefined') && window.InglyConsuntivo;
+  }
+
+  /** Il preventivato di un preventivo, nella forma che InglyScostamento vuole. */
+  function previstoDi(q, s) {
+    var r = calcQuote(q, s);
+    var pezzi = (q.lines || []).reduce(function (a, l) {
+      return a + Math.max(1, parseInt(l.qty, 10) || 1);
+    }, 0);
+    return {
+      costo: pezzi > 0 ? r.totalCost / pezzi : 0,
+      prezzo: pezzi > 0 ? r.afterDisc / pezzi : 0,
+      quantita: Math.max(1, pezzi),
+      costoTotale: r.totalCost,
+      ricavoTotale: r.afterDisc,
+    };
+  }
+
+  /** Preventivato contro reale per un preventivo. Senza consuntivo registrato
+      dichiara che manca, invece di dare per buono uno scostamento nullo. */
+  function scostamentoDi(q, s) {
+    var S = (typeof window !== 'undefined') && window.InglyScostamento;
+    var R = registroConsuntivi();
+    if (!S) return { disponibile: false, motivo: 'modulo di confronto non caricato' };
+
+    var prev = previstoDi(q, s);
+    var reale = R ? R.leggi(MODULO, q.id) : {};
+    var voci = ['capi', 'stampa', 'manodopera', 'extra'];
+    var haCosto = voci.some(function (v) { return reale[v] != null && reale[v] !== ''; });
+
+    if (!haCosto) return S.confronta(prev, {});
+
+    /* Il costo reale è la somma delle voci compilate: chi ne compila due su
+       quattro ottiene il confronto sulle due, non un buco. */
+    var costoTot = voci.reduce(function (a, v) {
+      var n = parseFloat(reale[v]);
+      return a + (isFinite(n) ? n : 0);
+    }, 0);
+
+    var ricavoReale = (reale.incassato != null && reale.incassato !== '')
+      ? parseFloat(reale.incassato) : null;
+
+    return S.confronta(prev, {
+      costo: costoTot / prev.quantita,
+      prezzo: ricavoReale != null ? ricavoReale / prev.quantita : undefined,
+      quantita: prev.quantita,
+    });
+  }
+
+  function setConsuntivo(id, campo, valore) {
+    var R = registroConsuntivi();
+    if (!R) return;
+    var d = {};
+    d[campo] = (valore === '' || valore == null) ? null : (parseFloat(valore) || 0);
+    R.salva(MODULO, id, d);
+    render();
+  }
+
   // ── Render router ────────────────────────────────────────────────────────
   function render() {
     var el=document.getElementById('view-apparel');
@@ -499,20 +632,55 @@ var ApparelQuoter = (function () {
     var H='<div style="width:290px;flex-shrink:0;border-left:1px solid var(--border);padding:14px;overflow-y:auto;background:var(--bg-card2);display:flex;flex-direction:column;gap:12px">';
 
     // QTY QUICK CALC
+    /* Il riquadro mostrava il solo totale. Costo/pz, prezzo/pz e margine erano
+       già calcolati e scartati; ora si vedono, e si vede quale scaglione
+       conviene — che è la domanda di chi sta trattando al telefono. */
+    var SC = scaglioni(q, s);
+    var qtyCorrente = ((q.lines||[])[0]||{}).qty;
     H+='<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:11px;padding:12px">';
-    H+='<div style="font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:9px;letter-spacing:.5px">⚡ Calcolo rapido quantità</div>';
-    H+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">';
-    QTY_BREAKS.forEach(function(qty){
-      var tq=Object.assign({},q,{lines:(q.lines||[]).map(function(l){return Object.assign({},l,{qty:qty});})});
-      var r=calcQuote(tq,s);
-      var disc=s.qtyDiscounts[qty]||0;
-      H+='<button onclick="ApparelQuoter.setQty('+qty+')" style="padding:5px 3px;background:var(--bg-card2);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:10px;font-weight:700;text-align:center;transition:.1s" onmouseover="this.style.borderColor=\'#ec4899\'" onmouseout="this.style.borderColor=\'var(--border)\'">';
-      H+='<div style="color:var(--text)">×'+qty+'</div>';
-      H+='<div style="color:var(--text-muted);font-size:9px;font-weight:500">€'+r.grand.toFixed(0)+'</div>';
-      if(disc) H+='<div style="color:#22c55e;font-size:8px">-'+disc+'%</div>';
-      H+='</button>';
-    });
-    H+='</div></div>';
+    H+='<div style="font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase;margin-bottom:9px;letter-spacing:.5px">⚡ Quanti ne fa</div>';
+    if(!SC.voci.length){
+      H+='<div style="font-size:11px;color:var(--text-dim)">Aggiungi una riga per vedere i prezzi a quantità.</div>';
+    } else {
+      H+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">';
+      H+='<thead><tr style="border-bottom:1px solid var(--border)">'
+        +['Qtà','Costo/pz','Prezzo/pz','Totale','Marg.'].map(function(h,i){
+          return '<th style="padding:4px 3px;font-size:8px;text-transform:uppercase;color:var(--text-dim);font-weight:700;text-align:'+(i?'right':'left')+'">'+h+'</th>';
+        }).join('')+'</tr></thead><tbody>';
+      SC.voci.forEach(function(v){
+        var note=[];
+        if(SC.migliori.unitario===v.qty) note.push(['costo/pz più basso','#22c55e']);
+        if(SC.migliori.profitto===v.qty) note.push(['profitto più alto','#fbbf24']);
+        if(SC.migliori.cliente===v.qty)  note.push(['migliore per il cliente','#38bdf8']);
+        var attiva = qtyCorrente===v.qty;
+        var mc = v.marginePct>=30?'#22c55e':v.marginePct>=15?'#f59e0b':'#ef4444';
+        H+='<tr onclick="ApparelQuoter.setQty('+v.qty+')" title="Applica questa quantità a tutte le righe"'
+          +' style="border-bottom:1px solid var(--border);cursor:pointer;'+(attiva?'background:#ec489915;':'')+'"'
+          +' onmouseover="this.style.background=\'var(--bg-card2)\'"'
+          +' onmouseout="this.style.background=\''+(attiva?'#ec489915':'')+'\'">';
+        H+='<td style="padding:5px 3px;font-weight:800;color:var(--text)">×'+v.qty
+          +note.map(function(n){return '<div style="font-size:7px;font-weight:700;color:'+n[1]+'">'+n[0]+'</div>';}).join('')
+          +(v.scontoPct?'<div style="font-size:7px;color:#22c55e">-'+v.scontoPct+'%</div>':'')
+          +'</td>';
+        H+='<td style="padding:5px 3px;text-align:right;color:var(--text-muted)">€'+v.costoPezzo.toFixed(2)+'</td>';
+        H+='<td style="padding:5px 3px;text-align:right;font-weight:700;color:var(--text)">€'+v.prezzoPezzo.toFixed(2)+'</td>';
+        H+='<td style="padding:5px 3px;text-align:right;color:var(--text-muted)">€'+v.totale.toFixed(0)+'</td>';
+        H+='<td style="padding:5px 3px;text-align:right;font-weight:700;color:'+mc+'">'+v.marginePct.toFixed(0)+'%'
+          +(v.pavimentoScattato?'<div style="font-size:7px;color:#f59e0b">pavimento</div>':'')
+          +'</td>';
+        H+='</tr>';
+      });
+      H+='</tbody></table></div>';
+      /* Quando i tre scaglioni migliori coincidono non c'è niente da decidere,
+         e dirlo vale più di tre etichette identiche. */
+      var m=SC.migliori;
+      if(m.unitario!=null && m.unitario===m.profitto && m.profitto===m.cliente){
+        H+='<div style="margin-top:7px;font-size:9px;color:#22c55e">×'+m.unitario+' conviene su tutti i fronti: costo, profitto e prezzo al cliente.</div>';
+      } else if(m.profitto!=null && m.cliente!=null && m.profitto!==m.cliente){
+        H+='<div style="margin-top:7px;font-size:9px;color:var(--text-dim)">Il cliente preferisce ×'+m.cliente+', a te rende di più ×'+m.profitto+'. È qui che si tratta.</div>';
+      }
+    }
+    H+='</div>';
 
     // TOTALS
     H+='<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:11px;overflow:hidden">';
@@ -542,6 +710,59 @@ var ApparelQuoter = (function () {
     H+='<div style="background:var(--bg-card2);border-radius:99px;height:6px;overflow:hidden">';
     H+='<div style="width:'+w+'%;height:100%;background:'+pc+';border-radius:99px;transition:.4s"></div></div></div>';
     H+='</div>';
+
+    // CONSUNTIVO
+    /* Il preventivo dice quanto dovrebbe costare. Finché nessuno torna a dire
+       quanto è costato, il laboratorio resta convinto di guadagnare quello che
+       aveva previsto — che sul tessile, dove lo scarto è la voce grossa, è
+       raramente vero. */
+    var sc = scostamentoDi(q, s);
+    var prevQ = previstoDi(q, s);
+    var realeQ = registroConsuntivi() ? registroConsuntivi().leggi(MODULO, q.id) : {};
+    H+='<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:11px;overflow:hidden">';
+    H+='<div style="padding:9px 13px;border-bottom:1px solid var(--border);font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase">📋 Consuntivo — com\'è andata</div>';
+    H+='<div style="padding:9px 13px">';
+    if(!registroConsuntivi()){
+      H+='<div style="font-size:10px;color:var(--text-dim)">Registro dei consuntivi non caricato.</div>';
+    } else {
+      [
+        {id:'capi',       lab:'Capi',       prev:prevQ.costoTotale},
+        {id:'stampa',     lab:'Lavorazione',prev:null},
+        {id:'manodopera', lab:'Manodopera', prev:null},
+        {id:'extra',      lab:'Extra e scarti', prev:null},
+        {id:'incassato',  lab:'Incassato',  prev:prevQ.ricavoTotale},
+      ].forEach(function(v){
+        var val = realeQ[v.id];
+        H+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'
+          +'<span style="flex:1;font-size:10px;color:var(--text-muted)">'+v.lab+'</span>'
+          +(v.prev!=null?'<span style="font-size:9px;color:var(--text-dim);width:66px;text-align:right">prev. €'+v.prev.toFixed(2)+'</span>':'<span style="width:66px"></span>')
+          +'<input type="number" step="0.01" min="0" placeholder="reale" value="'+(val==null?'':val)+'"'
+          +' oninput="ApparelQuoter.setConsuntivo('+JSON.stringify(q.id)+',\''+v.id+'\',this.value)"'
+          +' style="width:76px;padding:4px 6px;background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;text-align:right;outline:none">'
+          +'</div>';
+      });
+      if(!sc.disponibile){
+        H+='<div style="margin-top:7px;font-size:9px;color:var(--text-dim)">'+(sc.cosaFare||sc.motivo||'')+'</div>';
+      } else {
+        var col = sc.verdetto.colore==='rosso'?'#ef4444':sc.verdetto.colore==='arancione'?'#f59e0b':'#22c55e';
+        var seg = sc.scostamento.costo>=0?'+':'';
+        H+='<div style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">';
+        H+='<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">'
+          +'<span style="color:var(--text-muted)">Costo reale</span>'
+          +'<span style="font-weight:700;color:'+col+'">€'+sc.reale.costo.toFixed(2)+' ('+seg+'€'+sc.scostamento.costo.toFixed(2)+')</span></div>';
+        H+='<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">'
+          +'<span style="color:var(--text-muted)">Profitto reale</span>'
+          +'<span style="font-weight:700;color:'+col+'">€'+sc.reale.profitto.toFixed(2)+'</span></div>';
+        if(sc.reale.margine!=null){
+          H+='<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:5px">'
+            +'<span style="color:var(--text-muted)">Margine reale</span>'
+            +'<span style="font-weight:700;color:'+col+'">'+sc.reale.margine.toFixed(1)+'%</span></div>';
+        }
+        H+='<div style="font-size:9px;font-weight:700;color:'+col+'">'+sc.verdetto.label+'</div>';
+        H+='</div>';
+      }
+    }
+    H+='</div></div>';
 
     // IVA + Discount
     H+='<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:11px;padding:12px">';
@@ -1183,6 +1404,7 @@ var ApparelQuoter = (function () {
     dupQ,delQ,sf,addLine,sl,rl,setQty,addFromCatalog,_useP,_setProdFilter,
     openProdModal,_saveP,_delP,openStockModal,_saveSt,openCatalogPicker,
     _stc,_sqd,_applyS,genPDF,exportCSV,
+    setConsuntivo,scostamentoDi,previstoDi,scaglioni,
   };
 })();
 

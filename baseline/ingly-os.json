@@ -997,15 +997,15 @@
   ],
   "counts": {
     "files": 190,
-    "bytes": 9580932,
-    "inlineStyleAttrs": 16572,
-    "inlineOnclick": 2564,
-    "hardcodedHex": 8240,
+    "bytes": 9602074,
+    "inlineStyleAttrs": 16610,
+    "inlineOnclick": 2565,
+    "hardcodedHex": 8250,
     "important": 181,
-    "emoji": 9234,
+    "emoji": 9239,
     "alertCalls": 55,
     "confirmCalls": 125,
     "promptCalls": 69,
-    "ariaAttrs": 31
+    "ariaAttrs": 32
   }
 }
