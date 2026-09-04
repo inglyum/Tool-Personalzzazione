@@ -553,11 +553,25 @@ window.OrderImporter = {
         });
       }
       if(!imported.length){if(typeof toast!=='undefined') toast('Nessun ordine trovato nel file','error');return;}
-      var existing=JSON.parse(localStorage.getItem('ingly_orders_pro_v1')||'[]');
-      var all=imported.concat(existing);
-      localStorage.setItem('ingly_orders_pro_v1',JSON.stringify(all));
-      if(typeof toast!=='undefined') toast('📥 Importati '+imported.length+' ordini da '+file.name,'success');
-      if(typeof OrderTracker!=='undefined') OrderTracker.render();
+      /* Gli ordini importati finivano in `ingly_orders_pro_v1`, che Ordini non
+         legge: un import riuscito lasciava la sezione Ordini vuota. Ora si
+         scrive nello store canonico, uno per volta, e si conta quanti sono
+         entrati davvero invece di annunciare il totale del file. */
+      if(!(window.InglyMigrazioneOrderTracker && window.IDB)){
+        if(typeof toast!=='undefined') toast('Import non disponibile: archivio ordini non pronto','error');
+        return;
+      }
+      var scritti=0, falliti=0;
+      for(var i=0;i<imported.length;i++){
+        try{
+          var esito=await window.InglyMigrazioneOrderTracker.aggiungi(window.IDB, imported[i]);
+          if(esito&&esito.creato) scritti++;
+        }catch(e){ falliti++; if(window.Ingly&&window.Ingly.Errors) window.Ingly.Errors.log('import ordini', e); }
+      }
+      if(typeof toast!=='undefined'){
+        toast('📥 Importati '+scritti+' ordini da '+file.name+(falliti?' · '+falliti+' non salvati':''), falliti?'warning':'success');
+      }
+      try{ if(window.App&&App.navigate) App.navigate('gestione_ordini'); }catch(e){}
     }catch(e){if(typeof toast!=='undefined') toast('Errore importazione: '+e.message,'error');}
   }
 };
@@ -567,16 +581,11 @@ window.OrderImporter = {
   function _p(){
     if(!document.getElementById('html-root')){setTimeout(_p,600);return;}
     if(document.getElementById('v28-extra-btns')) return;
-    // Add "Order Tracker" nav if not exists
-    var lb2bNav=document.querySelector('[data-section="laser_b2b"]');
-    if(lb2bNav&&!document.querySelector('[data-section="order_tracker"]')){
-      var otNav=document.createElement('div');
-      otNav.className='nav-item'; otNav.setAttribute('data-section','order_tracker');
-      otNav.setAttribute('onclick',"App.navigate('order_tracker')");
-      otNav.style.cssText='color:#f59e0b;font-weight:700';
-      otNav.innerHTML='<i class="nav-icon fas fa-clipboard-list"></i> 📋 Ordini';
-      lb2bNav.insertAdjacentElement('beforebegin',otNav);
-    }
+    /* Qui si iniettava, due secondi dopo il caricamento, una seconda voce
+       «📋 Ordini» verso `order_tracker`: stessa etichetta della sezione
+       Ordini vera, e un archivio diverso da leggere. La gerarchia del menu
+       la definisce src/app-shell/nav-map.js, dove `order_tracker` è un alias
+       verso Ordini. La rotta resta valida, la voce doppia no. */
   }
   setTimeout(_p,2000);
 })();

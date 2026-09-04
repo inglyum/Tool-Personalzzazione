@@ -16,17 +16,28 @@ export function migrazioniJs(originalBlock) {
 (function () {
   if (typeof window === 'undefined') return;
   var avviata = false;
+  function esegui(nome, migrazione) {
+    if (!migrazione || typeof migrazione.esegui !== 'function') return Promise.resolve();
+    return migrazione.esegui(window.IDB).then(function (r) {
+      if (r && r.ok && r.scritti) {
+        console.info('[INGLY] Migrazione ' + nome + ': ' + r.scritti + ' record recuperati');
+      } else if (r && !r.ok) {
+        console.error('[INGLY] Migrazione ' + nome + ' non riuscita: ' + (r.motivo || (r.verifica && r.verifica.problemi.join(' · '))));
+      }
+    }).catch(function (e) {
+      if (window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('migrazione ' + nome, e);
+    });
+  }
   function parti() {
     if (avviata) return;
     avviata = true;
     try {
-      window.InglyMigrazionePipeline.esegui(window.IDB).then(function (r) {
-        if (r && r.ok && r.scritti) {
-          console.info('[INGLY] Migrazione pipeline → ordini: ' + r.scritti + ' record recuperati');
-        } else if (r && !r.ok) {
-          console.error('[INGLY] Migrazione pipeline non riuscita: ' + (r.motivo || (r.verifica && r.verifica.problemi.join(' · '))));
-        }
-      });
+      /* Le due migrazioni sono in sequenza, non in parallelo: entrambe
+         scrivono nello store orders e calcolano il primo id libero
+         leggendolo. In parallelo leggerebbero lo stesso massimo e
+         sceglierebbero lo stesso id, sovrascrivendosi a vicenda. */
+      esegui('pipeline → ordini', window.InglyMigrazionePipeline)
+        .then(function () { return esegui('Avanzamento ordini → ordini', window.InglyMigrazioneOrderTracker); });
     } catch (e) {
       if (window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('avvio migrazione', e);
     }
@@ -36,5 +47,6 @@ export function migrazioniJs(originalBlock) {
 })();
 `;
   return originalBlock + '\n' +
-    fs.readFileSync(path.join(HERE, 'pipeline-to-orders.js'), 'utf8') + '\n' + avvio;
+    fs.readFileSync(path.join(HERE, 'pipeline-to-orders.js'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(HERE, 'orders-pro-to-orders.js'), 'utf8') + '\n' + avvio;
 }

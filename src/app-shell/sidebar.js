@@ -156,11 +156,19 @@
       if (el) fuori.push(el);
     });
     /* Voci di menu che la tassonomia non conosce: le hanno aggiunte le patch,
-       e portano a sezioni che esistono davvero. */
+       e portano a sezioni che esistono davvero.
+
+       Un alias dichiarato però non è una voce sconosciuta: è una rotta
+       ritirata, che oggi vive dentro un'altra sezione. Conservarla ricrea
+       esattamente il doppione che il consolidamento ha tolto — è così che
+       «⚡ Workflow Overview» e un secondo «📋 Ordini» tornavano in sidebar
+       dopo essere stati rimossi dalla tassonomia. Le rotte restano valide:
+       chi ci arriva viene portato alla sezione giusta. La voce di menu no. */
     var noti = {};
     Nav.NAV_GROUPS.forEach(function (g) {
       g.items.forEach(function (it) { noti[it.id] = true; });
     });
+    var ritirate = Nav.NAV_ALIASES || {};
     var estranee = container.querySelectorAll('.nav-item[data-section]');
     for (var i = 0; i < estranee.length; i += 1) {
       var sec = estranee[i].getAttribute('data-section');
@@ -168,6 +176,7 @@
          come le altre, ma appartengono al loro gruppo: raccoglierle una per una
          le staccherebbe da lì e le riappenderebbe sciolte — cioè le
          duplicherebbe, perché il gruppo viene già conservato intero. */
+      if (ritirate[sec]) { estranee[i].remove(); continue; }
       if (!noti[sec] && fuori.indexOf(estranee[i]) === -1 &&
           !estranee[i].closest('#nav-favorites-bar') &&
           !estranee[i].closest('#nav-favs-group') &&

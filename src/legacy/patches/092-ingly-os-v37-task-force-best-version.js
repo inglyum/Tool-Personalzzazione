@@ -116,50 +116,16 @@ window.PrimaNota = {
   }
 };
 
-// ─── INJECT FATTURA BUTTON IN ORDER TRACKER ─────────────────────
-(function _patchOrdersForFattura(){
-  function _p(){
-    if(typeof OrderTracker==='undefined'){setTimeout(_p,700);return;}
-    if(OrderTracker._v37fattura) return; OrderTracker._v37fattura=true;
-    var _orig=OrderTracker.render.bind(OrderTracker);
-    OrderTracker.render=function(){
-      _orig();
-      setTimeout(function(){
-        var orders=[]; try{orders=JSON.parse(localStorage.getItem('ingly_orders_pro_v1')||'[]');}catch(e){}
-        orders.forEach(function(o,i){
-          if(!o||o.status==='draft') return; // Only show for non-draft
-          var sel="[data-order-id='"+o.id+"']";
-          var row=document.querySelector(sel);
-          if(!row) row=document.querySelector('#view-order_tracker tbody tr:nth-child('+(i+1)+')');
-          if(!row||row.querySelector('.fattura-btn')) return;
-          var cell=row.querySelector('td:last-child div,td:last-child');
-          if(!cell) return;
-          var btn=document.createElement('button');
-          btn.className='fattura-btn btn-v37 btn-ghost';
-          btn.style.cssText='padding:4px 8px;font-size:10px;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:6px;cursor:pointer;white-space:nowrap';
-          btn.innerHTML='📄 Fattura';
-          btn.title='Genera FatturaPA XML SDI';
-          btn.onclick=(function(ord){ return function(e){
-            e.stopPropagation();
-            if(confirm('Generare FatturaPA per ordine di '+ord.client+' (€'+( ord.total||0).toFixed(2)+')?')){
-              FatturaDaOrdine.genera(ord);
-              if(ord.status!=='paid'){
-                // Auto-mark as paid
-                ord.status='paid'; ord.paidAt=new Date().toISOString();
-                var os=[]; try{os=JSON.parse(localStorage.getItem('ingly_orders_pro_v1')||'[]');}catch(e){}
-                var idx=os.findIndex(function(x){return x.id===ord.id;});
-                if(idx>=0){os[idx]=ord;try{localStorage.setItem('ingly_orders_pro_v1',JSON.stringify(os));}catch(e){}}
-              }
-            }
-          };})(o);
-          if(cell.appendChild) cell.appendChild(btn);
-        });
-      },300);
-    };
-    console.log('[v37] FatturaPA from Order injected');
-  }
-  setTimeout(_p,1500);
-})();
+/* Il bottone «📄 Fattura» viveva qui, iniettato nelle righe di «Avanzamento
+   ordini» trecento millisecondi dopo ogni render. Leggeva gli ordini da
+   `ingly_orders_pro_v1` e, alla generazione, ci scriveva sopra `status:'paid'`:
+   segnava pagata una copia che nessun'altra vista leggeva — l'ordine vero, in
+   `orders`, restava non pagato.
+
+   La funzione non è andata persa: `GestioneOrdini._fatturaPA()` la chiama
+   dalla lista di Ordini, sul record canonico, e il passaggio a «venduto» lo fa
+   la funzione SSOT. `window.FatturaDaOrdine`, il generatore vero e proprio,
+   resta qui sopra dov'era: non è stato riscritto. */
 
 // Auto-register prima nota when order moves to "paid"
 (function _autoFirstNote(){
@@ -169,18 +135,47 @@ window.PrimaNota = {
     // Watch for status changes
     var _origUpdate=window.updateOrderStatus;
     if(typeof _origUpdate==='function'){
-      window.updateOrderStatus=function(id,status){
-        _origUpdate(id,status);
-        if(status==='paid'){
-          var orders=[]; try{orders=JSON.parse(localStorage.getItem('ingly_orders_pro_v1')||'[]');}catch(e){}
-          var o=orders.find(function(x){return String(x.id)===String(id);});
-          if(o&&!o._notaRegistered){
-            PrimaNota.register(o.client,parseFloat(o.total||0),'Ordine #'+id+' — '+(o.description||o.product||''),'entrata');
-            o._notaRegistered=true;
-            try{localStorage.setItem('ingly_orders_pro_v1',JSON.stringify(orders));}catch(e){}
-            if(typeof toast!=='undefined') toast('📒 Prima nota aggiornata: +€'+parseFloat(o.total||0).toFixed(2)+' ('+o.client+')','success');
+      /* Questo involucro perdeva tre cose, tutte in silenzio:
+         · il terzo argomento `opts` — `opts.note` non finiva mai nello storico
+           e `opts.skipSale` non arrivava, così la vendita automatica scattava
+           anche quando il chiamante aveva chiesto di non crearla;
+         · il valore di ritorno — `GestioneOrdini.transition()` riceveva
+           `undefined`, e QuickStats e SidebarBadges non si aggiornavano mai
+           dopo un cambio di stato;
+         · l'attesa — l'originale è `async`, e la prima nota veniva registrata
+           prima che l'ordine fosse salvato.
+         Ora l'involucro inoltra tutto, attende, e restituisce. */
+      window.updateOrderStatus=async function(id,status,opts){
+        var esito=await _origUpdate(id,status,opts);
+        if(status==='paid'||status==='venduto'||status==='sold'){
+          /* L'ordine si legge dallo store canonico, non da
+             `ingly_orders_pro_v1`: il pagamento riguarda l'ordine vero. */
+          var o=esito;
+          if(!o&&window.IDB){ try{ o=await IDB.get('orders',id); }catch(e){} }
+          /* `PrimaNota` come identificativo nudo si lega alla `const` della
+             patch 059, che non ha `register`: il registro di cassa vero è
+             quello su `window`, definito qui sotto. La chiamata nuda lanciava
+             un TypeError — restava invisibile solo perché non era attesa da
+             nessuno. Si passa da window, e si controlla il metodo.
+
+             Il fallimento della prima nota non deve far fallire il cambio di
+             stato: l'ordine è già salvato, e perderlo per un errore nella
+             contabilità sarebbe il danno maggiore. */
+          var registro=window.PrimaNota;
+          if(o&&!o._notaRegistered&&registro&&typeof registro.register==='function'){
+            try{
+              var importo=parseFloat(o.total||o.value||0)||0;
+              var cliente=o.clientName||o.client||'';
+              registro.register(cliente,importo,'Ordine #'+id+' — '+(o.name||o.description||o.product||''),'entrata');
+              o._notaRegistered=true;
+              if(window.IDB) await IDB.put('orders',o);
+              if(typeof toast!=='undefined') toast('📒 Prima nota aggiornata: +€'+importo.toFixed(2)+(cliente?' ('+cliente+')':''),'success');
+            }catch(e){
+              if(window.Ingly&&window.Ingly.Errors) window.Ingly.Errors.log('prima nota da ordine', e);
+            }
           }
         }
+        return esito;
       };
     }
   }

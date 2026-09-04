@@ -262,8 +262,20 @@ window.PreventivToOrder = {
       quoteId:q.id, // Link back to quote
       notes:'Creato da preventivo #'+String(q.id).slice(-4)
     };
-    var orders=[]; try{orders=JSON.parse(localStorage.getItem('ingly_orders_pro_v1')||'[]');}catch(e){}
-    orders.unshift(newOrder); try{localStorage.setItem('ingly_orders_pro_v1',JSON.stringify(orders));}catch(e){}
+    /* L'ordine nasceva in `ingly_orders_pro_v1`: esisteva, aveva un numero,
+       e Ordini non lo vedeva. Ora nasce nello store canonico. La traduzione
+       degli stati non è ricopiata qui — la possiede la migrazione, che è
+       l'unico posto in cui quella tabella vive. */
+    if(window.InglyMigrazioneOrderTracker && window.IDB){
+      window.InglyMigrazioneOrderTracker.aggiungi(window.IDB, newOrder)
+        .then(function(r){
+          if(!r.creato && typeof toast!=='undefined') toast('Questo preventivo aveva già un ordine: #'+r.ordine.id,'info');
+        })
+        .catch(function(e){
+          if(window.Ingly&&window.Ingly.Errors) window.Ingly.Errors.log('preventivo → ordine', e);
+          if(typeof toast!=='undefined') toast('Ordine non salvato: '+((e&&e.message)||e),'error');
+        });
+    }
     // Mark quote as confirmed
     q.status='confirmed'; q.orderId=newOrder.id;
     try{localStorage.setItem('lb2b_quotes_v1',JSON.stringify(quotes));}catch(e){}

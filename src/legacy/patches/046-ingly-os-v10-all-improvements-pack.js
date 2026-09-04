@@ -28,21 +28,31 @@
     }
     return _origGetAll(store);
   };
-  // Intercept IDB.put('pipeline') → redirect to orders
+  /* Intercetta IDB.put('pipeline') → orders.
+
+     La versione precedente aveva una via d'uscita che perdeva i dati senza
+     dirlo: se l'ordine non esisteva, scriveva nello store `pipeline` legacy.
+     Ma `getAll('pipeline')` proietta da `orders` e quello store legacy non lo
+     legge nessuno — la scrittura riusciva e il record non era più
+     raggiungibile. Ora ogni scrittura sulla pipeline finisce in `orders`: se
+     l'ordine c'è si fonde, se non c'è si crea. Una vista non ha un archivio
+     proprio in cui far sparire le cose.
+
+     I campi della proiezione (`_source`, `_sourceId`) non entrano nel record
+     canonico: appartengono alla vista, non all'ordine. */
   const _origPut = IDB.put.bind(IDB);
   IDB.put = async function(store, data, key) {
-    if(store === 'pipeline' && data && (data._sourceId || data.id)) {
-      // Write to orders instead, preserving the original id
-      const orderId = data._sourceId || data.id;
+    if(store === 'pipeline' && data && (data._sourceId != null || data.id != null)) {
+      const orderId = data._sourceId != null ? data._sourceId : data.id;
+      const campi = { ...data };
+      delete campi._source; delete campi._sourceId;
       try {
         const existing = await IDB.get('orders', orderId).catch(()=>null);
-        if(existing) {
-          const merged = { ...existing, ...data, id: orderId, _source: undefined };
-          return _origPut('orders', merged);
-        }
-      } catch(e) {}
-      // Fallback: write to pipeline legacy
-      return _origPut(store, data, key);
+        return _origPut('orders', { ...(existing||{}), ...campi, id: orderId });
+      } catch(e) {
+        if(window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('pipeline→orders', e);
+        return _origPut('orders', { ...campi, id: orderId });
+      }
     }
     return _origPut(store, data, key);
   };

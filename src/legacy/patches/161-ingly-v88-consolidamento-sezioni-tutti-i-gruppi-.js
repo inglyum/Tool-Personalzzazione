@@ -11,10 +11,12 @@
   if(window.__sectionConsolidation) return; window.__sectionConsolidation=true;
 
   var GROUPS=[
-    { hub:'gestione_ordini', views:[
-      {sec:'kanban',label:'🗂️ Kanban'},{sec:'workflow_dashboard',label:'⚡ Panoramica'},
-      {sec:'order_tracker',label:'📋 Tracker'},{sec:'payment_schedule',label:'📅 Scadenzario'} ],
-      remove:['workflow_dashboard','order_tracker','kanban'] },
+    /* Ordini esce da qui. I suoi quattro bottoni erano uscite dalla sezione —
+       chiamavano App.navigate() e portavano altrove — mentre le viste di
+       Ordini (Lista, Kanban, Produzione, Calendario, Timeline, Analytics)
+       sono selettori dello stesso dataset, disegnati dalla sezione stessa.
+       Due barre di viste nella stessa pagina, di cui una che porta via, sono
+       una duplicazione visiva: resta quella vera. */
     { hub:'suppliers', views:[ {sec:'supplierintel',label:'🚚 Supplier Intelligence'} ],
       remove:['supplier_intel','supplierintel'] },
     { hub:'clv', views:[ {sec:'clientintel',label:'🧠 Client Intelligence'},{sec:'ai-clv',label:'👥 CLV & Segmentazione'} ],

@@ -50,9 +50,12 @@ export const NAV_GROUPS = [
       { id: 'laserresources', label: 'Laser · Risorse', icon: 'book', feature: 'laser', tech: 'laser' },
       { id: 'print3d', label: '3D Print', icon: 'box', primary: true, feature: 'print3d', tech: 'print3d' },
       { id: 'apparel', label: 'Tessile · DTF · Sublimazione', icon: 'shirt', primary: true, feature: 'dtf', tech: 'dtf' },
-      { id: 'workflow_dashboard', label: 'Pianificazione lavori', icon: 'git-branch', primary: true, feature: 'core' },
-      { id: 'kanban', label: 'Kanban', icon: 'columns', feature: 'core' },
-      { id: 'order_tracker', label: 'Avanzamento ordini', icon: 'truck', feature: 'core' },
+      /* «Pianificazione lavori», «Kanban» e «Avanzamento ordini» mostravano
+         gli stessi ordini di Ordini, con un altro nome e — nel caso di
+         Avanzamento ordini — leggendoli da un archivio diverso. Sono viste,
+         non sezioni: vivono in Ordini (📦 Ordini → Kanban / Analytics /
+         Lista). Le rotte restano valide e ci portano, così i collegamenti
+         esistenti non si rompono. */
       { id: 'projects', label: 'Progetti', icon: 'folder', feature: 'core' },
       { id: 'timetracker', label: 'Tempi di produzione', icon: 'clock', feature: 'core' },
     ],
@@ -203,6 +206,13 @@ export const NAV_ALIASES = {
   /* Lo store pipeline era un mirror di orders: la destinazione è Gestione
      Ordini, non il CRM. Allineato al _redirectMap del router. */
   crm_pipeline: 'gestione_ordini',
+  /* Tre sezioni che mostravano gli stessi ordini di Ordini con un altro nome:
+     `order_tracker` per giunta leggendoli da un archivio diverso. Sono
+     diventate viste (Kanban, Analytics, Lista) e restano alias, così i
+     collegamenti e le scorciatoie esistenti continuano ad aprire qualcosa. */
+  workflow_dashboard: 'gestione_ordini',
+  kanban: 'gestione_ordini',
+  order_tracker: 'gestione_ordini',
   magazzino: 'items',
   market_intel: 'marketintel',
 };

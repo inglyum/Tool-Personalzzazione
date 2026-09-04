@@ -45,25 +45,23 @@ const PipelineOS = {
   // ── Main render ──────────────────────────────────────────────────────────
   async render() {
     try {
-      // v3.3: read from unified pipeline store (with safe fallback to orders/sales)
-      const [pipelineRaw, ordersRaw, salesRaw, quotesRaw] = await Promise.all([
-        AppStore.get('pipeline').catch(()=>[]),
+      /* Qui lo store `pipeline` vinceva su `orders`: bastava un record in
+         pipeline perché questa vista ignorasse l'archivio canonico. Non era
+         un fallback — era una seconda sorgente di verità che prevaleva, e
+         mostrava una copia mentre il resto dell'applicazione mostrava
+         l'originale. La pipeline ora è derivata: si legge da `orders`. */
+      const [ordersRaw, salesRaw, quotesRaw] = await Promise.all([
         AppStore.get('orders').catch(()=>[]),
         AppStore.get('sales').catch(()=>[]),
         AppStore.get('quotes').catch(()=>[]),
       ]);
 
-      // Use pipeline store if populated, else fall back to orders (zero-risk)
-      const usePipeline = pipelineRaw && pipelineRaw.length > 0;
-      const orders = usePipeline ? pipelineRaw : ordersRaw;
-      const sales  = usePipeline
-        ? pipelineRaw.filter(r => r._source === 'sales' || r.stage === 'paid')
-        : salesRaw;
+      const orders = ordersRaw || [];
+      const sales  = salesRaw || [];
 
       this._orders   = orders;
       this._sales    = sales;
-      this._quotes   = usePipeline ? pipelineRaw.filter(r => r._source === 'quotes') : quotesRaw;
-      this._usePipeline = usePipeline;
+      this._quotes   = quotesRaw || [];
 
       this._renderKPIs(orders, sales);
       this._renderCoda(orders);

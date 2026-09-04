@@ -209,9 +209,20 @@ const App={
     /* `crm_pipeline` aggiunto: senza di lui la sezione apriva una vista vuota.
        Lo store pipeline era un mirror di orders, quindi la destinazione giusta
        è la stessa degli altri alias — Gestione Ordini, unica sorgente. */
-    const _redirectMap = { pipeline:'gestione_ordini', crm_pipeline:'gestione_ordini', orders:'gestione_ordini', workflow:'gestione_ordini', produzione:'gestione_ordini' };
+    /* Le sezioni che mostravano gli stessi ordini con un altro nome diventano
+       viste di Ordini. Il redirect non perde l'intenzione di chi ha cliccato:
+       porta anche alla vista giusta — Kanban resta Kanban, «Pianificazione
+       lavori» apre Analytics, «Avanzamento ordini» apre la Lista. */
+    const _redirectMap = { pipeline:'gestione_ordini', crm_pipeline:'gestione_ordini', orders:'gestione_ordini', workflow:'gestione_ordini', produzione:'gestione_ordini', workflow_dashboard:'gestione_ordini', kanban:'gestione_ordini', order_tracker:'gestione_ordini' };
+    const _vistaPerSezione = { kanban:'kanban', workflow_dashboard:'analytics', order_tracker:'lista', produzione:'produzione' };
     if(_redirectMap[section]) {
       const _target = _redirectMap[section];
+      if(_vistaPerSezione[section] && typeof GestioneOrdini!=='undefined' && typeof GestioneOrdini._setView==='function') {
+        /* Si imposta la vista senza ridisegnare: il render arriva subito dopo
+           da renderSection, e disegnarla due volte è solo lavoro sprecato. */
+        GestioneOrdini._view = _vistaPerSezione[section];
+        try { localStorage.setItem('ingly_go_view_v1', GestioneOrdini._view); } catch(e) {}
+      }
       if(this.currentSection !== _target) {
         this.currentSection = _target; this.curr = _target; this._prevSection = _target;
         document.querySelectorAll('.section-view.active').forEach(v=>v.classList.remove('active'));

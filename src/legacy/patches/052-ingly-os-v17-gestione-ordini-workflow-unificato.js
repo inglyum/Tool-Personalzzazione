@@ -155,7 +155,7 @@ const GestioneOrdini = {
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--bg-card2);padding:8px 10px;border-radius:10px;border:1px solid var(--border);margin-bottom:10px">
         <!-- View toggle -->
         <div style="display:flex;gap:2px;background:var(--bg-card);padding:2px;border-radius:7px;border:1px solid var(--border)">
-          ${[['kanban','fa-columns','Kanban'],['produzione','fa-cogs','Produzione'],['lista','fa-list','Lista'],['calendario','fa-calendar','Calendario']].map(([v,ic,lb])=>`
+          ${[['lista','fa-list','Lista'],['kanban','fa-columns','Kanban'],['produzione','fa-cogs','Produzione'],['calendario','fa-calendar','Calendario'],['timeline','fa-stream','Timeline'],['analytics','fa-chart-line','Analytics']].map(([v,ic,lb])=>`
           <button onclick="GestioneOrdini._setView('${v}')" style="padding:4px 9px;border:none;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;transition:.15s;background:${view===v?'var(--primary)':'transparent'};color:${view===v?'#000':'var(--text-muted)'}">
             <i class="fas ${ic}"></i> ${lb}
           </button>`).join('')}
@@ -203,6 +203,8 @@ const GestioneOrdini = {
     else if(this._view === 'produzione') this._renderProduzione(el, filtered);
     else if(this._view === 'lista') this._renderLista(el, filtered);
     else if(this._view === 'calendario') this._renderCalendario(el, all);
+    else if(this._view === 'timeline') this._renderTimeline(el, filtered);
+    else if(this._view === 'analytics') this._renderAnalytics(el, all);
   },
 
   // ══ KANBAN ═════════════════════════════════════════════════════════
@@ -405,6 +407,8 @@ const GestioneOrdini = {
                   ${nextSt?`<button onclick="GestioneOrdini.transition(${o.id},'${st.next}').then(()=>GestioneOrdini.render())"
                     style="padding:3px 8px;background:${st.color}18;border:1px solid ${st.color}40;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;color:${st.color}">→ ${nextSt.label}</button>`:''}
                   <button onclick="GestioneOrdini._openDetail(${o.id})" style="padding:3px 6px;background:var(--bg-card2);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:10px;color:var(--text-muted)">✏️</button>
+                  ${o._state!=='preventivo'?`<button onclick="GestioneOrdini._fatturaPA(${o.id})" title="Genera FatturaPA XML SDI"
+                    style="padding:3px 6px;background:var(--bg-card2);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:10px;color:var(--text-muted)">📄</button>`:''}
                 </div>
               </td>
             </tr>`;
@@ -469,6 +473,218 @@ const GestioneOrdini = {
         }).join('')}
       </div>
     </div>`;
+  },
+
+  // ══ TIMELINE ═══════════════════════════════════════════════════════
+  /* Gli eventi non hanno un archivio proprio: stanno in `order_events`, dove
+     `updateOrderStatus` li scrive da sempre. Questa vista li legge, non li
+     produce. Un ordine senza eventi registrati mostra almeno la sua nascita,
+     che è un fatto, non una ricostruzione. */
+  _renderTimeline(el, orders) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Carico gli eventi…</div>`;
+    const token = (this._tlToken = (this._tlToken || 0) + 1);
+
+    IDB.getAll('order_events').catch(()=>[]).then(eventi => {
+      /* Una navigazione rapida può aver già cambiato vista: il risultato di
+         una lettura vecchia non deve sovrascrivere quella nuova. */
+      if(token !== this._tlToken || this._view !== 'timeline') return;
+
+      const perOrdine = {};
+      (eventi||[]).forEach(e => {
+        if(!e || e.orderId == null) return;
+        (perOrdine[e.orderId] = perOrdine[e.orderId] || []).push(e);
+      });
+
+      const righe = orders.slice(0, 40).map(o => {
+        const st = this.STATES[o._state];
+        const suoi = (perOrdine[o.id] || []).slice()
+          .sort((a,b) => new Date(b.ts||0) - new Date(a.ts||0));
+        const nascita = o.createdAt
+          ? [{ event:'Ordine creato', stage:o._state, ts:o.createdAt, _sintetico:true }] : [];
+        const tutti = suoi.length ? suoi : nascita;
+
+        return `<div style="border:1px solid var(--border);border-radius:10px;background:var(--bg-card2);margin-bottom:8px;overflow:hidden">
+          <div onclick="GestioneOrdini._openDetail(${o.id})" style="padding:9px 12px;display:flex;align-items:center;gap:9px;cursor:pointer;border-left:3px solid ${st.color}">
+            <span style="font-size:13px">${st.emoji}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._esc(o.clientName||o.name||('#'+o.id))}</div>
+              <div style="font-size:10px;color:var(--text-muted)">${this._esc(o.name||'')}</div>
+            </div>
+            <span style="font-size:10px;font-weight:800;color:${st.color}">${st.label}</span>
+            <span style="font-size:11px;font-weight:700">€${(+(o.total||o.value||0)).toFixed(2)}</span>
+          </div>
+          <div style="padding:6px 12px 10px 26px;display:flex;flex-direction:column;gap:5px">
+            ${tutti.length ? tutti.slice(0,8).map(e => `
+              <div style="display:flex;gap:8px;align-items:baseline;font-size:10px">
+                <span style="color:var(--text-dim);min-width:104px;font-variant-numeric:tabular-nums">${this._quando(e.ts)}</span>
+                <span style="color:var(--text-muted)">${this._esc(e.event||'')}${e._sintetico?'':''}</span>
+              </div>`).join('')
+              : `<div style="font-size:10px;color:var(--text-dim)">Nessun evento registrato per questo ordine.</div>`}
+            ${tutti.length>8?`<div style="font-size:9px;color:var(--text-dim)">+${tutti.length-8} eventi precedenti</div>`:''}
+          </div>
+        </div>`;
+      }).join('');
+
+      el.innerHTML = orders.length
+        ? `<div style="max-width:900px">${righe}${orders.length>40?`<div style="text-align:center;padding:10px;font-size:10px;color:var(--text-dim)">Mostrati i 40 ordini più recenti di ${orders.length}.</div>`:''}</div>`
+        : `<div style="padding:30px;text-align:center;color:var(--text-muted);font-size:12px">Nessun ordine da mostrare.</div>`;
+    });
+  },
+
+  // ══ ANALYTICS ══════════════════════════════════════════════════════
+  /* Qui vive ciò che «Workflow Overview» faceva da sezione a sé: il diagramma
+     di flusso per fase, i KPI, gli ordini incoerenti e il Repair Sync. Le
+     funzioni sono le stesse — WorkflowSync resta il loro proprietario, questa
+     vista lo interroga. Cambia solo che non sono più una seconda sezione che
+     mostra gli stessi ordini con un altro nome. */
+  _renderAnalytics(el, orders) {
+    const DONE = new Set(['venduto','completato','rifiutato','annullato']);
+    const attivi = orders.filter(o => !DONE.has(o._state));
+    const oggi = new Date().toISOString().slice(0,10);
+    const scaduti = attivi.filter(o => o.dueDate && o.dueDate < oggi);
+    const valoreAttivo = attivi.reduce((a,o) => a + (+(o.total||o.value||0)), 0);
+    const venduto = orders.filter(o => o._state==='venduto')
+      .reduce((a,o) => a + (+(o.total||o.value||0)), 0);
+
+    const fasi = ['preventivo','inviato','accettato','produzione','completato','venduto'];
+    const perFase = {};
+    fasi.forEach(f => { perFase[f] = orders.filter(o => o._state===f); });
+
+    /* Un ordine venduto senza vendita collegata è un buco nella catena, non
+       una statistica: si mostra come da sistemare. */
+    const incoerenti = orders.filter(o =>
+      o._state==='venduto' && !o.linkedSaleId && !o.saleId);
+
+    const kpi = (etichetta, valore, nota, colore) => `
+      <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
+        <div style="font-size:19px;font-weight:800;color:${colore||'var(--text)'}">${valore}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${etichetta}</div>
+        ${nota?`<div style="font-size:9px;color:var(--text-dim);margin-top:1px">${nota}</div>`:''}
+      </div>`;
+
+    el.innerHTML = `
+    <div style="max-width:1100px">
+      <!-- FLUSSO -->
+      <div style="display:flex;align-items:stretch;gap:5px;overflow-x:auto;padding:2px 0 10px">
+        ${fasi.map((f,i) => {
+          const st = this.STATES[f];
+          const n = perFase[f].length;
+          const v = perFase[f].reduce((a,o) => a + (+(o.total||o.value||0)), 0);
+          return `<div style="flex:1;min-width:104px;text-align:center">
+            <div onclick="GestioneOrdini._setFilter('${f}')" title="Filtra gli ordini in ${st.label}"
+                 style="cursor:pointer;padding:9px 6px;border-radius:9px;border:2px solid ${st.color}30;background:${st.color}10">
+              <div style="font-size:19px;font-weight:800;color:${st.color}">${n}</div>
+              <div style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">${st.label}</div>
+              ${v>0?`<div style="font-size:9px;color:${st.color};font-weight:700">€${v.toFixed(0)}</div>`:''}
+            </div>
+            ${i<fasi.length-1?`<div style="margin-top:2px;color:var(--text-dim);font-size:13px">→</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+
+      <!-- KPI -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
+        ${kpi('Ordini aperti', attivi.length, valoreAttivo?`€${valoreAttivo.toFixed(0)} in gioco`:'')}
+        ${kpi('In ritardo', scaduti.length, scaduti.length?'scadenza superata':'nessuno', scaduti.length?'#ef4444':'')}
+        ${kpi('In produzione', perFase.produzione.length, '')}
+        ${kpi('Venduto', `€${venduto.toFixed(0)}`, `${perFase.venduto.length} ordini`, '#22c55e')}
+      </div>
+
+      <!-- DA SISTEMARE -->
+      <div style="border:1px solid var(--border);border-radius:10px;background:var(--bg-card2);overflow:hidden">
+        <div style="padding:9px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;font-weight:800;flex:1">🔗 Coerenza ordini → vendite</span>
+          <button onclick="GestioneOrdini._repairSync(this)"
+                  style="padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:10px;font-weight:700;color:var(--text-muted)">
+            🔧 Repair Sync
+          </button>
+        </div>
+        <div style="padding:10px 12px">
+          ${incoerenti.length ? incoerenti.slice(0,10).map(o => `
+            <div onclick="GestioneOrdini._openDetail(${o.id})" style="display:flex;gap:9px;align-items:center;padding:5px 0;cursor:pointer;font-size:11px">
+              <span style="color:#f59e0b">⚠</span>
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this._esc(o.clientName||o.name||('#'+o.id))}</span>
+              <span style="color:var(--text-dim);font-size:10px">venduto, nessuna vendita collegata</span>
+            </div>`).join('')
+            : `<div style="font-size:11px;color:var(--text-muted)">Ogni ordine venduto ha la sua vendita. Niente da sistemare.</div>`}
+          ${incoerenti.length>10?`<div style="font-size:9px;color:var(--text-dim);margin-top:4px">+${incoerenti.length-10} altri</div>`:''}
+        </div>
+      </div>
+    </div>`;
+  },
+
+  /* Il Repair non è reimplementato: è WorkflowSync.repair(), lo stesso che il
+     bottone di Workflow Overview chiamava. Cambia il posto, non la funzione. */
+  async _repairSync(btn) {
+    if(typeof WorkflowSync === 'undefined' || typeof WorkflowSync.repair !== 'function') {
+      toast('Sincronizzazione non disponibile', 'warning');
+      return;
+    }
+    const testo = btn ? btn.innerHTML : '';
+    if(btn) { btn.disabled = true; btn.innerHTML = '🔄 Repair…'; }
+    try {
+      const fix = await WorkflowSync.repair();
+      toast(`🔧 Repair completato: ${fix} correzioni`, fix > 0 ? 'success' : 'info');
+      await this.render();
+    } catch(e) {
+      if(window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('repair sync', e);
+      toast('Repair non riuscito: ' + ((e && e.message) || e), 'error');
+    } finally {
+      if(btn) { btn.disabled = false; btn.innerHTML = testo; }
+    }
+  },
+
+  /* La generazione della FatturaPA viveva su un bottone iniettato nelle righe
+     di «Avanzamento ordini», e quella era la sua **unica** via d'accesso:
+     ritirare quella sezione l'avrebbe resa irraggiungibile. Il generatore
+     (`FatturaDaOrdine`) non è stato riscritto — cambia solo da dove lo si
+     chiama e su quale record.
+
+     Prima leggeva l'ordine da `ingly_orders_pro_v1` e ci scriveva sopra
+     `status:'paid'`: segnava pagata una copia che nessun'altra vista leggeva.
+     Ora l'ordine è quello canonico, e il passaggio a «venduto» lo fa la
+     funzione SSOT, che aggiorna lo stato, lo storico e gli eventi. */
+  async _fatturaPA(id) {
+    if(typeof FatturaDaOrdine === 'undefined' || typeof FatturaDaOrdine.genera !== 'function') {
+      toast('Generatore FatturaPA non disponibile', 'warning');
+      return;
+    }
+    const o = await IDB.get('orders', id).catch(() => null);
+    if(!o) { toast('Ordine non trovato', 'error'); return; }
+
+    const totale = +(o.total || o.value || 0);
+    const cliente = o.clientName || o.client || 'Cliente';
+    const ok = await (typeof confirmDialog === 'function'
+      ? confirmDialog(`Generare la FatturaPA per ${cliente} (€${totale.toFixed(2)})?`)
+      : Promise.resolve(confirm(`Generare la FatturaPA per ${cliente} (€${totale.toFixed(2)})?`)));
+    if(!ok) return;
+
+    /* Il generatore si aspetta i nomi di campo del vecchio archivio: si
+       adattano qui, in un punto solo, invece di rinominarli nel record. */
+    FatturaDaOrdine.genera({
+      id: o.id, total: totale, client: cliente,
+      description: o.description || o.name || '',
+      product: o.name || '',
+    });
+
+    if(this._normalizeState(o.stage || o.status) !== 'venduto') {
+      await this.transition(o.id, 'venduto', { note: 'FatturaPA generata' });
+      await this.render();
+    }
+  },
+
+  _esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  },
+
+  _quando(ts) {
+    if(!ts) return '—';
+    const d = new Date(ts);
+    if(isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit'}) +
+           ' ' + d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
   },
 
   // ══ DRAG & DROP ════════════════════════════════════════════════════

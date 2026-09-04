@@ -1043,21 +1043,17 @@ const Quoter={
     if(this.editId){q.id=this.editId;await snapshotRecord('quotes',this.editId);}else{q.id=Date.now();}
     const id=await IDB.put('quotes',q);
 
-    // v4.0: dual-write to pipeline (quotes as readonly, pipeline as source of truth)
-    try {
-      const plRecs = await IDB.getAll('pipeline').catch(()=>[]);
-      const existing = plRecs.find(r => r._sourceId===id || (r._source==='quotes' && r._sourceId===id));
-      const pEntry = {
-        _source:'quotes', _sourceId:id,
-        id: existing ? existing.id : Date.now()+Math.floor(Math.random()*9999),
-        name: q.name, clientName: q.clientName, clientId: q.clientId,
-        stage: q.status==='confermato'?'accepted':q.status==='bozza'?'draft':'sent',
-        total: q.grossPrice||0, createdAt: q.createdAt||new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await IDB.put('pipeline', pEntry);
-      AppStore.invalidate('pipeline');
-    } catch(e) { console.warn('[saveQuote pipeline]', e); }    this._lastSavedId=id;
+    /* Qui il preventivo veniva specchiato nello store `pipeline` con
+       `_sourceId` uguale all'id del **preventivo**. La pipeline però è una
+       vista derivata da `orders`: l'intercettore cercava un ordine con
+       quell'id e non lo trovava, perché era l'id di un preventivo. Due esiti,
+       entrambi silenziosi — il record finiva nello store legacy che nessuna
+       lettura restituisce, oppure, se quell'id apparteneva per caso a un
+       ordine vero, i dati del preventivo venivano fusi dentro quell'ordine.
+
+       Un preventivo vive in `quotes` e diventa pipeline quando diventa un
+       ordine, non prima. Lo specchio è rimosso. */
+    this._lastSavedId=id;
     await logAction('quote',id,this.editId?'updated':'created',{name,amount:gross});
     toast('Preventivo salvato!');this.editId=null;
     await this.renderList();
