@@ -126,7 +126,7 @@ var SK='p3dq_v4';
    «dettagli stampa», la tecnologia in due pulsanti, la descrizione da nessuna
    parte. Un preventivo che arriva al cliente senza dire che cosa sta
    preventivando è un numero senza oggetto. */
-var PROGETTO={ nome:'', descrizione:'' };
+var PROGETTO={ nome:'', descrizione:'', foto:null };
 
 /* ── Le due modalità di compilazione ───────────────────────────────────────
    `rapida` mostra i cinque campi che bastano a un numero onesto: materiale,
@@ -636,6 +636,7 @@ function render(){
   +'</div>'; // close p3-grid
 
   _ripristina(root,_prima);
+  montaFotoProgetto();
   /* Le due caselle e il decimale nascosto devono restare d'accordo dopo ogni
      ridisegno: sono la stessa grandezza scritta in due modi. */
   (function(){ var h=el('p3d-h'); if(h) tempoDaDecimale(parseFloat(h.value)||0); }());
@@ -999,6 +1000,7 @@ function cardProgetto(){
       +'<input class="p3-fc" id="p3d-prj" value="'+esc3(PROGETTO.nome)+'" placeholder="es. Supporto telefono personalizzato" oninput="Print3DQuoter.setProgetto(\'nome\',this.value)"></div>'
     +'<div class="p3-fg" style="margin-top:6px"><label class="p3-fl">DESCRIZIONE</label>'
       +'<textarea class="p3-fc" id="p3d-prj-d" rows="2" style="resize:vertical" placeholder="Materiale, finitura, tolleranze, quel che il cliente deve sapere" oninput="Print3DQuoter.setProgetto(\'descrizione\',this.value)">'+esc3(PROGETTO.descrizione)+'</textarea></div>'
+    +'<div id="p3d-prj-foto" style="margin-top:8px"></div>'
     +'<div class="p3-ht" style="margin-top:6px">La tecnologia si sceglie qui sotto: cambia i valori predefiniti di potenza, materiale e post-processo.</div>'
   +'</div>';
 }
@@ -1642,6 +1644,24 @@ function cardCostoPer(){
 function setFase(id,v){ LAVORO[id]=Math.max(0,parseFloat(v)||0); calc(); aggiornaLavoro(); }
 
 function setProgetto(k,v){ PROGETTO[k]=String(v==null?'':v); }
+
+/* ── La foto del pezzo ─────────────────────────────────────────────────────
+   Lo stesso campo di Ordini, Catalogo, Apparel e degli altri preventivatori:
+   `InglyProductImage`. Non conosce archivi — qui l'immagine resta in
+   `PROGETTO`, che è dove vivono già nome e descrizione del pezzo, e finisce
+   nel preventivo insieme a loro. */
+var CAMPO_FOTO=null;
+function montaFotoProgetto(){
+  var nodo=el('p3d-prj-foto'); if(!nodo) return;
+  var P=(typeof window!=='undefined') && window.InglyProductImage;
+  if(!P || !P.monta) return;
+  CAMPO_FOTO=P.monta(nodo,{
+    etichetta:'FOTO DEL PEZZO',
+    compatto:true,
+    valore:PROGETTO.foto,
+    onChange:function(img){ PROGETTO.foto=img; },
+  });
+}
 function addMat2(){ MULTIMAT.push({ tipo:'', grammi:0, prezzoKg:gv('p3d-mkg',24) }); render(); }
 function upMat2(i,k,v){ if(!MULTIMAT[i])return; MULTIMAT[i][k]=(k==='tipo')?v:(parseFloat(v)||0); calc(); }
 function rmMat2(i){ MULTIMAT.splice(i,1); render(); }

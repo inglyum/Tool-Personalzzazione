@@ -78,24 +78,8 @@ const QuoterImagePanel = {
     </div>
 
     <div id="qip-body" style="padding:12px 14px;display:block">
-      <!-- Image upload -->
-      <div style="margin-bottom:10px">
-        <label style="font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">📷 Foto prodotto / riferimento</label>
-        <div id="qip-img-preview" style="width:100%;height:160px;background:var(--bg-card);border-radius:8px;border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative"
-          onclick="document.getElementById('qip-file').click()"
-          ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
-          ondragleave="this.style.borderColor='var(--border)'"
-          ondrop="event.preventDefault();QuoterImagePanel._handleFileDrop(event)">
-          <span style="font-size:28px;opacity:.3" id="qip-placeholder">📷</span>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px" id="qip-placeholder-text">Clicca o trascina la foto</div>
-          <img id="qip-preview-img" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0" alt="">
-        </div>
-        <input type="file" id="qip-file" accept="image/*" style="display:none" onchange="QuoterImagePanel._loadFile(this.files[0])">
-        <div id="qip-img-actions" style="display:none;margin-top:4px;display:flex;gap:5px">
-          <button onclick="QuoterImagePanel._clearImage()" style="padding:3px 8px;background:#ef444415;border:1px solid #ef444430;border-radius:5px;cursor:pointer;font-size:10px;color:#ef4444">🗑 Rimuovi</button>
-          <button onclick="document.getElementById('qip-file').click()" style="padding:3px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:10px;color:var(--text-muted)">↺ Cambia</button>
-        </div>
-      </div>
+      <!-- Foto prodotto: campo condiviso, montato dopo -->
+      <div id="qip-img-mount" style="margin-bottom:10px"></div>
 
       <!-- Technical specs grid -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
@@ -156,59 +140,60 @@ const QuoterImagePanel = {
       this._autoSave();
     });
 
-    // Load any existing specs for current quoter session
+    // Il campo immagine, e poi le misure già salvate per questa sessione
+    this._montaImmagine();
     this._loadCurrent();
   },
 
-  _handleFileDrop(e) {
-    const file = e.dataTransfer?.files[0];
-    if (file && file.type.startsWith('image/')) this._loadFile(file);
-  },
+  /* ── La foto la disegna il campo condiviso ───────────────────────────────
+     Qui c'erano tre funzioni — trascinamento, lettura, rimozione — che
+     manipolavano a mano cinque elementi con id fissi, e salvavano il base64
+     **grezzo**: una foto da telefono, spesso dodici megapixel, finiva intera
+     in `localStorage`. Il limite era 2 MB sul file scelto, ma nessuno sul
+     risultato, e nessun ridimensionamento.
 
-  _loadFile(file) {
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      if (typeof toast !== 'undefined') toast('⚠️ Immagine troppo grande (max 2MB)', 'warning');
+     Ora l'immagine è di `InglyProductImage`, che ridimensiona conservando il
+     formato e non conosce nessun archivio: dove si salva lo decide questo
+     pannello, come prima. Le misure e il materiale restano roba sua — sono
+     cose del laser, e non appartengono a un campo immagine. */
+  _campoImg: null,
+
+  _montaImmagine() {
+    var nodo = document.getElementById('qip-img-mount');
+    if (!nodo) return;
+    var P = window.InglyProductImage;
+    if (!P || !P.monta) {
+      nodo.innerHTML = '<div style="font-size:10px;color:var(--text-dim)">Campo immagine non disponibile.</div>';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const b64 = e.target.result;
-      const img = document.getElementById('qip-preview-img');
-      const ph  = document.getElementById('qip-placeholder');
-      const pht = document.getElementById('qip-placeholder-text');
-      const act = document.getElementById('qip-img-actions');
-      if (img) { img.src = b64; img.style.display = 'block'; }
-      if (ph)  ph.style.display = 'none';
-      if (pht) pht.style.display = 'none';
-      if (act) act.style.display = 'flex';
-      this._currentImage = b64;
-      this._autoSave();
-      if (typeof toast !== 'undefined') toast('📷 Foto caricata!', 'success');
-    };
-    reader.readAsDataURL(file);
-  },
-
-  _clearImage() {
-    this._currentImage = null;
-    const img = document.getElementById('qip-preview-img');
-    const ph  = document.getElementById('qip-placeholder');
-    const pht = document.getElementById('qip-placeholder-text');
-    const act = document.getElementById('qip-img-actions');
-    if (img) { img.src = ''; img.style.display = 'none'; }
-    if (ph)  ph.style.display = 'block';
-    if (pht) pht.style.display = 'block';
-    if (act) act.style.display = 'none';
-    this._autoSave();
+    var self = this;
+    this._campoImg = P.monta(nodo, {
+      etichetta: '📷 Foto prodotto / riferimento',
+      /* Il campo lavora con un oggetto (immagine più metadati); questo
+         pannello ha sempre salvato una stringa, e mezza dozzina di punti la
+         mettono direttamente in `<img src>`. Cambiare la forma salvata li
+         romperebbe tutti, quindi la conversione sta qui, al confine: la
+         stringa resta la stringa, i metadati vanno accanto. */
+      valore: this._currentImage ? { dataUrl: this._currentImage } : null,
+      onChange: function (img) {
+        self._currentImage = img ? img.dataUrl : null;
+        self._currentImageMeta = img || null;
+        self._autoSave();
+      },
+    });
   },
 
   _currentImage: null,
+  _currentImageMeta: null,
 
   getSpecs() {
     const mat = document.getElementById('qip-material')?.value || '';
     const matText = document.getElementById('qip-material-text')?.value || '';
     return {
       image:     this._currentImage || null,
+      /* I metadati che §14 chiede — nome, formato, peso, dimensioni — vivono
+         accanto all'immagine, non al posto suo. */
+      imageMeta: this._currentImageMeta || null,
       width:     parseFloat(document.getElementById('qip-width')?.value || '0') || null,
       height:    parseFloat(document.getElementById('qip-height')?.value || '0') || null,
       thickness: parseFloat(document.getElementById('qip-thickness')?.value || '0') || null,
@@ -228,14 +213,10 @@ const QuoterImagePanel = {
     if (!specs) return;
     if (specs.image) {
       this._currentImage = specs.image;
-      const img = document.getElementById('qip-preview-img');
-      const ph  = document.getElementById('qip-placeholder');
-      const pht = document.getElementById('qip-placeholder-text');
-      const act = document.getElementById('qip-img-actions');
-      if (img) { img.src = specs.image; img.style.display = 'block'; }
-      if (ph)  ph.style.display = 'none';
-      if (pht) pht.style.display = 'none';
-      if (act) act.style.display = 'flex';
+      this._currentImageMeta = specs.imageMeta || null;
+      /* Il campo si ridisegna da sé: non si tocca più il DOM a mano. */
+      if (this._campoImg) this._campoImg.imposta(this._currentImageMeta || { dataUrl: specs.image });
+      else this._montaImmagine();
     }
     const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
     setVal('qip-width', specs.width);
@@ -263,20 +244,16 @@ const QuoterImagePanel = {
 
   clear() {
     this._currentImage = null;
+    this._currentImageMeta = null;
     ['qip-width','qip-height','qip-thickness','qip-qty-spec','qip-tech-notes'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = id === 'qip-qty-spec' ? '1' : '';
     });
     const sel = document.getElementById('qip-material');
     if (sel) sel.selectedIndex = 0;
-    const act = document.getElementById('qip-img-actions');
-    if (act) act.style.display = 'none';
-    const img = document.getElementById('qip-preview-img');
-    if (img) { img.src = ''; img.style.display = 'none'; }
-    const ph  = document.getElementById('qip-placeholder');
-    const pht = document.getElementById('qip-placeholder-text');
-    if (ph)  ph.style.display = 'block';
-    if (pht) pht.style.display = 'block';
+    /* Cinque elementi rimessi a mano nello stato vuoto: ora si dice al campo
+       che l'immagine non c'è più, e si ridisegna lui. */
+    if (this._campoImg) this._campoImg.imposta(null);
     OrderSpecs.clearQuoterCurrent();
   },
 };

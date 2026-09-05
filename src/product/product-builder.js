@@ -55,6 +55,9 @@
      metà non deve comparire nel catalogo. */
   const state = {
     step: 0,
+    /* La foto del prodotto: un prodotto senza immagine è una riga di testo in
+       un listino, e un cliente non compra una riga di testo. */
+    image: null,
     name: '',
     category: '',
     subcategory: '',
@@ -115,7 +118,9 @@
         [['b2c', 'B2C — vendita al pubblico'], ['b2b', 'B2B — rivenditori e aziende'], ['both', 'Entrambi']]
           .map(function (o) {
             return '<option value="' + o[0] + '"' + (state.target === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
-          }).join('') + '</select>');
+          }).join('') + '</select>') +
+      /* Il campo si monta dopo il render: qui si lascia solo il posto. */
+      '<div data-pb-immagine></div>';
   }
 
   function stepTechnology() {
@@ -539,6 +544,11 @@
       machine: machine ? machine.name : '',
       tech: state.tech || '',
       variants: state.variants,
+      /* Il catalogo chiama la foto `photo`: si scrive con il suo nome, non con
+         uno nuovo. I metadati vanno accanto, senza toccare il campo che tutto
+         il catalogo legge. */
+      photo: state.image ? state.image.dataUrl : null,
+      photoMeta: state.image || null,
       createdAt: new Date().toISOString(),
       source: 'product-builder',
     };
@@ -605,6 +615,25 @@
       '</footer></section></div>' +
       summary() +
       '</div>';
+
+    montaImmagine(view);
+  }
+
+  /* Il campo immagine è lo stesso di preventivatori, ordini e catalogo:
+     `InglyProductImage`. Non conosce archivi — dove finisce l'immagine lo
+     decide chi lo monta, e qui finisce nello stato del builder, che si salva
+     solo quando il prodotto si salva. */
+  function montaImmagine(view) {
+    const posto = view.querySelector('[data-pb-immagine]');
+    if (!posto) return;
+    const P = global.InglyProductImage;
+    if (!P || !P.monta) return;
+    P.monta(posto, {
+      etichetta: 'Foto del prodotto',
+      valore: state.image,
+      compatto: true,
+      onChange: function (img) { state.image = img; },
+    });
   }
 
   /* ── Interazione ────────────────────────────────────────────────────────

@@ -2989,7 +2989,13 @@ const CatalogView = {
     if (!grid) return;
     grid.innerHTML = products.map(p => `
       <div style="background:#1a1a2e;border-radius:12px;overflow:hidden;border:1px solid #333">
-        ${p.image ? `<img src="${p.image}" style="width:100%;height:160px;object-fit:cover">` : `<div style="height:160px;background:linear-gradient(135deg,#8b5cf6,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:48px">🎨</div>`}
+        ${/* I prodotti del catalogo portano la foto in `photo` — ventun punti
+              di questo file la leggono così. Qui si cercava `image`, e questa
+              griglia non ha quindi mai mostrato una foto: sempre il fondo
+              sfumato, anche per i prodotti che l'immagine ce l'hanno.
+              Si accettano entrambi, perché record vecchi possono avere l'uno
+              o l'altro. */''}
+        ${(p.photo || p.image) ? `<img src="${p.photo || p.image}" alt="${(p.name||'Prodotto').replace(/"/g,'&quot;')}" style="width:100%;height:160px;object-fit:cover">` : `<div style="height:160px;background:linear-gradient(135deg,#8b5cf6,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:48px">🎨</div>`}
         <div style="padding:12px">
           <div style="font-weight:600;color:#fff;margin-bottom:4px">${p.name}</div>
           <div style="color:#a78bfa;font-size:13px">€${parseFloat(p.price||0).toFixed(2)}</div>

@@ -1085,6 +1085,8 @@ var ApparelQuoter = (function () {
   function _setProdFilter(key,val){ _prodFilter[key]=val; render(); }
 
   // ── Product Modal ──────────────────────────────────────────────────────────
+  var _campoFotoProdotto = null;
+
   function openProdModal(id){
     var p=id?loadP().find(function(x){return x.id===id;}):null;
     var existing=document.getElementById('aq-prod-modal'); if(existing)existing.remove();
@@ -1124,6 +1126,7 @@ var ApparelQuoter = (function () {
       +'<div><label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px">Taglie disponibili</label>'
       +'<div id="aq-p-sizes-grid" style="display:flex;flex-wrap:wrap;gap:8px">'+sizeChecks+'</div></div>'
       +_pf2('Note / URL fornitore','aq-p-notes',p&&p.notes,'Fornitore, link, tempi consegna...')
+      +'<div id="aq-p-img"></div>'
       +'<input type="hidden" id="aq-p-id" value="'+(p&&p.id||'')+'">'
       +'<div style="display:flex;gap:8px;padding-top:6px;border-top:1px solid var(--border)">'
       +(p?'<button onclick="ApparelQuoter._delP()" style="padding:10px 14px;background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2);border-radius:10px;cursor:pointer;font-size:12px;font-weight:700">🗑</button>':'')
@@ -1131,6 +1134,19 @@ var ApparelQuoter = (function () {
       +'<button onclick="ApparelQuoter._saveP()" style="flex:2;padding:10px;background:linear-gradient(135deg,#ec4899,#db2777);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800">💾 Salva prodotto</button>'
       +'</div></div></div>';
     document.body.appendChild(ov);
+    /* La foto del capo: lo stesso campo di preventivatori, ordini e catalogo.
+       Non conosce archivi — qui l'immagine finisce sul record del prodotto,
+       col nome che il resto del programma usa per le foto: `photo`. */
+    _campoFotoProdotto = null;
+    var mountFoto = document.getElementById('aq-p-img');
+    var PI = (typeof window !== 'undefined') && window.InglyProductImage;
+    if (mountFoto && PI && PI.monta) {
+      _campoFotoProdotto = PI.monta(mountFoto, {
+        etichetta: 'Foto del capo',
+        compatto: true,
+        valore: (p && p.photoMeta) ? p.photoMeta : ((p && p.photo) ? { dataUrl: p.photo } : null),
+      });
+    }
     // Auto-calc margin
     var buyEl=document.getElementById('aq-p-buy');
     var sellEl=document.getElementById('aq-p-sell');
@@ -1166,6 +1182,9 @@ var ApparelQuoter = (function () {
       sizes:sizes.join(', '),
       notes:(document.getElementById('aq-p-notes').value||'').trim(),
     };
+    var foto = _campoFotoProdotto ? _campoFotoProdotto.valore() : null;
+    p.photo = foto ? foto.dataUrl : null;
+    p.photoMeta = foto || null;
     var prods=loadP(), idx=prods.findIndex(function(x){return x.id===id;});
     if(idx>=0)prods[idx]=p; else prods.unshift(p);
     store(PRODS_SK,prods);

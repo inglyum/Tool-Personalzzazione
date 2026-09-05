@@ -70,6 +70,8 @@ export const PRODUCT_FILES = [
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i
      preventivatori. Prima dei preventivatori che lo interrogano. */
   'consuntivo.js',
+  /* Il campo immagine riusabile: nessuna dipendenza, lo montano sei moduli. */
+  'product-image.js',
   'tema.js',
   'tema-view.js',
   'cliente-integrita.js',

@@ -207,7 +207,7 @@ Detto per intero, così non passa per fatto.
 
 | § | Punto | Stato |
 |---|-------|-------|
-| 14 | `ProductImageField` riutilizzabile in 6 moduli | **non fatto**. Oggi l'immagine prodotto è `OrderSpecs` (patch 066), un contenitore in `localStorage` per ordine, usato da Quoter e Gestione Ordini. Non è un campo riusabile, e Apparel, Product Builder e Catalogo non lo usano. |
+| 14 | `ProductImageField` riutilizzabile in 6 moduli | **fatto** — vedi §14 qui sotto. |
 | 16 | Orders mostra Estimated / Actual / Variance | **fatto** — vedi §16-17 qui sotto. |
 | 17 | Inserimento dei consuntivi al completamento | **fatto** — vedi §16-17 qui sotto. |
 | 4 | Lista con Immagine, Margine, Assegnato a, Priorità | **parziale**. La lista mostra cliente, ordine, stato, scadenza, importo e priorità come filtro; mancano colonna immagine, margine e assegnatario. |
@@ -290,3 +290,70 @@ il dettaglio.
 costo reale vale esattamente la somma delle due sorgenti; senza dati dichiara
 «non lo so» invece di zero; registrare non tocca il preventivo; correggere non
 lascia due righe; e dopo una ricarica il consuntivo c'è ancora.
+
+
+---
+
+## 14 · Un campo immagine, sei posti
+
+Un pannello immagine c'era già — `QuoterImagePanel`, patch 066 — e funzionava.
+Non era riusabile, per tre motivi che sono gli stessi che rendono non
+riusabile quasi tutto:
+
+1. **id fissi.** Ogni campo si chiamava `qip-…`. Due pannelli nella stessa
+   pagina si sarebbero sovrascritti.
+2. **un archivio deciso da lui.** Salvava in `OrderSpecs`. Il catalogo tiene
+   l'immagine sul record del prodotto, gli ordini altrove: un campo che sceglie
+   l'archivio può vivere in un posto solo.
+3. **immagine e misure insieme.** Larghezza, spessore e materiale sono cose del
+   laser. Per avere la foto, il tessile avrebbe dovuto portarsele dietro.
+
+`InglyProductImage` fa **una cosa sola** e non conosce nessun archivio: chi lo
+monta decide dove finisce l'immagine. Un test verifica proprio questo — il
+sorgente non contiene `localStorage`, `IDB.` né `AppStore`.
+
+### Dove è montato
+
+| Modulo | Dove finisce l'immagine |
+|--------|------------------------|
+| Smart Quoter | `OrderSpecs`, come prima |
+| Ordini | `OrderSpecs`, come prima |
+| Smart Quoter 3D | in `PROGETTO`, con nome e descrizione del pezzo |
+| Apparel | sul record del prodotto, in `photo` |
+| Product Builder | nello stato, poi in `catalog.photo` |
+| Catalogo | `photo`, il campo che già usava |
+
+Nessun archivio nuovo: ognuno tiene l'immagine dove la teneva.
+
+### Sul formato
+
+Si **conserva** quello originale. Un PNG con trasparenza convertito in JPEG la
+perde, e un logo su fondo bianco al posto del fondo trasparente è un danno
+silenzioso. Si ridimensiona solo oltre i 1280 px sul lato lungo; un GIF non si
+ridisegna mai, perché perderebbe l'animazione; e se il ridimensionamento non
+guadagna spazio si tiene l'originale — succede con le immagini già molto
+compresse, dove il canvas ne produce una più pesante.
+
+### Tre difetti trovati costruendolo
+
+1. **La libreria immagini non ha mai salvato niente.** `ImageLib.uploadFiles`
+   leggeva le dimensioni da `dataUrl`, una variabile che nel file compare una
+   volta sola e non è mai definita. `ReferenceError`, promessa rifiutata,
+   funzione uscita con un'eccezione, `IDB.put` mai raggiunto. E la funzione non
+   lo diceva. Mancava anche `onerror`: un file corrotto avrebbe lasciato
+   l'upload appeso per sempre.
+2. **Una foto da telefono finiva intera in `localStorage`.** Il vecchio pannello
+   salvava il base64 grezzo: limite di 2 MB sul file scelto, nessuno sul
+   risultato, nessun ridimensionamento.
+3. **La griglia del catalogo non ha mai mostrato una foto.** `CatalogView`
+   cercava `p.image` mentre i prodotti portano la foto in `photo` — ventun punti
+   dello stesso file la leggono così. Sempre il fondo sfumato, anche per i
+   prodotti che l'immagine ce l'hanno.
+
+### Misurato
+
+`tests/product-image.test.mjs` 19 test · `tests/qa/campo-immagine.mjs` 23
+controlli, 0 errori JS. Fra questi: due campi nella stessa pagina non
+condividono gli id; un PNG vero viene letto, mostrato con un alt, sostituito e
+rimosso; un formato che il canvas non legge viene rifiutato **dicendo cosa
+fare**; l'upload in libreria adesso salva davvero, con le dimensioni lette.

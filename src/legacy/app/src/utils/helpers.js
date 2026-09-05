@@ -395,9 +395,23 @@ const ImageLib={
         width:0,height:0,
         uploadedAt:new Date().toISOString().split('T')[0]
       };
-      // Get dimensions
-      await new Promise(res=>{const i=new Image();i.onload=()=>{img.width=i.width;img.height=i.height;res()};i.src=dataUrl;
-      })
+      /* Qui si leggevano le dimensioni da `dataUrl`, che in questo file non
+         esiste: compariva una volta sola e non era mai stata definita. La
+         promessa veniva rifiutata da un ReferenceError, `uploadFiles` usciva
+         con un'eccezione, e `IDB.put` non veniva mai raggiunto. Nessuna
+         immagine è mai stata salvata nella libreria, e la funzione non lo
+         diceva — restituiva solo il silenzio.
+
+         E mancava `onerror`: un file corrotto non avrebbe mai risolto la
+         promessa, lasciando l'upload appeso per sempre. Le dimensioni sono un
+         dato in più, non una condizione: se non si leggono, l'immagine si
+         salva lo stesso. */
+      await new Promise(res=>{
+        const i=new Image();
+        i.onload=()=>{img.width=i.width;img.height=i.height;res();};
+        i.onerror=()=>res();
+        i.src=data;
+      });
       await IDB.put('image_lib',img).catch(()=>{});
       saved++;
     }
