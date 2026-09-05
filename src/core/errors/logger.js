@@ -43,6 +43,10 @@
     try { return JSON.stringify(e).slice(0, 300); } catch (x) { return String(e); }
   }
 
+  /* Un avviso ogni dieci secondi al massimo: vedi il gestore dei rifiuti. */
+  var INTERVALLO_AVVISO = 10000;
+  var ultimoAvviso = 0;
+
   var Errors = {
     /** Registra e restituisce la voce, così il chiamante può citarne l'id. */
     log: function (origine, errore, dettaglio) {
@@ -95,8 +99,25 @@
       });
     });
 
+    /* ── Una promessa rifiutata è un'operazione non riuscita ──────────────
+       Registrarla e basta lasciava l'utente davanti a un'interfaccia che non
+       era cambiata, senza sapere che il salvataggio non era andato a buon
+       fine. Ora si registra **e** si dice.
+
+       Misurato prima di aggiungerlo: dieci sezioni aperte in sequenza su una
+       installazione pulita producono zero rifiuti non gestiti, quindi
+       l'avviso compare solo quando qualcosa è davvero andato storto.
+
+       È limitato nel tempo perché un guasto ripetuto — la quota esaurita, per
+       dire — ne genererebbe uno per ogni tentativo, e venti avvisi uguali
+       nascondono l'unico che conta. */
     global.addEventListener('unhandledrejection', function (ev) {
       Errors.log('promise', ev.reason);
+      var adesso = Date.now();
+      if (adesso - ultimoAvviso < INTERVALLO_AVVISO) return;
+      ultimoAvviso = adesso;
+      Errors.avvisa('Un\'operazione non è riuscita: ' + descrivi(ev.reason),
+        'riprova; se si ripete, controlla lo spazio disponibile');
     });
   } catch (e) { /* ambiente senza window: il registro resta comunque usabile */ }
 

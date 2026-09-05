@@ -230,7 +230,7 @@ const GestioneOrdini = {
     const el = document.getElementById('go-content');
     if(!el) return;
     if(this._view === 'kanban')     this._renderKanban(el, filtered, all);
-    else if(this._view === 'produzione') await this._renderProduzione(el, filtered);
+    else if(this._view === 'produzione') await this._renderProduzione(el, filtered, all);
     else if(this._view === 'lista') this._renderLista(el, filtered);
     else if(this._view === 'calendario') this._renderCalendario(el, all);
     else if(this._view === 'timeline') this._renderTimeline(el, filtered);
@@ -399,7 +399,7 @@ const GestioneOrdini = {
       <span style="color:var(--text)">${data}</span>${margine}${s.incompleta ? '<span style="color:#f59e0b" title="la coda contiene ordini senza tempo dichiarato"> ⚠️</span>' : ''}`;
   },
 
-  async _renderProduzione(el, orders) {
+  async _renderProduzione(el, orders, tuttiGliOrdini) {
     const prodOrders = orders.filter(o=>['accettato','produzione','completato'].includes(o._state));
     const now = new Date();
     const _e = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -409,7 +409,11 @@ const GestioneOrdini = {
     const parco = await IDB.getAll('equipment').catch(()=>[]);
     const timelogs = await IDB.getAll('timelogs').catch(()=>[]);
     const PR = window.InglyProduzione;
-    const tutti = await this.getOrders().catch(()=>orders);
+    /* `render()` ha già letto tutti gli ordini: rileggerli qui raddoppiava
+       l'accesso al database a ogni disegno della vista. La coda sulla
+       macchina ha bisogno di tutti, non dei filtrati, quindi arrivano da
+       sopra invece che da una seconda lettura. */
+    const tutti = Array.isArray(tuttiGliOrdini) ? tuttiGliOrdini : orders;
     const analisi = PR ? PR.analizza({ macchine:parco, ordini:tutti, timelogs, finestraGiorni:30 }) : null;
     const contesto = { macchine:parco, ordini:tutti, timelogs };
 
