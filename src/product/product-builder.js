@@ -498,12 +498,25 @@
 
   async function recompute() {
     const mat = selectedMaterial();
-    const materialCost = (mat ? mat.cost : 0) * Number(state.materialQty || 0) +
-      Number(state.packaging || 0) + Number(state.extra || 0);
+    /* ── Confezione ed extra si contavano due volte ──────────────────────
+       Erano sommati qui dentro `materialCost` **e** passati a `Data.price`
+       come `packaging` e `other`, che li aggiunge come voci proprie. Ogni
+       euro di confezione entrava due volte nel costo, e quindi nel prezzo.
+       La spiegazione del prezzo li leggeva invece una volta sola: prezzo e
+       spiegazione non tornavano.
+
+       Il materiale è il materiale. La confezione ha la sua voce, dove il
+       motore la vuole: costo diretto per pezzo, fuori dalla base dello
+       scarto (un pezzo fallito non viene confezionato). */
+    const materialCost = (mat ? mat.cost : 0) * Number(state.materialQty || 0);
     const machineMin = Number(state.machineMin || 0);
     const laborMin = Number(state.laborMin || 0);
 
-    if (materialCost <= 0 && machineMin <= 0 && laborMin <= 0) {
+    /* Un prodotto fatto di sola confezione è raro ma legittimo — un kit
+       riconfezionato, per esempio — e prima contava perché la confezione era
+       dentro `materialCost`. Ora che ha la sua voce, va nominata anche qui. */
+    if (materialCost <= 0 && machineMin <= 0 && laborMin <= 0
+        && Number(state.packaging || 0) <= 0 && Number(state.extra || 0) <= 0) {
       result = null;
       return;
     }

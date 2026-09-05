@@ -15,7 +15,12 @@ var MACH={
     {id:'ender3-s1', n:'Ender 3 S1 Pro',  w:200,c:299, l:2500},
     {id:'cr10s',     n:'CR-10 Smart Pro',  w:350,c:340, l:2000},
     {id:'voron24',   n:'Voron 2.4',        w:600,c:900, l:6000},
-    {id:'custom',    n:'Personalizzata',   w:150,c:400, l:2000},
+    /* «Personalizzata» è il punto di partenza di chi descrive una macchina
+       che il programma non conosce. 400 €/2000 h facevano 0,2000 €/h: più
+       caro di nove degli undici preset qui sopra, che sono macchine vere con
+       prezzi veri. 420 €/3000 h fanno 0,1398 €/h, la mediana esatta di quegli
+       undici. Vedi docs/COST-PARAMETERS-AUDIT.md. */
+    {id:'custom',    n:'Personalizzata',   w:150,c:420, l:3000},
   ],
   resin:[
     {id:'esat2',n:'Elegoo Saturn 2', w:55, c:350,l:3000},
@@ -428,8 +433,8 @@ function render(){
         +'<div class="p3-fg"><label class="p3-fl">💡 €/kWh</label><input class="p3-fc" id="p3d-kwh" type="number" step="0.01" value="0.28" oninput="Print3DQuoter.calc()"><div class="p3-ht">Dalla tua bolletta, non dalla media</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">📊 W MEDI (misurati)</label><input class="p3-fc" id="p3d-avgw" type="number" step="5" value="" placeholder="—" oninput="Print3DQuoter.calc()"><div class="p3-ht">Se li conosci, battono la targa</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🔋 kWh MISURATI</label><input class="p3-fc" id="p3d-kwhm" type="number" step="0.01" value="" placeholder="—" oninput="Print3DQuoter.calc()"><div class="p3-ht">Da presa intelligente o contatore</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">🏭 COSTO MACCHINA €</label><input class="p3-fc" id="p3d-mc" type="number" step="50" value="'+(isFdm?'400':'250')+'" oninput="Print3DQuoter.calc()"></div>'
-        +'<div class="p3-fg"><label class="p3-fl">⏳ VITA UTILE (h)</label><input class="p3-fc" id="p3d-lh" type="number" step="100" value="'+(isFdm?'2000':'2500')+'" oninput="Print3DQuoter.calc()"></div>'
+        +'<div class="p3-fg"><label class="p3-fl">🏭 COSTO MACCHINA €</label><input class="p3-fc" id="p3d-mc" type="number" step="50" value="'+(isFdm?'420':'250')+'" oninput="Print3DQuoter.calc()"></div>'
+        +'<div class="p3-fg"><label class="p3-fl">⏳ VITA UTILE (h)</label><input class="p3-fc" id="p3d-lh" type="number" step="100" value="'+(isFdm?'3000':'2500')+'" oninput="Print3DQuoter.calc()"></div>'
         /* Le quattro voci che mancavano al conto: senza di queste il costo
            sembra più basso di quello che è. */
         +'<div class="p3-fg"><label class="p3-fl">🔧 MANUTENZIONE €/h</label><input class="p3-fc" id="p3d-mnt" type="number" step="0.05" value="'+(isFdm?'0.12':'0.20')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'Ugelli, piatti, cinghie':'Film FEP, alcool, guanti')+'</div></div>'
@@ -1854,7 +1859,7 @@ function ingresso(){
        silenzio. */
     watt: (ENE==='auto'||ENE==='targa') ? gv('p3d-watt',150) : undefined,
     kwhPrice:gv('p3d-kwh',.28), dutyCycle:gv('p3d-duty',1),
-    machinePrice:gv('p3d-mc',400), machineLifeHours:gv('p3d-lh',2000),
+    machinePrice:gv('p3d-mc',420), machineLifeHours:gv('p3d-lh',3000),
     maintenancePerHour:gv('p3d-mnt',0),
     /* Il lavaggio è la fase «post» della card lavoro, non un campo a parte:
        finché ne esistevano due, chi compilava entrambi pagava il
