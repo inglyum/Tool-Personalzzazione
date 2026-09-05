@@ -361,7 +361,13 @@ const App={
       competitors:()=>{ if(typeof CompetitorsBoard!=='undefined') CompetitorsBoard.render(); },
       marketintel:()=>{ if(typeof CompetitorTracker!=='undefined') (typeof CompetitorTracker!=='undefined'&&CompetitorTracker.render()); },
       leadscorer:()=>{ if(typeof LeadScorer!=='undefined') (typeof LeadScorer!=='undefined'&&LeadScorer.render()); },
-      studio_ai:()=>{ if(typeof AIStudio!=='undefined') (typeof AIStudio!=='undefined'&&AIStudio.render()); },
+      /* `AIStudio` esiste ma non ha `render`: è un insieme di funzioni AI
+         (generateDescription, generateReply, generateNames…), non il
+         disegnatore di una sezione. La chiamata lanciava
+         «AIStudio.render is not a function» a ogni apertura, e la vista —
+         che ha il suo contenuto statico — si vedeva lo stesso. Si controlla
+         il metodo, non solo l'oggetto. */
+      studio_ai:()=>{ if(typeof AIStudio!=='undefined' && typeof AIStudio.render==='function') AIStudio.render(); },
       web_presence:()=>{ if(typeof WebPresence!=='undefined') (typeof WebPresence!=='undefined'&&WebPresence.render()); },
       inglydesign:()=>{ if(typeof InglyDesign!=='undefined') (typeof InglyDesign!=='undefined'&&InglyDesign.render()); },
       

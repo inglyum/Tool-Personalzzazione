@@ -7160,8 +7160,28 @@ const Favs = {
 // ══════════════════════════════════════════════════════════════════════
 const NavGroups = {
   SK: 'ingly_navgroups_v1',
-  // Groups collapsed by default (less-used sections)
-  DEFAULT_COLLAPSED: ['ng-market','ng-mkt','ng-ops','ng-brand','ng-report','ng-sistema'],
+  /* ── Nessun gruppo chiuso per scelta del programma ─────────────────────
+     Qui c'era un elenco di gruppi da chiudere al primo avvio: `ng-market`,
+     `ng-mkt`, `ng-ops`, `ng-brand`, `ng-report`, `ng-sistema`. Due cose,
+     entrambe vere:
+
+       · quegli id non esistono più — i gruppi attuali si chiamano
+         `ng-workspace`, `ng-production`, `ng-business`, `ng-lab`,
+         `ng-intelligence`, `ng-marketing`, `ng-finance`, `ng-system` — quindi
+         l'elenco non chiudeva niente da parecchie versioni;
+       · e comunque non è il programma a dover decidere che metà
+         dell'applicazione si apre chiusa.
+
+     Chiudere un gruppo è una scelta dell'utente, e resta possibile: il clic
+     sul titolo comprime, e la scelta si ricorda. Cambia solo il punto di
+     partenza. */
+  DEFAULT_COLLAPSED: [],
+
+  /* Il contrassegno della patch v37, che al primo avvio chiudeva tutti i
+     gruppi e salvava lo stato. Chi ce l'ha si è ritrovato la sidebar chiusa
+     senza averlo chiesto, e non ha modo di sapere che si riapre. */
+  MARCA_V37: '_v37sidebar_done',
+  MARCA_MIGRAZIONE: 'ingly_navgroups_aperti_v1',
 
   _getState() {
     try { return JSON.parse(localStorage.getItem(this.SK) || 'null'); }
@@ -7171,12 +7191,39 @@ const NavGroups = {
     try { localStorage.setItem(this.SK, JSON.stringify(state)); } catch(e) {}
   },
 
+  /** Uno stato utilizzabile, o `null`. Un oggetto rotto — un array, una
+      stringa, un `null` dentro il JSON — non è uno stato: è un file corrotto,
+      e ripartire da zero è meglio che ereditarlo. */
+  _statoValido() {
+    const s = this._getState();
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return null;
+    return s;
+  },
+
+  /* ── La migrazione ────────────────────────────────────────────────────
+     Chi ha il contrassegno della v37 ha una sidebar chiusa che non ha scelto.
+     Si riapre, una volta sola, e si segna di averlo fatto — così chi la
+     richiude dopo la ritrova chiusa, come è giusto.
+
+     Non si tocca chi quel contrassegno non ce l'ha: il suo stato è suo. */
+  _migraSeChiusaDaSola() {
+    try {
+      if (localStorage.getItem(this.MARCA_MIGRAZIONE)) return false;
+      const daV37 = !!localStorage.getItem(this.MARCA_V37);
+      localStorage.setItem(this.MARCA_MIGRAZIONE, new Date().toISOString());
+      if (!daV37) return false;
+      this._saveState({});
+      try { localStorage.removeItem('ingly_nav_groups_v1'); } catch(e) {}
+      return true;
+    } catch(e) { return false; }
+  },
+
   init() {
-    let state = this._getState();
-    // First time: apply defaults
-    if (!state) {
+    const riaperta = this._migraSeChiusaDaSola();
+    let state = this._statoValido();
+    /* Prima installazione, o stato illeggibile: tutto aperto. */
+    if (!state || riaperta) {
       state = {};
-      this.DEFAULT_COLLAPSED.forEach(id => { state[id] = true; });
       this._saveState(state);
     }
     /* Lo stato aperto/chiuso dei gruppi ha un solo proprietario: la sidebar

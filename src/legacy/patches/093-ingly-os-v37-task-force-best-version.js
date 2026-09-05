@@ -172,19 +172,23 @@
     if(!document.getElementById('sidebar-inner')){setTimeout(_p,600);return;}
     if(window._v37sidebar) return; window._v37sidebar=true;
     // Collapse all non-essential nav groups on first load
-    var ESSENTIAL=['ng-core','ng-main','ng-vendit','ng-laser','ng-clienti','ng-ordini','ng-mag'];
     setTimeout(function(){
-      if(!localStorage.getItem('_v37sidebar_done')){
-        // Collapse everything once
-        document.querySelectorAll('.nav-group[id^="ng-"]').forEach(function(g){
-          var id=g.id;
-          var isEssential=ESSENTIAL.some(function(e){return id===e||id.includes(e.replace('ng-',''));});
-          if(!isEssential&&typeof NavGroups!=='undefined') NavGroups.toggle&&NavGroups.toggle(id);
-        });
-        // Actually collapse ALL and let user expand
-        if(typeof NavGroups!=='undefined') NavGroups.collapseAll&&NavGroups.collapseAll();
-        localStorage.setItem('_v37sidebar_done','1');
-      }
+      /* ── Qui la sidebar si chiudeva tutta, al primo avvio ─────────────────
+         Il commento originale diceva «Actually collapse ALL and let user
+         expand». È esattamente quel che faceva: su nove gruppi, nove chiusi.
+
+         Misurato sulla build prima della correzione: 35 voci visibili su 107.
+         Settantadue moduli raggiungibili solo scrivendo il loro nome nella
+         ricerca — e per scriverlo bisogna sapere che esistono. Una barra di
+         navigazione che nasconde due terzi dell'applicazione non è una
+         navigazione: è un campo di ricerca con una lista di preferiti sopra.
+
+         Lo stato chiuso finiva anche in `ingly_navgroups_v1`, quindi restava
+         per sempre: chi apriva i gruppi a mano li ritrovava aperti, ma chi non
+         sapeva di poterlo fare non lo scopriva mai.
+
+         I gruppi restano comprimibili: cambia solo che partono aperti. La
+         migrazione che ripulisce lo stato già scritto sta in NavGroups. */
       // Add shortcut hint below search
       var searchBox=document.getElementById('sidebar-search');
       if(searchBox&&!searchBox.querySelector('.kbd-hint')){

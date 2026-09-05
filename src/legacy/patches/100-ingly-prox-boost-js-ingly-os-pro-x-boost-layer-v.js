@@ -848,13 +848,9 @@ body             #content-inner { padding-bottom: 76px; }
 }
 #prox-cn-toggle:hover .cn-toggle-icon { color: #fbbf24; }
 .cn-toggle-icon { font-size: 12px; color: #52525b; transition: .15s; }
-#prox-cn-showhide {
-  font-size: 10px; padding: 3px 10px; border-radius: 20px;
-  border: 1px solid rgba(255,255,255,.1); background: transparent;
-  color: #52525b; cursor: pointer; margin: 0 12px 8px;
-  transition: .12s; width: calc(100% - 24px);
-}
-#prox-cn-showhide:hover { border-color: rgba(251,191,36,.35); color: #fbbf24; }
+/* Lo stile di #prox-cn-showhide se n'è andato con il pulsante: regole per un
+   elemento che nessuno crea più sono peso morto che il prossimo lettore deve
+   comunque leggere per capire che non serve. */
 `;
     document.head.appendChild(s);
   }
@@ -904,31 +900,30 @@ body             #content-inner { padding-bottom: 76px; }
         }
       }, true);
 
-      /* 2. Wrap the header div to add show/hide toggle */
-      var header = cn.querySelector('div:first-child');
+      /* ── 2. Il pulsante «Nascondi / Mostra Accesso Rapido» è stato tolto ──
+         Creava `#prox-cn-showhide` e ricordava la scelta in `prox_cn_hidden`.
+         Un comando che nasconde una parte dell'interfaccia, in un menu che già
+         nasconde i moduli dentro gruppi chiusi, non aiuta a orientarsi:
+         aggiunge un modo in più di far sparire qualcosa.
+
+         Chi lo aveva premuto però ha `prox_cn_hidden = '1'` e la griglia con
+         `display:none` scritto nello stile in linea. Togliere il pulsante e
+         basta gli lascerebbe l'Accesso Rapido invisibile **per sempre**, senza
+         più il comando per riaprirlo: la rimozione senza ripristino sarebbe un
+         danno, non una pulizia. Quindi si rimette a posto lo stile e si
+         ripulisce la chiave, una volta sola. */
       var gridWrap = cn.querySelector('.cn-grid');
+      try {
+        if (localStorage.getItem('prox_cn_hidden') !== null) {
+          if (gridWrap && gridWrap.style.display === 'none') gridWrap.style.display = '';
+          localStorage.removeItem('prox_cn_hidden');
+        }
+      } catch (e) { /* archivio non disponibile: la griglia resta com'è */ }
 
-      /* Insert hide button below header */
-      var hideBtn = document.createElement('button');
-      hideBtn.id = 'prox-cn-showhide';
-      hideBtn.textContent = '▲ Nascondi Accesso Rapido';
-      var hidden = localStorage.getItem('prox_cn_hidden') === '1';
-      if (hidden) {
-        hideBtn.textContent = '▼ Mostra Accesso Rapido';
-        if (gridWrap) gridWrap.style.display = 'none';
-      }
-      hideBtn.addEventListener('click', function () {
-        var isHidden = gridWrap && gridWrap.style.display === 'none';
-        if (gridWrap) gridWrap.style.display = isHidden ? '' : 'none';
-        hideBtn.textContent = isHidden ? '▲ Nascondi Accesso Rapido' : '▼ Mostra Accesso Rapido';
-        localStorage.setItem('prox_cn_hidden', isHidden ? '0' : '1');
-      });
-
-      if (header) {
-        cn.insertBefore(hideBtn, header.nextSibling);
-      } else {
-        cn.insertBefore(hideBtn, cn.firstChild);
-      }
+      /* E se una versione precedente aveva già disegnato il pulsante in questa
+         pagina, va tolto: un ricaricamento parziale potrebbe averlo lasciato. */
+      var vecchio = document.getElementById('prox-cn-showhide');
+      if (vecchio && vecchio.parentNode) vecchio.parentNode.removeChild(vecchio);
 
       return true;
     }

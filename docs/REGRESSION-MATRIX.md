@@ -62,6 +62,11 @@ sul file consegnato — `dist/INGLY-OS.html` — non sui sorgenti.
 | Sidebar | sovrapposizioni, 8 larghezze × 2 stati × 4 scorrimenti | 0 | 0 | ✔ |
 | Sidebar | categorie che si aprono al primo clic | 8 su 8 | 8/8 | ✔ |
 | Sidebar | voci con `display` in linea | 0 | 0 | ✔ |
+| Sidebar | gruppi chiusi all'avvio | 0 | 0 su 9 | ✔ |
+| Sidebar | voci di menu visibili | tutte | 110 su 110 | ✔ |
+| Sidebar | gruppo compresso a mano, dopo ricaricamento | resta compresso | resta compresso | ✔ |
+| Sidebar | `#prox-cn-showhide` e il suo testo | assenti | assenti | ✔ |
+| Sidebar | barra più lunga dello schermo | scorre | 4 234 px in 593, scorre | ✔ |
 | DOM | azioni offerte due volte nello stesso componente | 0 | 0 | ✔ |
 | DOM | id duplicati | 0 | 0 | ✔ |
 | DOM | palette dei comandi contemporanee | ≤ 1 | 0 aperte | ✔ |

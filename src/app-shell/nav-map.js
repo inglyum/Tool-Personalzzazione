@@ -94,6 +94,13 @@ export const NAV_GROUPS = [
     items: [
       { id: 'equipment', label: 'Macchine', aka: ['Attrezzature'], icon: 'cpu', primary: true, feature: 'core' },
       { id: 'items', label: 'Magazzino', icon: 'package', primary: true, feature: 'core' },
+      /* Tre moduli che esistevano, disegnavano, e non avevano una voce:
+         `Gadgets`, `Materials` e `Components` hanno il loro renderer e la
+         loro vista piena — misurati 24k, 20k e 518 caratteri — ma non si
+         potevano raggiungere in nessun modo dalla barra. */
+      { id: 'gadgets', label: 'Gadget & Accessori', icon: 'package', feature: 'core' },
+      { id: 'materials', label: 'Materiali & Macchine', aka: ['Materiali'], icon: 'boxes', feature: 'core' },
+      { id: 'components', label: 'Componenti', aka: ['Componenti & Accessori'], icon: 'puzzle', feature: 'core' },
       { id: 'paints', label: 'Vernici & spray', aka: ['Vernici & Bombolette'], icon: 'droplet', feature: 'core' },
       { id: 'suppliers', label: 'Fornitori', icon: 'truck', primary: true, feature: 'core' },
       { id: 'stockalert', label: 'Alert scorte', icon: 'alert-triangle', feature: 'core' },
@@ -211,6 +218,14 @@ export const NAV_ALIASES = {
      diventate viste (Kanban, Analytics, Lista) e restano alias, così i
      collegamenti e le scorciatoie esistenti continuano ad aprire qualcosa. */
   workflow_dashboard: 'gestione_ordini',
+  /* Viste che esistono nel markup ma il cui modulo non è mai stato caricato:
+     il contenuto è statico e una voce equivalente c'è già. Restano cercabili,
+     senza aggiungere una seconda riga per la stessa cosa. */
+  inventory: 'items',
+  etsy: 'etsyai',
+  social: 'socialstudio',
+  innovation: 'ideas',
+  studio_ai: 'ai',
   kanban: 'gestione_ordini',
   order_tracker: 'gestione_ordini',
   magazzino: 'items',
@@ -226,6 +241,8 @@ export const NAV_EXCLUDED = {
     'Consolidato dentro il hub Report dalla patch v88, che lo rimuove esplicitamente dalle sezioni. La voce di menu era rimasta.',
   stockplanner:
     'Nessuna vista e nessun modulo: compare solo negli elenchi dei piani. Va tolto anche dal registro licenze.',
+  profitleak:
+    'La vista esiste ma è vuota: misurato `innerHTML` di zero caratteri, e `ProfitLeakDetector` non è definito a runtime. Una voce di menu che apre una schermata bianca è peggio di nessuna voce.',
 };
 
 export const TECH_LABELS = {

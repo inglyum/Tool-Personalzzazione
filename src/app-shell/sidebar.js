@@ -48,9 +48,14 @@
     }
   }
 
+  /* `[].slice.call(set)` restituiva sempre `[]`: un `Set` non ha `length`, e
+     `Array.prototype.slice` su un oggetto senza `length` non copia niente. La
+     scrittura riusciva, il JSON era valido, e il valore era sempre vuoto — per
+     questo un gruppo chiuso a mano si ritrovava aperto dopo il ricaricamento.
+     `Array.from` è l'unico modo corretto di svuotare un insieme in un array. */
   function writeSet(key, set) {
     try {
-      localStorage.setItem(key, JSON.stringify([].slice.call(set)));
+      localStorage.setItem(key, JSON.stringify(Array.from(set)));
     } catch (e) {
       /* quota piena: il menu funziona lo stesso, si perde solo la preferenza */
     }
@@ -111,11 +116,24 @@
 
     for (var i = 0; i < primary.length; i += 1) html += itemMarkup(primary[i], isFavorito(primary[i].id));
 
-    /* Progressive disclosure: le voci secondarie esistono, ma non pesano sulla
-       lettura finché non servono. Sono comunque raggiungibili dalla ricerca. */
+    /* ── «Altro» si apre, non si chiude ──────────────────────────────────
+       Queste voci stavano in un `<details>` chiuso, con la giustificazione che
+       erano «comunque raggiungibili dalla ricerca». Misurato sulla build
+       precedente: 35 voci visibili su 107. Settantadue moduli che si potevano
+       aprire solo scrivendone il nome — e per scriverlo bisogna sapere che
+       esistono.
+
+       La ricerca è una scorciatoia per chi sa cosa cerca, non il modo di
+       scoprire cosa c'è. Il raggruppamento resta, perché separa il quotidiano
+       dal resto e la gerarchia aiuta a leggere; cambia che parte aperto.
+
+       Se aprendo tutto la barra supera lo schermo, scorre: `#sidebar-nav` ha
+       `overflow-y:auto` e misura 1610 px di contenuto in 593 di finestra.
+       Nascondere moduli per non far scorrere una barra è il rimedio sbagliato
+       al problema sbagliato. */
     if (secondary.length) {
       html +=
-        '<details class="nav-more"><summary class="nav-item nav-item--more">' +
+        '<details class="nav-more" open><summary class="nav-item nav-item--more">' +
         '<i class="fas fa-ellipsis" aria-hidden="true"></i><span>Altro (' + secondary.length + ')</span>' +
         '</summary>';
       for (var j = 0; j < secondary.length; j += 1) html += itemMarkup(secondary[j], isFavorito(secondary[j].id));
