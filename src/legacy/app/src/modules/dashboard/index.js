@@ -1,6 +1,14 @@
 
 // === /src/modules/dashboard/index.js ===
 // Dashboard Module - INGLY OS v88
+/* Quanti preventivi sono diventati un ordine. Un conto solo, chiamato da due
+   punti che prima ne avevano due copie identiche e parziali. */
+function _convertiti(quotes, orders){
+  const QS = typeof window!=='undefined' && window.InglyQuoteStatus;
+  if(!QS) return (quotes||[]).filter(q=>q.status==='confermato').length;
+  return (quotes||[]).filter(q=>QS.statoDi(q,{orders:orders||[]}).id==='CONVERTED').length;
+}
+
 const KPIEngine={
   async run(){
     // Prefer BDW (Single Source of Truth) when ready; fallback to IDB direct
@@ -21,7 +29,10 @@ const KPIEngine={
       income   = cf.filter(c=>c.type==='entrata'&&new Date(c.date||0).getTime()>=monthStart).reduce((a,c)=>a+(+c.amount||0),0);
       expenses = cf.filter(c=>c.type==='uscita'&&new Date(c.date||0).getTime()>=monthStart).reduce((a,c)=>a+(+c.amount||0),0);
       const quotes = raw.quotes || [];
-      converted = quotes.filter(q=>q.status==='confermato').length;
+      /* `'confermato'` è uno dei tre valori che significano «diventato un
+         ordine»: `'produzione'` e un ordine collegato dicono la stessa cosa.
+         Il vocabolario unico li conosce tutti. */
+      converted = _convertiti(quotes, raw.orders || []);
       totalQuotes = quotes.length;
       totalSales = mSales.length;
       totalClients = (raw.clients||[]).length;
@@ -30,10 +41,14 @@ const KPIEngine={
       invValue = items.reduce((a,i)=>(+(i.quantity??i.stock??0))*(+(i.costPrice??i.cost??0))+a,0);
     } catch(e) {
       // BDW not ready — fallback to direct IDB
-      const [sales,quotes,inventory,cashflow,clients]=await Promise.all([
+      const [sales,quotes,inventory,cashflow,clients,orders]=await Promise.all([
         IDB.getAll('sales').catch(()=>[]),IDB.getAll('quotes').catch(()=>[]),
         IDB.getAll('items').catch(()=>[]),IDB.getAll('cashflow').catch(()=>[]),
-        IDB.getAll('clients').catch(()=>[])
+        IDB.getAll('clients').catch(()=>[]),
+        /* Serve a sapere quali preventivi sono diventati un ordine: senza,
+           `_convertiti` conterebbe solo quelli il cui stato è stato
+           aggiornato a mano. */
+        IDB.getAll('orders').catch(()=>[])
       ]);
       const now=new Date();
       const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
@@ -42,7 +57,7 @@ const KPIEngine={
       unpaid=mSales.filter(s=>s.status==='da_pagare').reduce((a,s)=>a+(+s.amount||0),0);
       income=cashflow.filter(c=>c.type==='entrata'&&new Date(c.date||0).getTime()>=monthStart).reduce((a,c)=>a+(+c.amount||0),0);
       expenses=cashflow.filter(c=>c.type==='uscita'&&new Date(c.date||0).getTime()>=monthStart).reduce((a,c)=>a+(+c.amount||0),0);
-      converted=quotes.filter(q=>q.status==='confermato').length;
+      converted=_convertiti(quotes, orders);
       totalQuotes=quotes.length; totalSales=mSales.length; totalClients=clients.length;
       lowStock=inventory.filter(i=>(+i.stock||0)<=(+i.minStock||0)).length;
       invValue=inventory.reduce((a,i)=>(+i.stock||0)*(+i.costPrice||0)+a,0);
@@ -625,7 +640,11 @@ const DashLayout = {
 
       // Quotes awaiting response > 5 days
       const pendingQuotes=quotes.filter(q=>{
-        if(q.status==='confermato'||q.status==='rifiutato')return false;
+        /* «In attesa di risposta» vuol dire ancora aperto: chiuso è convertito,
+           rifiutato **o scaduto** — e uno scaduto non aspetta più niente. */
+        const QS=window.InglyQuoteStatus;
+        if(QS){ if(!QS.statoDi(q,{orders:orders||[]}).aperto) return false; }
+        else if(q.status==='confermato'||q.status==='rifiutato')return false;
         const daysDiff=(now-new Date(q.created||q.date||0))/864e5;
         return daysDiff>5;
       });

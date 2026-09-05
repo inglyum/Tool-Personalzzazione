@@ -98,6 +98,51 @@
       el.innerHTML = this._buildHTML(ctx);
       var fileInp = document.getElementById('crm-file-inp');
       if(fileInp) fileInp.setAttribute('accept','.vcf,.vcard,.csv,.xlsx,.xls,.txt');
+      /* I preventivi arrivano dal database, quindi dopo il disegno: il
+         riquadro è già lì e si riempie appena la lettura torna. */
+      this._kpiPreventivi();
+    };
+
+    /* ── La pipeline dei preventivi ──────────────────────────────────────
+       Esisteva `Clients.renderPipeline()`, che scriveva in
+       `#crm-pipeline-strip` — un elemento del markup storico che questa vista
+       non usa più: misurato sul documento composto, quell'id non esiste nel
+       DOM — e che comunque non chiamava nessuno.
+
+       Sommava inoltre i preventivi con stato `'inviato'` o `'bozza'`, due
+       valori che nessuna parte del programma scrive: il preventivatore crea
+       con `'in_attesa'`. Anche fosse stata disegnata e chiamata avrebbe
+       segnato zero euro per sempre — ed è questo che faceva sembrare i
+       preventivi «fermi».
+
+       Il conto lo fa `InglyQuoteStatus`, che conosce tutti i nomi storici e
+       sa che un preventivo con un ordine collegato non è più in gioco. Il
+       nome è `_kpiPreventivi` e non `_pipeline` perché in questo oggetto
+       `_pipeline()` è già un'altra cosa: prepara l'elenco dei clienti. */
+    CRMSmart._kpiPreventivi = async function(){
+      var box = document.getElementById('crm-kpi-preventivi');
+      var esc = function(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x];}); };
+      var QS = window.InglyQuoteStatus;
+      if(!box || !QS || typeof IDB === 'undefined') return;
+      var quotes = await IDB.getAll('quotes').catch(function(){ return []; });
+      var orders = await IDB.getAll('orders').catch(function(){ return []; });
+      var c = QS.pipeline(quotes, { orders: orders });
+      var eu = function(v){ return '€' + Math.round(v).toLocaleString('it-IT'); };
+      var voci = [
+        { l:'Pipeline', v: eu(c.valore), c:'#6366f1', t:'Valore dei preventivi ancora in gioco' },
+        { l:'Preventivi aperti', v: c.aperti, c:'#3b82f6', t:'Bozze, inviati, visti e accettati' },
+        { l:'Convertiti', v: c.conteggi.CONVERTED, c:'#22c55e', t:'Diventati un ordine' },
+        { l:'Conversione', v: c.conversionePct==null ? '—' : Math.round(c.conversionePct)+'%', c:'#16a34a',
+          t: c.conversionePct==null ? 'Nessun preventivo ancora deciso: il tasso non esiste'
+            : 'Sui ' + c.decisi + ' preventivi decisi, non su tutti' },
+      ];
+      if(c.scadutiDerivati) voci.push({ l:'Scaduti', v:c.scadutiDerivati, c:'#78716c',
+        t:'Validità superata: derivato dalla data, non scritto nel preventivo' });
+      box.innerHTML = voci.map(function(k){
+        return '<div title="'+esc(k.t)+'" style="background:var(--bg-card2);border:1px solid '+k.c+'30;border-radius:12px;padding:12px;text-align:center">'
+          +'<div style="font-size:9px;color:'+k.c+';font-weight:700;text-transform:uppercase;margin-bottom:3px">'+esc(k.l)+'</div>'
+          +'<div style="font-size:20px;font-weight:900;color:'+k.c+'">'+esc(k.v)+'</div></div>';
+      }).join('');
     };
 
     /* I comandi della vista: cambiano lo stato e ridisegnano. Nessuno di loro
@@ -158,6 +203,9 @@
         +[{l:'Totale',v:total,c:'#6366f1'},{l:'Con Telefono',v:withPhone,c:'#10b981'},{l:'Importati',v:data.filter(function(x){return x._imported;}).length,c:'#f59e0b'},{l:'Aggiunti oggi',v:data.filter(function(x){return x.added&&x.added.slice(0,10)===new Date().toISOString().slice(0,10);}).length,c:'#ec4899'}]
         .map(function(k){ return '<div style="background:var(--bg-card2);border:1px solid '+k.c+'30;border-radius:12px;padding:12px;text-align:center"><div style="font-size:9px;color:'+k.c+';font-weight:700;text-transform:uppercase;margin-bottom:3px">'+k.l+'</div><div style="font-size:20px;font-weight:900;color:'+k.c+'">'+k.v+'</div></div>'; }).join('')
         +'</div>'
+
+        // Preventivi: riempito da _kpiPreventivi(), che legge il database
+        +'<div id="crm-kpi-preventivi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px"></div>'
 
         // Search
         +'<input id="crm-q" value="'+esc(ctx.q!=null?ctx.q:CRMSmart._stato.q)+'" oninput="CRMSmart._cerca(this.value)" placeholder="🔍 Cerca per nome, telefono, azienda, email, P.IVA..." '

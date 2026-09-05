@@ -692,24 +692,18 @@ const Clients={
     await App.populateClientSelects();
   },
 
-  async renderPipeline(){
-    const clients=await AppStore.get('clients').catch(()=>[]);
-    const sales=await AppStore.get('sales').catch(()=>[]);
-    const quotes=await AppStore.get('quotes').catch(()=>[]);
-    // Compute pipeline stages
-    const prospects=clients.filter(c=>c.leadStatus==='prospect'||!c.leadStatus);
-    const inTreatative=clients.filter(c=>c.leadStatus==='trattativa');
-    const closed=clients.filter(c=>c.leadStatus==='chiuso');
-    const revenue=sales.filter(s=>s.status==='pagato').reduce((a,s)=>a+(+s.amount||0),0);
-    const pipeline=quotes.filter(q=>q.status==='inviato'||q.status==='bozza').reduce((a,q)=>a+(+q.grossPrice||0),0);
-    const el=eid('crm-pipeline-strip');
-    if(el) el.innerHTML=[
-      {l:'Prospect',v:prospects.length,c:'#64748b'},
-      {l:'In Trattativa',v:inTreatative.length,c:'#f59e0b'},
-      {l:'Clienti Chiusi',v:closed.length,c:'#10b981'},
-      {l:'Pipeline €',v:fmtCur(pipeline),c:'var(--primary)'},
-    ].map(k=>`<div class="kpi-card"><div class="kpi-value" style="color:${k.c}">${k.v}</div><div class="kpi-label">${k.l}</div></div>`).join('');
-  },
+  /* ── `renderPipeline` è stata ritirata ─────────────────────────────────
+     Scriveva in `#crm-pipeline-strip`, un elemento del markup storico che la
+     vista clienti non usa più: misurato sul documento composto, quell'id non
+     esiste nel DOM. E non la chiamava nessuno.
+
+     Sommava inoltre i preventivi con stato `'inviato'` o `'bozza'`, due
+     valori che nessuna parte del programma scrive — il preventivatore crea
+     con `'in_attesa'`. Anche fosse stata disegnata e chiamata, avrebbe
+     segnato zero euro per sempre.
+
+     La pipeline ora la disegna `CRMSmart._pipeline()`, dentro la vista che
+     esiste davvero, e il conto lo fa `InglyQuoteStatus`. */
 
   // ── Bulk selection ───────────────────────────────────────
   _selected: new Set(),
@@ -818,13 +812,21 @@ const Clients={
 
     const cSales   = allSales.filter(s  => s.clientId===client.id || (s.clientName||'').toLowerCase()===(client.name||'').toLowerCase());
     const cOrders  = allOrders.filter(o => o.clientId===client.id || (o.clientName||'').toLowerCase()===(client.name||'').toLowerCase());
-    const cQuotes  = allQuotes.filter(q => q.clientId===client.id || (q.clientName||'').toLowerCase()===(client.name||'').toLowerCase());
+    const cQuotes  = window.InglyQuoteStatus
+      ? window.InglyQuoteStatus.preventiviDi(client, allQuotes)
+      : allQuotes.filter(q => q.clientId===client.id || (q.clientName||'').toLowerCase()===(client.name||'').toLowerCase());
 
     const totalSpent = cSales.filter(s=>s.status==='pagato').reduce((a,s)=>a+(+s.amount||0),0);
     const lastSale   = cSales.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0))[0];
     const daysSince  = lastSale ? Math.floor((Date.now()-new Date(lastSale.date||0).getTime())/864e5) : null;
     const avgOrder   = cSales.filter(s=>s.status==='pagato').length ? totalSpent / cSales.filter(s=>s.status==='pagato').length : 0;
-    const convRate   = cQuotes.length ? Math.round(cQuotes.filter(q=>q.status==='confermato').length/cQuotes.length*100) : null;
+    /* La conversione si calcola sui preventivi **decisi**: contare al
+       denominatore anche quelli ancora aperti fa scendere il tasso ogni volta
+       che si fa un preventivo nuovo, che è l'opposto di quel che vuol dire. */
+    const _QS = window.InglyQuoteStatus;
+    const _conto = _QS ? _QS.pipeline(cQuotes, { orders: allOrders }) : null;
+    const convRate = _conto ? (_conto.conversionePct==null ? null : Math.round(_conto.conversionePct))
+      : (cQuotes.length ? Math.round(cQuotes.filter(q=>q.status==='confermato').length/cQuotes.length*100) : null);
 
     // Health score (0-100)
     let health = 50;
@@ -1156,7 +1158,7 @@ const ClientTimeline = {
     // Build unified timeline events
     const events = [
       ...cSales.map(s=>({ts:new Date(s.date||0).getTime()||0, type:'sale', icon:'💰', color:'#10b981', label:s.desc||'Vendita', detail:`${fmtCur(+s.amount||0)} · ${s.status}`, raw:s})),
-      ...cQuotes.map(q=>({ts:new Date(q.date||q.createdAt||0).getTime()||0, type:'quote', icon:'📄', color:'#f59e0b', label:q.name||'Preventivo', detail:`${q.grossPrice?fmtCur(q.grossPrice):''} · ${q.status||'bozza'}`, raw:q})),
+      ...cQuotes.map(q=>({ts:new Date(q.date||q.createdAt||0).getTime()||0, type:'quote', icon:'📄', color:'#f59e0b', label:q.name||'Preventivo', detail:`${q.grossPrice?fmtCur(q.grossPrice):''} · ${(window.InglyQuoteStatus?window.InglyQuoteStatus.statoDi(q,{orders:allOrders}).label:(q.status||'—'))}`, raw:q})),
       ...cSigs.map(s=>({ts:s.ts||0, type:'signature', icon:'✍️', color:'#8b5cf6', label:'Firma digitale', detail:new Date(s.ts).toLocaleDateString('it-IT'), raw:s})),
     ].sort((a,b)=>b.ts-a.ts);
 

@@ -62,6 +62,10 @@ export const PRODUCT_FILES = [
   /* Il ricalcolo del catalogo: usa `InglyCostEngine.prezzo`, quindi dopo il
      motore. Prepara una proposta e non scrive: scrivere è di chi conferma. */
   'catalog-recalc.js',
+  /* Il vocabolario degli stati di preventivo e i legami preventivo↔ordine.
+     Puro e senza dipendenze: può stare ovunque, sta qui perché lo leggono
+     CRM, dashboard e ordini. */
+  'quote-status.js',
   /* Il registro di magazzino: puro, poi la metà che parla con il database.
      Nessuno dei due dipende dal resto, ma l'ordine fra i due sì. */
   'inventory-ledger.js',
