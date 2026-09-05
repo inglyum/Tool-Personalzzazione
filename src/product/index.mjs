@@ -72,6 +72,9 @@ export const PRODUCT_FILES = [
   'consuntivo.js',
   /* Il campo immagine riusabile: nessuna dipendenza, lo montano sei moduli. */
   'product-image.js',
+  /* Quando ricomprare, calcolato dai movimenti invece che scritto a mano.
+     Puro: legge un registro che riceve, non lo va a prendere. */
+  'inventory-riordino.js',
   'tema.js',
   'tema-view.js',
   'cliente-integrita.js',

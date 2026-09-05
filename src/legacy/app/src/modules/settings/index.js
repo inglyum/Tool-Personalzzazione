@@ -6358,6 +6358,10 @@ const ExcelExport = {
 // SOLLECITI AUTOMATICI
 // ══════════════════════════════════════════════════════════════════
 const StockAlert = {
+  /* Il motore che dice quando ricomprare. Non è di questo file: qui si
+     interroga soltanto. */
+  get _riordino() { return typeof InglyRiordino !== 'undefined' ? InglyRiordino : null; },
+
   async render() {
     const el = eid('view-stockalert'); if(!el) return;
     el.innerHTML = `<div style="padding:20px;max-width:1100px">
@@ -6365,7 +6369,7 @@ const StockAlert = {
         <h2 style="color:#fbbf24;margin:0;font-size:22px">📦 Stock Alert</h2>
         <span style="font-size:11px;background:#fbbf2415;color:#fbbf24;padding:3px 10px;border-radius:99px;border:1px solid #fbbf2430;font-weight:700">INTELLIGENTE</span>
       </div>
-      <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">Monitor materiali basato sui tuoi ordini reali — alert automatici prima che finisca lo stock</p>
+      <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">Monitor materiali basato sui movimenti di magazzino registrati — alert automatici prima che finisca lo stock</p>
       <div id="sa-content"><div style="text-align:center;padding:40px"><div style="width:40px;height:40px;border:3px solid var(--border);border-top-color:#fbbf24;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px"></div></div></div>
     </div>`;
     await this._load();
@@ -6373,11 +6377,14 @@ const StockAlert = {
 
   async _load() {
     const el = eid('sa-content'); if(!el) return;
+    const RIORDINO = this._riordino;
     try {
-      const [materials, sales, orders] = await Promise.all([
+      const [materials, sales, orders, movimenti] = await Promise.all([
         IDB.getAll('materials').catch(()=>[]),
         IDB.getAll('sales').catch(()=>[]),
-        IDB.getAll('orders').catch(()=>[])
+        IDB.getAll('orders').catch(()=>[]),
+        /* Il registro dei movimenti: è lui che sa quanto è uscito e quando. */
+        IDB.getAll('inventory_ledger').catch(()=>[])
       ]);
 
       // Calculate monthly material consumption from sales
@@ -6393,10 +6400,28 @@ const StockAlert = {
         const minStock = +m.minStock||+m.minQuantity||0;
         const unit = m.unit||'pz';
         const price = +m.price||+m.unitCost||0;
-        const monthlyConsumption = +m.monthlyConsumption||0;
-        const daysLeft = monthlyConsumption > 0 ? Math.floor(stock / (monthlyConsumption/30)) : null;
+        /* Il consumo mensile si leggeva da `m.monthlyConsumption`: un secondo
+           numero scritto a mano, accanto a `minStock`, che nessuno aggiorna.
+           Il sottotitolo di questa sezione promette «basato sui tuoi ordini
+           reali», e non lo era.
+
+           Ora lo calcola `InglyRiordino` dal registro dei movimenti, che sa
+           quanto è uscito e quando. Il campo scritto a mano resta la riserva
+           per chi non ha ancora movimenti registrati: meglio un numero vecchio
+           che nessun numero, purché si sappia da dove viene. */
+        let riordino = null;
+        if (RIORDINO) {
+          riordino = RIORDINO.analizza(movimenti, { ...m, id: m.id, stock, minStock }, {});
+        }
+        const misurato = !!(riordino && riordino.misurabile);
+        const monthlyConsumption = misurato
+          ? riordino.consumo.alMese
+          : (+m.monthlyConsumption || 0);
+        const daysLeft = misurato
+          ? (riordino.giorniResidui == null ? null : Math.floor(riordino.giorniResidui))
+          : (monthlyConsumption > 0 ? Math.floor(stock / (monthlyConsumption / 30)) : null);
         const status = stock <= 0 ? 'empty' : minStock > 0 && stock <= minStock ? 'low' : daysLeft !== null && daysLeft < 14 ? 'warning' : 'ok';
-        return { ...m, stock, minStock, unit, price, daysLeft, status, monthlyConsumption };
+        return { ...m, stock, minStock, unit, price, daysLeft, status, monthlyConsumption, riordino, misurato };
       }).sort((a,b) => {
         const order = {empty:0,low:1,warning:2,ok:3};
         return (order[a.status]||3) - (order[b.status]||3);
@@ -6422,8 +6447,20 @@ const StockAlert = {
             ${m.stock} ${m.unit}
           </span>
           ${m.minStock?`<span style="color:var(--text-muted);font-size:11px"> / min ${m.minStock}</span>`:''}
+          ${/* La soglia calcolata sta accanto a quella scritta, non al posto
+                suo: `minStock` resta dell'utente, e si cambia solo se lo
+                decide lui. Si mostra solo quando cambierebbe qualcosa. */''}
+          ${(m.riordino && m.riordino.misurabile && Math.abs(m.riordino.suggerito - m.minStock) >= 1)
+            ? `<div style="font-size:10px;color:#60a5fa;margin-top:2px" title="Consumo ${m.riordino.consumo.alGiorno.toFixed(2)} ${m.unit}/giorno su ${m.riordino.consumo.giorniOsservati} giorni · consegna ${m.riordino.giorniConsegna} giorni">
+                 dai movimenti: ${m.riordino.suggerito.toFixed(m.riordino.suggerito < 10 ? 1 : 0)} ${m.unit}
+                 ${m.riordino.consumo.affidabile ? '' : ' <span style="color:var(--text-dim)" title="' + m.riordino.consumo.riserve.join(' · ') + '">(stima debole)</span>'}
+               </div>`
+            : ''}
         </td>
-        <td style="padding:10px 12px;text-align:right;font-size:12px;color:var(--text-muted)">${m.daysLeft!==null?`~${m.daysLeft} giorni`:'—'}</td>
+        <td style="padding:10px 12px;text-align:right;font-size:12px;color:var(--text-muted)">
+          ${m.daysLeft!==null?`~${m.daysLeft} giorni`:'—'}
+          ${m.misurato ? '' : '<div style="font-size:9px;color:var(--text-dim)">non dai movimenti</div>'}
+        </td>
         <td style="padding:10px 12px;text-align:right;font-size:12px;color:var(--text-muted)">${m.price>0?`€${m.price}/${m.unit}`:'—'}</td>
         <td style="padding:10px 12px;text-align:center">
           ${m.status!=='ok'?`<button onclick="if(typeof StockAlert!==typeof undefined)StockAlert._order(${(m.name||'').replace(/'/g,'')},${m.stock||0},${m.unit})" style="padding:5px 10px;background:#fbbf24;color:#000;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Ordina</button>
