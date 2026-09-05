@@ -118,6 +118,17 @@ var _registroLetto=false;
    l'informazione che mancava: quali filamenti sono tracciati e quali sono solo
    scritti qui dentro. */
 var MATS_INV=[];
+/* ── Il parco macchine, quello vero ────────────────────────────────────────
+   `MACH` è un elenco di modelli noti: serve a chi non ha ancora registrato
+   niente, ed è un catalogo commerciale, non un inventario. Il parco è in
+   `equipment`, con i prezzi pagati davvero, le ore di vita dichiarate e la
+   manutenzione di quella macchina.
+
+   Finché il preventivatore leggeva solo `MACH`, i due registri dicevano cose
+   diverse sulla stessa stampante e vinceva sempre il listino. Ora il parco
+   viene prima: le macchine registrate in testa alla tendina, i modelli noti
+   dietro. */
+var PARCO=[];
 /* I dati che arrivano dallo slicer, tenuti separati da quelli digitati: è la
    distinzione che permette di non contarli due volte. */
 var SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
@@ -317,7 +328,14 @@ function render(){
   var _prima=_valoriCorrenti(root);
   var MODI=MODI_();
   var isFdm=T==='fdm';
-  var machOpts=(MACH[T]||[]).map(function(m){return '<option value="'+m.id+'">'+m.n+' ('+m.w+'W · €'+m.c+')</option>';}).join('');
+  var _opt=function(m){
+    return '<option value="'+m.id+'">'+m.n+' ('+(m.w?m.w+'W · ':'')+'€'+m.c+(m.incompleta?' · da completare':'')+')</option>';
+  };
+  var mieMacchine=PARCO.map(macchinaDalParco).filter(Boolean);
+  var machOpts=(mieMacchine.length
+      ? '<optgroup label="Le tue macchine">'+mieMacchine.map(_opt).join('')+'</optgroup>'
+        +'<optgroup label="Modelli noti">'+(MACH[T]||[]).map(_opt).join('')+'</optgroup>'
+      : (MACH[T]||[]).map(_opt).join(''));
   var visibili=materialiVisibili();
   var segno={registro:'✅', anagrafica:'📦', locale:'✎'};
   var matOpts=visibili.filter(function(m){return m.t===T;}).map(function(m){
@@ -647,7 +665,7 @@ function render(){
   (function(){ var h=el('p3d-h'); if(h) tempoDaDecimale(parseFloat(h.value)||0); }());
   setTimeout(function(){calc();},10);
   /* Il registro si rilegge quando la sezione si apre, non a ogni tasto. */
-  if(!_registroLetto){ _registroLetto=true; aggiornaRegistro(); }
+  if(!_registroLetto){ _registroLetto=true; aggiornaRegistro(); aggiornaParco(); }
 }
 
 /* ── Da dove viene il prezzo del materiale ─────────────────────────────────
@@ -1741,9 +1759,22 @@ function setDisc(v){
 }
 
 function pickMach(id){
-  var m=(MACH[T]||[]).find(function(x){return x.id===id;});if(!m)return;
+  var m=null;
+  if(String(id).indexOf('parco:')===0){
+    var rec=PARCO.filter(function(x){ return 'parco:'+x.id===id; })[0];
+    m=macchinaDalParco(rec);
+    /* La manutenzione di **questa** macchina batte il valore iniziale del
+       modulo, che è un ripiego per chi non ha ancora registrato niente. */
+    if(m && m.manutenzione != null) sv('p3d-mnt', m.manutenzione);
+  }
+  if(!m) m=(MACH[T]||[]).find(function(x){return x.id===id;});
+  if(!m)return;
   var s=el('p3d-mach');if(s)s.value=id;
-  sv('p3d-watt',m.w);sv('p3d-mc',m.c);sv('p3d-lh',m.l);
+  /* Un campo del parco lasciato vuoto vale zero, e uno zero qui vorrebbe dire
+     «questa macchina non costa niente all'ora». Si scrive solo ciò che c'è. */
+  if(m.w>0) sv('p3d-watt',m.w);
+  if(m.c>0) sv('p3d-mc',m.c);
+  if(m.l>0) sv('p3d-lh',m.l);
   /* Il costo orario lo calcola il motore macchine, che sa distinguere le
      quattro voci — corrente, ammortamento, manutenzione, consumabili — e sa
      dire se il consumo è misurato o dedotto dalla targa. Il suggerimento qui
@@ -1767,7 +1798,7 @@ function pickMach(id){
     }
   }
   document.querySelectorAll('#view-print3d .p3-mb').forEach(function(b){b.classList.remove('sel');});
-  var idx=(MACH[T]||[]).findIndex(function(x){return x.id===id;});
+  var idx=(MACH[T]||[]).findIndex(function(x){return x.id===id;});   // −1 per le macchine del parco: nessun pulsante da accendere
   var btns=document.querySelectorAll('#view-print3d .p3-mb');if(btns[idx])btns[idx].classList.add('sel');
   calc();
 }
@@ -1810,6 +1841,45 @@ function costoDalRegistro(m){
   });
   if(POLITICA_MAT==='manuale') return null;   // il campo comanda, e lo dichiara
   return (e && e.disponibile) ? e : e;
+}
+
+/** Le macchine registrate dal laboratorio, per la tecnologia in uso. */
+function aggiornaParco(){
+  if(typeof IDB==='undefined' || !IDB.getAll) return;
+  IDB.getAll('equipment').then(function(lista){
+    var voluta = (T==='resin') ? ['resin','resina','sla','dlp','print3d','3d'] : ['print3d','3d','fdm'];
+    PARCO=(lista||[]).filter(function(m){
+      if(!m || m._archived) return false;
+      var t=String(m.tech||m.tecnologia||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      /* Senza tecnologia dichiarata la macchina si mostra lo stesso: escluderla
+         nasconderebbe una macchina che esiste, e l'utente sa cosa ha comprato
+         meglio di un filtro. */
+      return !t || voluta.indexOf(t)>=0;
+    });
+    render();
+  }).catch(function(){});
+}
+
+/** Una macchina del parco, normalizzata nei quattro numeri che servono qui.
+    I nomi dei campi sono tre generazioni di schede macchina: si leggono
+    tutti, perché un record vecchio è comunque una macchina vera. */
+function macchinaDalParco(rec){
+  if(!rec) return null;
+  var n=function(v){ var x=parseFloat(v); return isFinite(x)?x:0; };
+  var prezzo = n(rec.purchasePrice) || n(rec.costBuy) || n(rec.price) || 0;
+  var ore    = n(rec.usefulLifeHours) || n(rec.hoursLife) || (n(rec.lifeYears) * 1650) || 0;
+  var watt   = n(rec.measuredPowerW) || n(rec.averagePowerW) || n(rec.ratedPowerW) || n(rec.powerW) || 0;
+  var manut  = rec.maintenancePerHour != null ? n(rec.maintenancePerHour)
+             : (n(rec.costMaint) > 0 && ore > 0 ? n(rec.costMaint) / (ore / Math.max(1, n(rec.lifeYears) || 1)) : null);
+  return {
+    id: 'parco:' + rec.id,
+    n: [rec.brand, rec.model].filter(Boolean).join(' ') || rec.name || ('Macchina ' + rec.id),
+    w: watt, c: prezzo, l: ore,
+    manutenzione: manut,
+    /* Quel che manca si dice, invece di essere completato con un valore di
+       listino che non è di questa macchina. */
+    incompleta: !(prezzo > 0) || !(ore > 0),
+  };
 }
 
 /** Il registro si legge una volta per apertura di sezione, non a ogni tasto. */

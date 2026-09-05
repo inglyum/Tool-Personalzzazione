@@ -51,16 +51,27 @@ prudente che serve a non scoprire a fine anno che la manutenzione non era nel
 prezzo. Abbassarlo del 58% toglie 0,38 € da ogni pezzo di 5 ore senza che
 nessun dato dell'applicazione lo giustifichi.
 
-**Quello che resta da fare — NON APPLICATO in questa fase.** Il numero
-dovrebbe venire dalla macchina, non da un valore iniziale del modulo:
-`InglyMachineCost.normalizza()` legge già `maintenancePerHour` dalla scheda
-macchina, e `InglyProduzione` legge il parco. Il preventivatore 3D però non
-sceglie fra le macchine registrate: sceglie fra un elenco di preset interni
-(`MACH`), che è un secondo registro parallelo al parco.
+**Cosa si è cambiato invece — APPLICATO.** Il numero ora viene dalla
+macchina. `MACH` era un elenco di modelli commerciali noti — un listino, non
+un inventario — e il preventivatore leggeva solo quello, mentre il parco vero
+sta in `equipment` con il prezzo pagato davvero, le ore di vita dichiarate e
+la manutenzione di quella macchina. Due registri per la stessa stampante, e
+vinceva sempre il listino.
 
-Collegare i due è una modifica di integrazione, non una taratura di parametro,
-e va fatta con il suo collaudo: qui sarebbe entrata di straforo dentro una
-scheda che parla d'altro. Resta come lavoro dichiarato, non come cosa fatta.
+Ora la tendina apre con «Le tue macchine» e i modelli noti restano dietro.
+Scegliendo una macchina registrata, potenza, prezzo, vita utile **e
+manutenzione** arrivano dal record; un campo che il record non ha resta com'è,
+perché uno zero qui vorrebbe dire «questa macchina non costa niente all'ora».
+Una macchina registrata a metà compare lo stesso, marcata «da completare»:
+nasconderla nasconderebbe una macchina che esiste.
+
+Il valore di 0,12 €/h resta come punto di partenza per chi non ha ancora
+registrato niente.
+
+Verificato in `tests/qa/quoter3d-parco.mjs`: una macchina registrata con
+777 €/7000 h/111 W/0,33 €/h riempie i quattro campi con i suoi numeri, e il
+costo orario che ne esce (0,472 €/h) è diverso da quello del preset
+(0,302 €/h).
 
 ---
 
@@ -170,7 +181,7 @@ sola: prezzo e spiegazione non tornavano.
 | Parametro | Prima | Dopo | Motivazione | Impatto |
 |---|---|---|---|---|
 | Manutenzione FDM | 0,12 €/h | **0,12 €/h** (invariato) | 0,05 €/h non copre due piatti e un set di ugelli su 2000 h; nessun dato nell'applicazione lo sostiene | — |
-| Manutenzione, provenienza | valore del modulo | **non applicato** | il preventivatore 3D sceglie fra preset interni, non fra le macchine registrate: collegarli è integrazione, non taratura | da misurare quando si farà |
+| Manutenzione, provenienza | valore del modulo | **dalla macchina registrata** | il numero è della macchina, non del preventivatore; il valore del modulo resta per chi non ha ancora registrato niente | dipende dalla macchina: 0,12 → 0,33 €/h sul caso di prova |
 | Macchina «Personalizzata» | 400 €/2000 h (0,2000 €/h) | **420 €/3000 h (0,1398 €/h)** | mediana degli undici preset reali: 0,2000 è più caro di nove, 0,0997 è il secondo più economico | −0,326 €/pezzo sul caso da 5 h |
 | Confezione | doppio conteggio nel Product Builder | **una volta sola, costo diretto per pezzo** | è un costo variabile causato dal pezzo | −1× il valore della confezione sul prezzo del Product Builder |
 

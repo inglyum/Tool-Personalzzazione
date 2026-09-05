@@ -33,6 +33,7 @@ Ogni riga della tabella è un difetto **misurato**, non dedotto: la colonna
 | PB-01 | Product Builder | La confezione era contata **due volte** nel prezzo | Sommata in `materialCost` e ripassata a `Data.price` come voce | Una volta sola, come voce | costi-parametri + browser (5,00 → 8,00 con 3 €) | ✔ |
 | ERR-01 | Tutto | Una promessa rifiutata veniva registrata ma non detta a nessuno | Il presidio centrale solo osservava | Avviso all'utente, limitato a uno ogni dieci secondi | FASE 8e/8f | ✔ |
 | PERF-01 | Ordini | La vista Produzione rileggeva tutti gli ordini una seconda volta a ogni disegno | — | Gli ordini arrivano da `render()` che li ha già letti | PROD 26/26 | ✔ |
+| MACH-01 | Smart Quoter 3D | Il preventivatore ignorava il parco macchine registrato | `MACH` (listino di modelli noti) era l'unico registro letto; `equipment` è l'inventario vero | La tendina apre con «Le tue macchine»; potenza, prezzo, vita utile e manutenzione vengono dal record | quoter3d-parco, 14 controlli | ✔ |
 
 ## Parametri di costo — decisioni
 
@@ -50,14 +51,14 @@ Dettaglio in `docs/COST-PARAMETERS-AUDIT.md`.
 
 | | |
 |---|---|
-| **Bug trovati** | 21 |
-| **Bug risolti** | 21 |
+| **Bug trovati** | 22 |
+| **Bug risolti** | 22 |
 | **Moduli nuovi** | 4 (`order-fields`, `production-capacity`, `catalog-recalc`, `quote-status`) |
 | **Test totali (unitari)** | 1302 |
 | **Test passati** | 1302 |
 | **Test falliti** | 0 |
-| **Suite su browser** | 38, tutte verdi (`npm run qa`, uscita 0) |
-| **Controlli su browser nelle suite nuove** | 126 (28 ordini · 26 produzione · 21 catalogo · 18 CRM · 5+3 confezione · 28 coerenza) |
+| **Suite su browser** | 39, tutte verdi (`npm run qa`, uscita 0) |
+| **Controlli su browser nelle suite nuove** | 140 (28 ordini · 26 produzione · 21 catalogo · 18 CRM · 8 confezione · 28 coerenza · 14 parco macchine) |
 | **Errori JavaScript nelle suite nuove** | 0 |
 | **Controlli superati nella regressione completa** | 879 · 0 falliti · 0 errori JavaScript |
 
@@ -67,32 +68,25 @@ Dettaglio in `docs/COST-PARAMETERS-AUDIT.md`.
 
 Cose che questa fase **non** ha verificato, e il motivo.
 
-1. **Manutenzione dalla scheda macchina.** L'audit conclude che il valore
-   dovrebbe venire dalla macchina registrata, non da un valore iniziale del
-   modulo. Non è stato fatto: il preventivatore 3D sceglie fra preset interni
-   (`MACH`), un secondo registro parallelo al parco macchine. Collegarli è
-   un'integrazione con un suo collaudo, non una taratura di parametro, e
-   infilarla qui sarebbe stato un cambiamento non misurato.
-
-2. **I 472 `catch` vuoti del codice storico.** Sono stati contati, non
+1. **I 472 `catch` vuoti del codice storico.** Sono stati contati, non
    riscritti. Sono stati corretti soltanto quelli sui percorsi toccati da
    questa fase (salvataggio dell'ordine, conferma del ricalcolo, salvataggio
    delle specifiche). Il presidio centrale ora avvisa l'utente su ogni
    promessa rifiutata, il che copre il caso più pericoloso — l'operazione che
    fallisce in silenzio — ma non sostituisce una revisione voce per voce.
 
-3. **Il carico su più giorni.** La stima di fine lavoro tratta la capacità
+2. **Il carico su più giorni.** La stima di fine lavoro tratta la capacità
    giornaliera come costante e la coda come sequenziale su una macchina sola.
    Non modella turni, ferie, festività (il calendario non esiste nei dati),
    né lavorazioni parallele su più macchine. Dove i dati non arrivano, la
    stima si dichiara incompleta invece di inventare.
 
-4. **La conversione «visto dal cliente».** Lo stato esiste nel vocabolario ma
+3. **La conversione «visto dal cliente».** Lo stato esiste nel vocabolario ma
    nessuna parte dell'applicazione registra una data di visione: nessun
    preventivo risulterà mai «visto» finché quel dato non esiste. Dedurlo
    dall'invio sarebbe una statistica inventata.
 
-5. **Le 15 registrazioni di Escape e i 35 gestori `keydown` globali** rilevati
+4. **Le 15 registrazioni di Escape e i 35 gestori `keydown` globali** rilevati
    dall'audit dell'interfaccia sono preesistenti e non sono stati toccati:
    nessuno di essi è sul percorso di questa fase, e ritirarli senza capire
    quale finestra chiude ciascuno è il modo classico di rompere una modale.
@@ -104,7 +98,7 @@ Cose che questa fase **non** ha verificato, e il motivo.
 ```bash
 npm run verify   # 224 file JS parsati
 npm test         # 1302 test unitari
-npm run qa       # 38 suite su browser reale
+npm run qa       # 39 suite su browser reale
 ```
 
 ## FASE 9 — regressione sulla sidebar
