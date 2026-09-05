@@ -52,6 +52,10 @@ export const PRODUCT_FILES = [
   /* La vista dello storico: dopo lo snapshot che legge e dopo `ui.js`, da cui
      prende `esc` e i dialoghi. */
   'order-economics.js',
+  /* La lettura normalizzata dei campi dell'ordine: legge lo snapshot, quindi
+     dopo di lui, e il registro delle tecnologie del motore, quindi dopo il
+     cost engine. Non disegna e non salva: la vista storica lo interroga. */
+  'order-fields.js',
   /* Il registro di magazzino: puro, poi la metà che parla con il database.
      Nessuno dei due dipende dal resto, ma l'ordine fra i due sì. */
   'inventory-ledger.js',

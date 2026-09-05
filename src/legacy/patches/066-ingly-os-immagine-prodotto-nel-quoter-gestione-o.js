@@ -19,6 +19,31 @@ const OrderSpecs = {
   },
 
   save(orderId, specs) {
+    /* ── L'immagine va sull'ordine, prima ────────────────────────────────
+       Questa mappa tiene al massimo 200 voci e butta le più vecchie: un
+       laboratorio al duecentunesimo ordine si vedeva sparire la foto del
+       primo, senza nessun avviso. Una foto è parte di ciò che il cliente ha
+       ordinato, quindi vive sull'ordine — che non ha tetti — e questa mappa
+       torna a essere quello che è: una cache delle specifiche tecniche.
+
+       Si scrive senza attendere perché la vista non deve bloccarsi su una
+       scrittura di database; un fallimento però si registra, non si perde. */
+    try {
+      if (specs && specs.image && typeof IDB !== 'undefined' && IDB.get) {
+        const chiave = +orderId || orderId;
+        Promise.resolve(IDB.get('orders', chiave)).then(function (o) {
+          if (!o || o.image === specs.image) return;
+          o.image = specs.image;
+          o.updated = new Date().toISOString();
+          return IDB.put('orders', o);
+        }).catch(function (e) {
+          if (window.Ingly && Ingly.Errors) Ingly.Errors.log('OrderSpecs.save→orders', e, { orderId: orderId });
+        });
+      }
+    } catch (e) {
+      if (window.Ingly && Ingly.Errors) Ingly.Errors.log('OrderSpecs.save→orders', e, { orderId: orderId });
+    }
+
     try {
       const all = JSON.parse(localStorage.getItem(this._SK) || '{}');
       all[String(orderId)] = { ...specs, updatedAt: new Date().toISOString() };
@@ -30,7 +55,8 @@ const OrderSpecs = {
       }
       localStorage.setItem(this._SK, JSON.stringify(all));
     } catch(e) {
-      console.warn('[OrderSpecs] save error:', e.message);
+      if (window.Ingly && Ingly.Errors) Ingly.Errors.log('OrderSpecs.save', e, { orderId: orderId });
+      else console.warn('[OrderSpecs] save error:', e.message);
     }
   },
 

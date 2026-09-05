@@ -20,6 +20,14 @@ const GestioneOrdini = {
   _search: '',
   _filterState: 'all',
   _filterPriority: 'all',
+  /* Macchina, operatore e tecnologia: i tre criteri con cui si guarda una
+     lista di produzione. Restano in memoria per la sessione, come gli altri
+     filtri, e la loro lettura non sta qui — la fa `InglyOrderFields`, che è
+     l unico posto che sa in quanti modi diversi un ordine nomina la sua
+     macchina. */
+  _filterMachine: 'all',
+  _filterOperator: 'all',
+  _filterTech: 'all',
   _sortBy: 'date_desc',
   _selected: new Set(),
 
@@ -93,20 +101,27 @@ const GestioneOrdini = {
     const el = document.getElementById('view-gestione_ordini');
     if(!el) return;
 
+    /* ── Due render insieme dipingono il primo che finisce ────────────────
+       `getOrders()` è asincrona e non c'era niente che ordinasse le chiamate:
+       cambiare due filtri a breve distanza avvia due render, e quello partito
+       prima legge i criteri vecchi. Se finisce per secondo, in tabella resta
+       il risultato del filtro precedente — e chi guarda vede una lista che
+       non corrisponde ai menu. Il turno più recente è l'unico che disegna. */
+    const turno = (this._turno = (this._turno || 0) + 1);
+
     const orders   = await this.getOrders();
+    if(turno !== this._turno) return;
     const view     = this._view;
     const q        = this._search.toLowerCase();
     const fltState = this._filterState;
     const fltPrio  = this._filterPriority;
 
-    let filtered = orders.filter(o => {
-      if(fltState !== 'all' && o._state !== fltState) return false;
-      if(fltPrio !== 'all' && (o.priority||'normal') !== fltPrio) return false;
-      if(q && !((o.clientName||'').toLowerCase().includes(q) ||
-                (o.name||'').toLowerCase().includes(q) ||
-                (o.notes||'').toLowerCase().includes(q))) return false;
-      return true;
-    });
+    /* Qui c era una seconda copia del filtro, scritta a mano dentro `render`.
+       `_getFilteredOrders` esisteva già, più completa — sapeva anche filtrare
+       gli ordini in ritardo — e non la chiamava nessuno: `filterOverdue()`
+       impostava uno stato che questo filtro non capiva e la lista si svuotava.
+       Una sola pipeline, quella completa. */
+    let filtered = this._getFilteredOrders(orders);
 
     if(this._sortBy === 'date_desc')   filtered.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
     else if(this._sortBy === 'date_asc') filtered.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
@@ -136,7 +151,7 @@ const GestioneOrdini = {
           <div onclick="GestioneOrdini._setFilter('all')" style="padding:5px 10px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border);cursor:pointer;text-align:center;min-width:60px" title="Tutti">
             <div style="font-size:14px;font-weight:800">${active.length}</div><div style="font-size:8px;color:var(--text-dim)">Attivi</div>
           </div>
-          ${overdue.length?`<div onclick="GestioneOrdini._setFilter('all')" style="padding:5px 10px;background:#ef444415;border-radius:8px;border:1px solid #ef444430;cursor:pointer;text-align:center" title="In ritardo">
+          ${overdue.length?`<div onclick="GestioneOrdini._setFilter('overdue')" style="padding:5px 10px;background:#ef444415;border-radius:8px;border:1px solid #ef444430;cursor:pointer;text-align:center" title="Mostra solo gli ordini in ritardo">
             <div style="font-size:14px;font-weight:800;color:#ef4444">${overdue.length}</div><div style="font-size:8px;color:#ef4444">Ritardo</div>
           </div>`:''}
           <div style="padding:5px 10px;background:var(--primary-dim);border-radius:8px;border:1px solid var(--primary-border);text-align:center;min-width:70px">
@@ -179,6 +194,21 @@ const GestioneOrdini = {
           <option value="high" ${fltPrio==='high'?'selected':''}>🟠 Alta</option>
           <option value="normal" ${fltPrio==='normal'?'selected':''}>⚪ Normale</option>
         </select>
+        ${(()=>{
+          /* Tre filtri che compaiono solo quando hanno qualcosa da offrire:
+             un laboratorio che non ha ancora assegnato una macchina a nessun
+             ordine non ha bisogno di un menu «Macchina» sempre vuoto. */
+          const opz = this._opzioniFiltri(orders);
+          const _e = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          const menu = (titolo, lista, attivo, azione) => !lista.length ? '' :
+            `<select class="form-control" style="height:30px;font-size:10px;width:auto" onchange="GestioneOrdini.${azione}(this.value)">
+              <option value="all">${titolo}</option>
+              ${lista.map(v=>`<option value="${_e(v.id)}" ${attivo===String(v.id)?'selected':''}>${_e(v.label)}</option>`).join('')}
+            </select>`;
+          return menu('⚙️ Macchina', opz.macchine, this._filterMachine, '_setMachine')
+               + menu('👷 Operatore', opz.operatori, this._filterOperator, '_setOperator')
+               + menu('🧪 Tecnologia', opz.tecnologie, this._filterTech, '_setTech');
+        })()}
         <select class="form-control" style="height:30px;font-size:10px;width:auto" onchange="GestioneOrdini._setSort(this.value)">
           <option value="date_desc" ${this._sortBy==='date_desc'?'selected':''}>📅 Più recente</option>
           <option value="date_asc" ${this._sortBy==='date_asc'?'selected':''}>📅 Più vecchio</option>
@@ -361,6 +391,50 @@ const GestioneOrdini = {
   },
 
   // ══ VISTA LISTA ════════════════════════════════════════════════════
+  /* ── La miniatura di riga ─────────────────────────────────────────────
+     Mai un `<img>` senza sorgente: un `src` vuoto il browser lo disegna come
+     icona rotta, che è peggio di un quadrato con un'icona. E mai un `<img>`
+     senza `alt`.
+
+     Se l'immagine arriva dal catalogo — l'unica sorgente che può cambiare
+     sotto un ordine già chiuso — si mostra con un segno discreto, perché chi
+     guarda sappia che quella foto è di oggi e non di allora. */
+  _miniatura(o) {
+    const OF = window.InglyOrderFields;
+    const specs = (window.OrderSpecs && window.OrderSpecs.get) ? window.OrderSpecs.get(o.id) : null;
+    const img = OF ? OF.immagine(o, { specs }) : null;
+    const _e = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const nome = _e(o.name || o.clientName || 'Ordine');
+    if (!img) {
+      return `<div title="Nessuna immagine" style="width:36px;height:36px;border-radius:7px;background:var(--bg-card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:13px">🗂</div>`;
+    }
+    /* `onerror` non è una cortesia: un data URL troncato dalla quota, o un
+       file remoto sparito, lascerebbero l'icona rotta esattamente dove si
+       voleva evitarla. */
+    return `<img src="${_e(img.src)}" alt="Immagine di ${nome}" loading="lazy"
+      title="${img.storica ? 'Immagine dell ordine' : 'Immagine dal catalogo di oggi, non dell ordine'}"
+      style="width:36px;height:36px;border-radius:7px;object-fit:cover;border:1px solid ${img.storica?'var(--border)':'#f59e0b60'};display:block;background:var(--bg-card2)"
+      onerror="this.outerHTML='&lt;div style=&quot;width:36px;height:36px;border-radius:7px;background:var(--bg-card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:13px&quot;&gt;🗂&lt;/div&gt;'">`;
+  },
+
+  /* ── Il margine di riga ───────────────────────────────────────────────
+     Viene dallo snapshot economico dell'ordine e da nessun altro posto. Se
+     l'ordine è precedente allo snapshot la cella dice «—» con il motivo nel
+     titolo: un trattino onesto vale più di un margine ricostruito con i costi
+     di oggi, che sembrerebbe vero. */
+  _margine(o) {
+    const OF = window.InglyOrderFields;
+    if (!OF) return '<span style="color:var(--text-dim)">—</span>';
+    const m = OF.margine(o);
+    if (!m.disponibile) {
+      const _e = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x);
+      return `<span style="color:var(--text-dim)" title="${_e(m.motivo||'')}">—</span>`;
+    }
+    const colore = m.percentuale == null ? 'var(--text)' : (m.percentuale < 15 ? '#ef4444' : (m.percentuale < 30 ? '#f59e0b' : '#22c55e'));
+    const pct = m.percentuale == null ? '' : `<div style="font-size:9px;color:${colore};opacity:.8">${m.percentuale.toFixed(1)}%</div>`;
+    return `<div style="line-height:1.2"><div style="font-weight:800;color:${colore}">€${m.valore.toFixed(0)}</div>${pct}</div>`;
+  },
+
   _renderLista(el, orders) {
     const _s = typeof sanitize==='function'?sanitize:function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
     // S15: Pagination for lista view
@@ -380,11 +454,14 @@ const GestioneOrdini = {
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead style="position:sticky;top:0;z-index:5;background:var(--bg-card2)">
           <tr>
+            <th style="padding:8px 6px 8px 12px;border-bottom:1px solid var(--border);width:52px"></th>
             <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;cursor:pointer" onclick="GestioneOrdini._setSort('client_asc')">👤 Cliente</th>
             <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Ordine</th>
             <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Stato</th>
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">👷 Assegnato</th>
             <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;cursor:pointer" onclick="GestioneOrdini._setSort('due_asc')">⏰ Scadenza</th>
             <th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;cursor:pointer" onclick="GestioneOrdini._setSort('amount_desc')">💶 Importo</th>
+            <th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase" title="Dallo snapshot economico dell ordine: non si ricalcola con i costi di oggi">📈 Margine</th>
             <th style="padding:8px 12px;border-bottom:1px solid var(--border)"></th>
           </tr>
         </thead>
@@ -394,14 +471,20 @@ const GestioneOrdini = {
             const val = +(o.total||o.value||o.grossPrice||0);
             const isOver = o.dueDate && new Date(o.dueDate)<new Date() && !st.done;
             const nextSt = st.next ? this.STATES[st.next] : null;
+            const img = this._miniatura(o);
+            const mrg = this._margine(o);
+            const chi = (window.InglyOrderFields && window.InglyOrderFields.assegnatario(o)) || null;
             return `<tr style="border-bottom:1px solid var(--border);border-left:3px solid ${st.color};cursor:pointer;transition:.12s"
               onmouseover="this.style.background='var(--bg-card2)'" onmouseout="this.style.background=''"
               onclick="GestioneOrdini._openDetail(${o.id})">
+              <td style="padding:6px 6px 6px 12px">${img}</td>
               <td style="padding:8px 12px;font-weight:700">${_s(o.clientName)||'—'}</td>
               <td style="padding:8px 12px;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_s(o.name)||'—'}</td>
               <td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${st.color}18;color:${st.color};font-weight:700">${st.emoji} ${st.label}</span></td>
+              <td style="padding:8px 12px;font-size:11px;color:${chi?'var(--text)':'var(--text-dim)'};white-space:nowrap">${chi?_s(chi):'—'}</td>
               <td style="padding:8px 12px;font-size:11px;color:${isOver?'#ef4444':'var(--text-muted)'};white-space:nowrap">${o.dueDate?new Date(o.dueDate).toLocaleDateString('it-IT'):'—'}</td>
               <td style="padding:8px 12px;text-align:right;font-weight:800">${val?'€'+val.toFixed(0):'—'}</td>
+              <td style="padding:8px 12px;text-align:right;white-space:nowrap">${mrg}</td>
               <td style="padding:8px 12px" onclick="event.stopPropagation()">
                 <div style="display:flex;gap:3px">
                   ${nextSt?`<button onclick="GestioneOrdini.transition(${o.id},'${st.next}').then(()=>GestioneOrdini.render())"
@@ -413,13 +496,13 @@ const GestioneOrdini = {
               </td>
             </tr>`;
           }).join('')}
-          ${!totalO?`<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-dim)">Nessun ordine trovato</td></tr>`:''}
+          ${!totalO?`<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-dim)">Nessun ordine trovato</td></tr>`:''}
         </tbody>
         ${totalO?`<tfoot style="position:sticky;bottom:0;background:var(--bg-card2)">
           <tr>
-            <td colspan="4" style="padding:8px 12px;font-size:11px;color:var(--text-muted)">${totalO} ordini · pag. ${this._listPage+1}/${tp}</td>
+            <td colspan="6" style="padding:8px 12px;font-size:11px;color:var(--text-muted)">${totalO} ordini · pag. ${this._listPage+1}/${tp}</td>
             <td style="padding:8px 12px;text-align:right;font-size:14px;font-weight:800;color:var(--primary)">€${orders.reduce((a,o)=>a+(+(o.total||o.value||0)),0).toFixed(0)}</td>
-            <td></td>
+            <td colspan="2"></td>
           </tr>
         </tfoot>`:''}
       </table>
@@ -886,6 +969,16 @@ const GestioneOrdini = {
   async openProductionPanel(orderId) {
     const order = await IDB.get('orders', +orderId||orderId).catch(()=>null);
     if(!order) return;
+    const _esc = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    /* I tre registri canonici: il parco macchine, il team e le tecnologie che
+       il motore dei costi sa preventivare. Nessun elenco scritto qui. */
+    const parco = await IDB.getAll('equipment').catch(()=>[]);
+    const team  = await IDB.getAll('team').catch(()=>[]);
+    const OF    = window.InglyOrderFields;
+    const tecno = OF ? OF.tecnologie() : [];
+    const macAtt = OF ? OF.macchina(order) : null;
+    const chiAtt = OF ? OF.assegnatario(order) : null;
+    const tecAtt = OF ? OF.tecnologia(order) : null;
     const notes = JSON.parse(localStorage.getItem('ingly_prod_notes_' + orderId) || '[]');
     const timerKey = 'ingly_timer_' + orderId;
     const timerData = JSON.parse(localStorage.getItem(timerKey)||'{"total":0,"running":false,"start":null}');
@@ -917,6 +1010,39 @@ const GestioneOrdini = {
             <select id="pp-priority" class="form-control" style="font-size:13px">
               ${['urgent','high','normal','low'].map(p=>`<option value="${p}" ${(order.priority||'normal')===p?'selected':''}>${{urgent:'🔴 Urgente',high:'🟠 Alta',normal:'🟡 Normale',low:'🟢 Bassa'}[p]}</option>`).join('')}
             </select>
+          </div>
+        </div>
+
+        <!-- Macchina, operatore, tecnologia: i tre campi su cui la lista filtra -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px">⚙️ Macchina</label>
+            <select id="pp-machine" class="form-control" style="font-size:13px">
+              <option value="">— non assegnata</option>
+              ${parco.map(m=>{
+                const et = [m.brand,m.model].filter(Boolean).join(' ') || m.name || String(m.id);
+                const sel = macAtt && (String(macAtt.id)===String(m.id) || macAtt.nome===et);
+                return `<option value="${_esc(m.id)}" data-nome="${_esc(et)}" ${sel?'selected':''}>${_esc(et)}</option>`;
+              }).join('')}
+              ${macAtt && !parco.some(m=>String(m.id)===String(macAtt.id))
+                ? `<option value="${_esc(macAtt.id||macAtt.nome)}" data-nome="${_esc(macAtt.nome)}" selected>${_esc(macAtt.nome)} (fuori parco)</option>` : ''}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px">🧪 Tecnologia</label>
+            <select id="pp-tech" class="form-control" style="font-size:13px">
+              <option value="">— non indicata</option>
+              ${tecno.map(t=>`<option value="${_esc(t.id)}" ${tecAtt&&tecAtt.id===t.id?'selected':''}>${_esc(t.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div style="grid-column:1/-1">
+            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px">👷 Assegnato a</label>
+            <select id="pp-assignee" class="form-control" style="font-size:13px">
+              <option value="">— nessuno</option>
+              ${team.map(t=>`<option value="${_esc(t.name)}" ${chiAtt===t.name?'selected':''}>${_esc(t.name)}${t.role?' · '+_esc(t.role):''}</option>`).join('')}
+              ${chiAtt && !team.some(t=>t.name===chiAtt) ? `<option value="${_esc(chiAtt)}" selected>${_esc(chiAtt)} (fuori team)</option>` : ''}
+            </select>
+            ${team.length?'':'<div style="font-size:10px;color:var(--text-dim);margin-top:4px">Nessun membro in Team &amp; HR: registrali lì e compariranno qui.</div>'}
           </div>
         </div>
 
@@ -1030,13 +1156,38 @@ const GestioneOrdini = {
   async _savePanelChanges(orderId) {
     const deadline = document.getElementById('pp-deadline')?.value;
     const priority = document.getElementById('pp-priority')?.value;
+    const macSel   = document.getElementById('pp-machine');
+    const tecSel   = document.getElementById('pp-tech');
+    const chiSel   = document.getElementById('pp-assignee');
     const order = await IDB.get('orders', +orderId||orderId).catch(()=>null);
     if(!order) return;
     if(deadline) order.dueDate = deadline;
     if(priority) order.priority = priority;
+
+    /* Un campo svuotato deve poter tornare vuoto: `if(valore)` avrebbe reso
+       impossibile togliere un'assegnazione sbagliata. Si scrive `null`. */
+    if(macSel){
+      const opt = macSel.selectedOptions && macSel.selectedOptions[0];
+      order.machineId   = macSel.value || null;
+      order.machineName = (opt && opt.dataset && opt.dataset.nome) || null;
+    }
+    if(tecSel) order.technology = tecSel.value || null;
+    if(chiSel) order.assignedTo = chiSel.value || null;
+
     order.updated = new Date().toISOString();
-    await IDB.put('orders', order);
+
+    /* `await IDB.put(...)` senza rete: se il salvataggio falliva, la promessa
+       rifiutava, il pannello restava aperto e nessuno lo diceva — l'utente
+       tornava alla lista convinto di aver salvato. */
+    try {
+      await IDB.put('orders', order);
+    } catch(e) {
+      if(window.Ingly && Ingly.Errors) Ingly.Errors.log('GestioneOrdini._savePanelChanges', e, {orderId:orderId});
+      if(typeof toast!=='undefined') toast('Salvataggio non riuscito: '+(e&&e.message||'errore sconosciuto'),'error');
+      return;
+    }
     document.getElementById('_prod-panel')?.remove();
+    document.dispatchEvent(new CustomEvent('orderUpdated',{detail:{id:order.id,order}}));
     this.render();
     if(typeof toast!=='undefined') toast('💾 Ordine aggiornato!','success');
   },
@@ -1045,6 +1196,9 @@ const GestioneOrdini = {
   clearFilters(){
     this._filterState = 'all';
     this._filterPriority = 'all';
+    this._filterMachine = 'all';
+    this._filterOperator = 'all';
+    this._filterTech = 'all';
     this._search = '';
     this._sortBy = 'date_desc';
     this.render();
@@ -1056,12 +1210,18 @@ const GestioneOrdini = {
     this.render();
   },
 
-  // Add overdue to filter pipeline
+  /* L unica pipeline di filtro della sezione. Stato, priorità e ricerca si
+     leggono qui perché sono campi dell ordine; macchina, operatore e
+     tecnologia no — quelli hanno più nomi possibili nei dati, e chi sa
+     leggerli è `InglyOrderFields`. Se il modulo non è caricato i tre criteri
+     restano neutri: meglio una lista intera che una lista vuota. */
   _getFilteredOrders(orders){
     const now = new Date().toISOString().split('T')[0];
     const q = this._search.toLowerCase();
     const fltState = this._filterState;
     const fltPrio = this._filterPriority;
+    const OF = window.InglyOrderFields;
+    const criteri = { macchina:this._filterMachine, operatore:this._filterOperator, tecnologia:this._filterTech };
     return orders.filter(o=>{
       if(fltState==='overdue'){
         const active=['preventivo','inviato','accettato','produzione'].includes(o._state);
@@ -1069,9 +1229,21 @@ const GestioneOrdini = {
       } else if(fltState!=='all' && o._state!==fltState) return false;
       if(fltPrio!=='all'&&(o.priority||'normal')!==fltPrio) return false;
       if(q&&![(o.clientName||''),(o.name||''),(o.notes||'')].join(' ').toLowerCase().includes(q)) return false;
+      if(OF && !OF.passa(o, criteri)) return false;
       return true;
     });
-  }
+  },
+
+  /* Le opzioni dei tre filtri: si costruiscono dagli ordini che ci sono. Un
+     filtro che offre una macchina che nessun ordine nomina è un vicolo cieco. */
+  _opzioniFiltri(orders){
+    const OF = window.InglyOrderFields;
+    return OF ? OF.opzioni(orders) : { macchine:[], operatori:[], tecnologie:[] };
+  },
+
+  _setMachine(v){ this._filterMachine=v; this._listPage=0; this.render(); },
+  _setOperator(v){ this._filterOperator=v; this._listPage=0; this.render(); },
+  _setTech(v){ this._filterTech=v; this._listPage=0; this.render(); },
 };
 window.GestioneOrdini = GestioneOrdini;
 
