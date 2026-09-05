@@ -165,6 +165,17 @@ dico('+2% è «in linea»', conf.centrato === 'centrato');
 dico('−20% dà verdetto «sotto»', conf.sottoVerdetto === 'sotto');
 
 /* ── 4 · PERSISTENZA ────────────────────────────────────────────────────── */
+/* Che cosa c'è nell'archivio **prima** di ricaricare: senza questo, un
+   fallimento dopo la ricarica non dice se il dato non è mai stato scritto o
+   se è stato scritto e poi perso. */
+const prima = await page.evaluate(() => ({
+  archivio: localStorage.getItem('ingly_consuntivo_v1'),
+  segno: localStorage.getItem('ingly_consuntivo_migrato_p3d'),
+  tessile: InglyConsuntivo.leggi('apparel', 1).capi,
+}));
+dico('prima della ricarica il consuntivo tessile è nell archivio ('
+  + String(prima.archivio).slice(0, 120) + ')', prima.tessile === 10);
+
 await page.reload({ waitUntil: 'load', timeout: 120000 });
 await page.waitForTimeout(14000);
 const dopo = await page.evaluate(() => ({
@@ -175,7 +186,8 @@ const dopo = await page.evaluate(() => ({
      nell'archivio, non solo che manca. */
   archivio: localStorage.getItem('ingly_consuntivo_v1'),
 }));
-dico('dopo la ricarica il consuntivo tessile c è ancora', dopo.tessile === 10);
+dico('dopo la ricarica il consuntivo tessile c è ancora ('
+  + String(dopo.archivio).slice(0, 160) + ')', dopo.tessile === 10);
 dico('e quello 3D pure', dopo.tridi === 99);
 dico('e il migrato non è stato duplicato né perso', dopo.migrato === 4.5);
 if (dopo.tessile !== 10 || dopo.tridi !== 99) {

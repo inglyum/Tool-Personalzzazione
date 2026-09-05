@@ -198,3 +198,54 @@ test('id numerico e id stringa sono la stessa commessa', () => {
   C.salva('apparel', 7, { costo: 3 });
   assert.equal(C.leggi('apparel', '7').costo, 3);
 });
+
+/* ── La lettura che fallisce non è un archivio vuoto ─────────────────────── */
+
+test('una lettura fallita si distingue da un archivio vuoto', () => {
+  const { C, dati } = nuovo();
+  assert.equal(C.leggiSicuro('mai-scritta').ok, true, 'assente ma leggibile: vuoto');
+  assert.equal(C.leggiSicuro('mai-scritta').vuoto, true);
+  dati.rotta = '{non json';
+  assert.equal(C.leggiSicuro('rotta').ok, false);
+  dati.forma = '[1,2,3]';
+  assert.equal(C.leggiSicuro('forma').ok, false, 'un array non è la forma attesa');
+});
+
+test('se l archivio non si può leggere la migrazione non lo riscrive', () => {
+  /* Lo stato di partenza: un consuntivo scritto dall'utente e uno da migrare. */
+  const dati = {
+    ingly_consuntivo_v1: JSON.stringify({ 'apparel/1': { capi: 10 } }),
+    p3d_consuntivo_v1: JSON.stringify({ 77: { costo: 4.5 } }),
+  };
+  let guasto = true;
+  const contesto = vm.createContext({
+    Math, JSON, Object, Array, Date, parseFloat, isFinite, isNaN, String,
+    localStorage: {
+      getItem: (k) => {
+        /* La lettura della destinazione fallisce, come può capitare quando
+           l'archivio è momentaneamente non disponibile. */
+        if (guasto && k === 'ingly_consuntivo_v1') throw new Error('lettura non riuscita');
+        return (k in dati ? dati[k] : null);
+      },
+      setItem: (k, v) => { dati[k] = String(v); },
+      removeItem: (k) => { delete dati[k]; },
+    },
+  });
+  vm.runInContext(sorgente, contesto);
+  const C = contesto.InglyConsuntivo;
+
+  C.perModulo('3d');                       // fa scattare migra()
+
+  const dopo = JSON.parse(dati.ingly_consuntivo_v1);
+  assert.deepEqual(Object.keys(dopo), ['apparel/1'],
+    'il consuntivo dell utente è ancora lì: la fusione non è avvenuta dentro un «non lo so»');
+  assert.equal(dati.ingly_consuntivo_migrato_p3d, undefined,
+    'senza contrassegno: al prossimo avvio ci riprova');
+
+  /* Guarito l'archivio, la migrazione riesce e non ha perso niente. */
+  guasto = false;
+  C.perModulo('3d');
+  const finale = JSON.parse(dati.ingly_consuntivo_v1);
+  assert.equal(Object.keys(finale).sort().join(','), '3d/77,apparel/1');
+  assert.ok(dati.ingly_consuntivo_migrato_p3d);
+});
