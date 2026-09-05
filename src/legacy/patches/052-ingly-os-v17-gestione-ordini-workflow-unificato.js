@@ -223,14 +223,14 @@ const GestioneOrdini = {
       <div id="go-content"></div>
     </div>`;
 
-    this._renderContent(filtered, orders);
+    await this._renderContent(filtered, orders);
   },
 
-  _renderContent(filtered, all) {
+  async _renderContent(filtered, all) {
     const el = document.getElementById('go-content');
     if(!el) return;
     if(this._view === 'kanban')     this._renderKanban(el, filtered, all);
-    else if(this._view === 'produzione') this._renderProduzione(el, filtered);
+    else if(this._view === 'produzione') await this._renderProduzione(el, filtered);
     else if(this._view === 'lista') this._renderLista(el, filtered);
     else if(this._view === 'calendario') this._renderCalendario(el, all);
     else if(this._view === 'timeline') this._renderTimeline(el, filtered);
@@ -323,12 +323,99 @@ const GestioneOrdini = {
   },
 
   // ══ VISTA PRODUZIONE — focus su ordini in lavorazione ══════════════
-  _renderProduzione(el, orders) {
+  /* ── Il pannello della capacità ────────────────────────────────────────
+     Quattro numeri e, quando servono, la ragione per cui non sono quattro
+     numeri. Un utilizzo calcolato ignorando gli ordini di cui non si conosce
+     la durata sembrerebbe una misura: qui si dice quanti ne mancano. */
+  _pannelloCapacita(a, _e) {
+    const t = a.totali;
+    const h = (v) => v == null ? '—' : (Math.round(v * 10) / 10) + ' h';
+    const colore = t.utilizzo == null ? 'var(--text-muted)'
+      : (t.utilizzo > 100 ? '#ef4444' : (t.utilizzo > 85 ? '#f59e0b' : '#22c55e'));
+    const incompleto = !t.completo;
+    const perche = [];
+    if (t.incognite) perche.push(t.incognite + ' ordini senza tempo di produzione');
+    if (t.macchineSenzaCapacita) perche.push(t.macchineSenzaCapacita + ' macchine senza ore al giorno');
+    if (!a.righe.length) perche.push('nessuna macchina nel parco');
+
+    const riquadro = (etichetta, valore, tinta) => `
+      <div style="padding:7px 11px;background:var(--bg-card2);border-radius:9px;border:1px solid var(--border);min-width:96px">
+        <div style="font-size:15px;font-weight:800;color:${tinta||'var(--text)'}">${valore}</div>
+        <div style="font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px">${etichetta}</div>
+      </div>`;
+
+    const righe = a.righe.map((r) => {
+      const u = r.utilizzo == null ? null : Math.min(100, Math.max(0, r.utilizzo));
+      const tinta = r.utilizzo == null ? 'var(--border)' : (r.sovraccarico ? '#ef4444' : (r.utilizzo > 85 ? '#f59e0b' : '#22c55e'));
+      return `<div style="display:flex;align-items:center;gap:9px;padding:5px 0">
+        <div style="width:150px;font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_e(r.nome)}</div>
+        <div style="flex:1;height:7px;background:var(--bg-card2);border-radius:99px;overflow:hidden;border:1px solid var(--border)">
+          ${u == null ? '' : `<div style="width:${u}%;height:100%;background:${tinta}"></div>`}
+        </div>
+        <div style="width:190px;text-align:right;font-size:10px;color:var(--text-muted);white-space:nowrap">
+          ${r.disponibile == null
+            ? `<span title="${_e(r.notaCapacita)}">capacità non calcolabile</span>`
+            : `${h(r.carico)} / ${h(r.disponibile)} · <b style="color:${tinta}">${Math.round(r.utilizzo)}%</b>`}
+          ${r.ordiniSenzaOre ? `<span title="ordini senza tempo dichiarato" style="color:#f59e0b"> · ${r.ordiniSenzaOre}?</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:var(--bg-card)">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px">
+        <div style="font-size:12px;font-weight:800;flex:1;min-width:150px">📊 Capacità · prossimi ${a.finestraGiorni} giorni
+          <span style="font-weight:500;color:var(--text-dim);font-size:10px">(${a.giorniUtili} giorni lavorativi)</span>
+        </div>
+        ${riquadro('Disponibile', h(t.disponibile))}
+        ${riquadro('Impegnate', h(t.carico))}
+        ${riquadro('Residue', h(t.residua), t.residua < 0 ? '#ef4444' : null)}
+        ${riquadro('Utilizzo', t.utilizzo == null ? '—' : Math.round(t.utilizzo) + '%', colore)}
+      </div>
+      ${righe || '<div style="font-size:11px;color:var(--text-dim)">Nessuna macchina registrata: la capacità non si può calcolare.</div>'}
+      ${a.nonAssegnati.ordini ? `<div style="margin-top:7px;font-size:10px;color:var(--text-muted)">
+        ${a.nonAssegnati.ordini} ordini non assegnati a nessuna macchina${a.nonAssegnati.ore ? ` · ${h(a.nonAssegnati.ore)}` : ''}${a.nonAssegnati.senzaOre ? ` · ${a.nonAssegnati.senzaOre} senza tempo` : ''}
+      </div>` : ''}
+      ${incompleto ? `<div style="margin-top:8px;padding:6px 9px;background:#f59e0b12;border:1px solid #f59e0b35;border-radius:7px;font-size:10px;color:#f59e0b">
+        ⚠️ Stima incompleta — ${_e(perche.join(' · '))}. I numeri sopra contano solo ciò che è dichiarato.
+      </div>` : ''}
+    </div>`;
+  },
+
+  /* La cella «fine stimata»: una data e un semaforo, oppure il motivo per cui
+     non c'è. Mai una data inventata su ore che nessuno ha dichiarato. */
+  _cellaScadenza(o, contesto) {
+    const PR = window.InglyProduzione;
+    if (!PR) return '<span style="color:var(--text-dim)">—</span>';
+    const _e = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const s = PR.scadenza(o, contesto);
+    if (!s.stimabile) {
+      return `<span style="color:var(--text-dim)" title="${_e(s.motivo||'')}">stima incompleta</span>`;
+    }
+    const data = s.dataStimata.toLocaleDateString('it-IT');
+    const margine = s.margineGiorni == null ? '' :
+      `<span style="font-size:9px;color:var(--text-dim)"> (${s.margineGiorni >= 0 ? '+' : ''}${s.margineGiorni}gg)</span>`;
+    return `<span style="color:${s.semaforo.colore};font-weight:700" title="${_e(s.semaforo.label + (s.motivo ? ' — ' + s.motivo : ''))}">●</span>
+      <span style="color:var(--text)">${data}</span>${margine}${s.incompleta ? '<span style="color:#f59e0b" title="la coda contiene ordini senza tempo dichiarato"> ⚠️</span>' : ''}`;
+  },
+
+  async _renderProduzione(el, orders) {
     const prodOrders = orders.filter(o=>['accettato','produzione','completato'].includes(o._state));
     const now = new Date();
+    const _e = typeof sanitize==='function'?sanitize:(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    /* Capacità, carico e scadenze si calcolano sui dati veri: il parco
+       macchine e il tempo davvero registrato. Non su una costante. */
+    const parco = await IDB.getAll('equipment').catch(()=>[]);
+    const timelogs = await IDB.getAll('timelogs').catch(()=>[]);
+    const PR = window.InglyProduzione;
+    const tutti = await this.getOrders().catch(()=>orders);
+    const analisi = PR ? PR.analizza({ macchine:parco, ordini:tutti, timelogs, finestraGiorni:30 }) : null;
+    const contesto = { macchine:parco, ordini:tutti, timelogs };
 
     el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
+      ${analisi ? this._pannelloCapacita(analisi, _e) : ''}
       <div style="font-size:12px;font-weight:700;color:var(--text-muted);padding:4px 0">
         ⚙️ ${prodOrders.length} ordini in lavorazione
         <span style="float:right;font-size:10px">Trascina per cambiare stato · Click per dettaglio</span>
@@ -341,6 +428,7 @@ const GestioneOrdini = {
               <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Cliente · Ordine</th>
               <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Stato</th>
               <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Scadenza</th>
+              <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase" title="Data ordine + coda sulla macchina + ore proprie, in giorni lavorativi">🏁 Fine stimata</th>
               <th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase">€</th>
               <th style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:9px;color:var(--text-muted)">Azione rapida</th>
             </tr>
@@ -365,6 +453,7 @@ const GestioneOrdini = {
                 <td style="padding:9px 12px;font-size:11px;color:${isOver?'#ef4444':'var(--text-muted)'};white-space:nowrap">
                   ${o.dueDate ? `${isOver?'⚠️ ':''}${new Date(o.dueDate).toLocaleDateString('it-IT')}${daysLeft!==null&&!isOver?` <span style="font-size:9px;color:var(--text-dim)">(${daysLeft}gg)</span>`:''}` : '—'}
                 </td>
+                <td style="padding:9px 12px;font-size:11px;white-space:nowrap">${this._cellaScadenza(o, contesto)}</td>
                 <td style="padding:9px 12px;text-align:right;font-weight:800">${val?'€'+val.toFixed(0):'—'}</td>
                 <td style="padding:9px 12px" onclick="event.stopPropagation()">
                   <div style="display:flex;gap:4px;align-items:center">
@@ -380,7 +469,7 @@ const GestioneOrdini = {
           <!-- Footer totale produzione -->
           <tfoot style="position:sticky;bottom:0;background:var(--bg-card2)">
             <tr>
-              <td colspan="3" style="padding:8px 12px;font-size:11px;color:var(--text-muted)">${prodOrders.length} ordini in lavorazione</td>
+              <td colspan="4" style="padding:8px 12px;font-size:11px;color:var(--text-muted)">${prodOrders.length} ordini in lavorazione</td>
               <td style="padding:8px 12px;text-align:right;font-size:14px;font-weight:800;color:var(--primary)">€${prodOrders.reduce((a,o)=>a+(+(o.total||o.value||0)),0).toFixed(0)}</td>
               <td></td>
             </tr>
@@ -1035,6 +1124,14 @@ const GestioneOrdini = {
               ${tecno.map(t=>`<option value="${_esc(t.id)}" ${tecAtt&&tecAtt.id===t.id?'selected':''}>${_esc(t.label)}</option>`).join('')}
             </select>
           </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px" title="Serve a calcolare capacità e data di fine: senza, l ordine resta un incognita nel conto">⏳ Ore di produzione</label>
+            <input type="number" id="pp-hours" min="0" step="0.25" value="${order.estimatedHours != null ? _esc(order.estimatedHours) : ''}" class="form-control" style="font-size:13px" placeholder="es. 3.5">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px">🔧 Avviamento (min)</label>
+            <input type="number" id="pp-setup" min="0" step="1" value="${order.setupMinutes != null ? _esc(order.setupMinutes) : ''}" class="form-control" style="font-size:13px" placeholder="es. 15">
+          </div>
           <div style="grid-column:1/-1">
             <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:4px">👷 Assegnato a</label>
             <select id="pp-assignee" class="form-control" style="font-size:13px">
@@ -1173,6 +1270,14 @@ const GestioneOrdini = {
     }
     if(tecSel) order.technology = tecSel.value || null;
     if(chiSel) order.assignedTo = chiSel.value || null;
+
+    /* Le ore di produzione: il dato che mancava perché capacità e scadenze
+       fossero calcolabili. Un campo vuoto torna `null` — «non lo so» — e non
+       diventa zero, che nel conto della capacità sarebbe una bugia. */
+    const oreSel = document.getElementById('pp-hours');
+    const setSel = document.getElementById('pp-setup');
+    if(oreSel) order.estimatedHours = oreSel.value === '' ? null : Math.max(0, parseFloat(oreSel.value) || 0);
+    if(setSel) order.setupMinutes  = setSel.value === '' ? null : Math.max(0, parseFloat(setSel.value) || 0);
 
     order.updated = new Date().toISOString();
 

@@ -78,6 +78,11 @@
         el.innerHTML='<div class="mc-grid">'
           +F('Stato','status','select',STATI)+F('Operatore assegnato','operator')
           +F('Ore di vita (h)','hoursLife','number')+F('Ore lavorate (h)','hoursWorked','number')
+          /* Le ore al giorno che questa macchina può davvero produrre: è il
+             dato da cui la vista Produzione calcola capacità e residua. Senza,
+             quella macchina resta fuori dal conto e lo dichiara — meglio di
+             una capacità presunta uguale per tutte. */
+          +F('Ore al giorno (h)','hoursPerDay','number')+F('Ore attese/anno (h)','expectedAnnualHours','number')
           +F('Posizione','location')+F('Seriale (S/N)','serial')
           +F('Data acquisto','purchaseDate','date')+F('Garanzia fino a','warranty','date')+'</div>';
       } else if(this._tab==='maint'){

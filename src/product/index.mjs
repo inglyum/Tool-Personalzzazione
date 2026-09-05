@@ -56,6 +56,9 @@ export const PRODUCT_FILES = [
      dopo di lui, e il registro delle tecnologie del motore, quindi dopo il
      cost engine. Non disegna e non salva: la vista storica lo interroga. */
   'order-fields.js',
+  /* Capacità e scadenze di produzione: legge la macchina di un ordine
+     attraverso `order-fields`, quindi dopo di lui. Puro: nessun DOM. */
+  'production-capacity.js',
   /* Il registro di magazzino: puro, poi la metà che parla con il database.
      Nessuno dei due dipende dal resto, ma l'ordine fra i due sì. */
   'inventory-ledger.js',
