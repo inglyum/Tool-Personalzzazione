@@ -34,6 +34,7 @@ Ogni riga della tabella è un difetto **misurato**, non dedotto: la colonna
 | ERR-01 | Tutto | Una promessa rifiutata veniva registrata ma non detta a nessuno | Il presidio centrale solo osservava | Avviso all'utente, limitato a uno ogni dieci secondi | FASE 8e/8f | ✔ |
 | PERF-01 | Ordini | La vista Produzione rileggeva tutti gli ordini una seconda volta a ogni disegno | — | Gli ordini arrivano da `render()` che li ha già letti | PROD 26/26 | ✔ |
 | MACH-01 | Smart Quoter 3D | Il preventivatore ignorava il parco macchine registrato | `MACH` (listino di modelli noti) era l'unico registro letto; `equipment` è l'inventario vero | La tendina apre con «Le tue macchine»; potenza, prezzo, vita utile e manutenzione vengono dal record | quoter3d-parco, 14 controlli | ✔ |
+| ERR-02 | Tutto | 200 `catch {}` vuoti attorno a una scrittura: un salvataggio poteva non avvenire senza che nessuno lo dicesse | Duecento chiamanti, un canale solo | Spia su `localStorage.setItem` e sui metodi di scrittura di `IDB`: registra, avvisa, e rilancia identico | scritture-non-silenziose, 13 controlli | ✔ |
 
 ## Parametri di costo — decisioni
 
@@ -51,14 +52,14 @@ Dettaglio in `docs/COST-PARAMETERS-AUDIT.md`.
 
 | | |
 |---|---|
-| **Bug trovati** | 22 |
-| **Bug risolti** | 22 |
+| **Bug trovati** | 23 |
+| **Bug risolti** | 23 |
 | **Moduli nuovi** | 4 (`order-fields`, `production-capacity`, `catalog-recalc`, `quote-status`) |
 | **Test totali (unitari)** | 1302 |
 | **Test passati** | 1302 |
 | **Test falliti** | 0 |
-| **Suite su browser** | 39, tutte verdi (`npm run qa`, uscita 0) |
-| **Controlli su browser nelle suite nuove** | 140 (28 ordini · 26 produzione · 21 catalogo · 18 CRM · 8 confezione · 28 coerenza · 14 parco macchine) |
+| **Suite su browser** | 40, tutte verdi (`npm run qa`, uscita 0) |
+| **Controlli su browser nelle suite nuove** | 153 (28 ordini · 26 produzione · 21 catalogo · 18 CRM · 8 confezione · 28 coerenza · 14 parco macchine · 13 scritture) |
 | **Errori JavaScript nelle suite nuove** | 0 |
 | **Controlli superati nella regressione completa** | 879 · 0 falliti · 0 errori JavaScript |
 
@@ -68,12 +69,18 @@ Dettaglio in `docs/COST-PARAMETERS-AUDIT.md`.
 
 Cose che questa fase **non** ha verificato, e il motivo.
 
-1. **I 472 `catch` vuoti del codice storico.** Sono stati contati, non
-   riscritti. Sono stati corretti soltanto quelli sui percorsi toccati da
-   questa fase (salvataggio dell'ordine, conferma del ricalcolo, salvataggio
-   delle specifiche). Il presidio centrale ora avvisa l'utente su ogni
-   promessa rifiutata, il che copre il caso più pericoloso — l'operazione che
-   fallisce in silenzio — ma non sostituisce una revisione voce per voce.
+1. **I 517 `catch` vuoti del codice storico** — di cui **200** avvolgono una
+   scrittura — non sono stati riscritti uno per uno: toccare duecento punti di
+   9 MB di codice che funziona è il modo di romperne uno per correggerne un
+   altro. Si è intercettato il **canale**, come già fatto con `console.error`:
+   `localStorage.setItem` e i metodi di scrittura di `IDB` passano da una spia
+   che registra e avvisa, poi rilancia l'eccezione o lascia la promessa
+   rifiutata. Il comportamento non cambia — chi ha un `catch {}` continua a
+   ingoiarla — ma il silenzio non c'è più.
+
+   Resta vero che una revisione voce per voce direbbe, per ognuno di quei
+   duecento, se il salvataggio ingoiato andava anche *ritentato* o annullato.
+   Quella non è stata fatta.
 
 2. **Il carico su più giorni.** La stima di fine lavoro tratta la capacità
    giornaliera come costante e la coda come sequenziale su una macchina sola.
@@ -98,7 +105,7 @@ Cose che questa fase **non** ha verificato, e il motivo.
 ```bash
 npm run verify   # 224 file JS parsati
 npm test         # 1302 test unitari
-npm run qa       # 39 suite su browser reale
+npm run qa       # 40 suite su browser reale
 ```
 
 ## FASE 9 — regressione sulla sidebar

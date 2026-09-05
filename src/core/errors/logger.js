@@ -141,6 +141,9 @@
   /* ── Archiviazione che non mente ───────────────────────────────────────────
      Tre garanzie: non lancia mai, dice sempre la verità sull'esito, e quando
      l'esito è negativo lo registra e lo spiega. */
+  /* Vero mentre `Archivio.set` sta scrivendo: vedi la spia sulle scritture. */
+  var dentroArchivio = false;
+
   var MOTIVI = {
     quota: 'spazio esaurito',
     assente: 'archiviazione non disponibile',
@@ -178,6 +181,11 @@
         return { ok: false, motivo: MOTIVI.serializzazione };
       }
       try {
+        /* La spia sulle scritture sta più in basso in questo stesso file e
+           avvisa chi non se ne accorgerebbe. Qui ce ne si accorge eccome — e
+           si dice all'utente quale chiave e cosa fare — quindi si sospende:
+           due avvisi per lo stesso guasto sono uno di troppo. */
+        dentroArchivio = true;
         global.localStorage.setItem(chiave, testo);
       } catch (e) {
         Errors.log('Storage.set', e, { chiave: chiave, byte: testo.length });
@@ -187,6 +195,8 @@
           return { ok: false, motivo: MOTIVI.quota };
         }
         return { ok: false, motivo: descrivi(e) };
+      } finally {
+        dentroArchivio = false;
       }
       var riletto;
       try { riletto = global.localStorage.getItem(chiave); } catch (e) { riletto = null; }
@@ -240,9 +250,130 @@
     };
   }
 
+  /* ── Le scritture non possono più fallire in silenzio ──────────────────────
+     Misurato sul codice storico: 517 blocchi `catch {}` vuoti, di cui **200**
+     avvolgono una scrittura. Ognuno di quei duecento è un salvataggio che può
+     non avvenire senza che nessuno lo dica — né all'utente né al registro.
+
+     Riscriverli uno per uno significherebbe toccare duecento punti di 9 MB di
+     codice che funziona, con il rischio di romperne uno per correggerne un
+     altro. Qui si fa la stessa cosa che si è fatta con `console.error`: si
+     intercetta il **canale**, non i duecento chiamanti.
+
+     La regola è: non si cambia il comportamento, si toglie il silenzio.
+     L'eccezione viene rilanciata identica, la promessa rifiutata resta
+     rifiutata, e chi ha un `catch {}` continua a ingoiarla — ma prima
+     l'errore è finito nel registro e l'utente è stato avvisato.
+
+     Due canali, perché due sono i modi di scrivere in questa applicazione. */
+
+  /* La sorveglianza si reinstalla ogni tanto, perché più di un modulo storico
+     sostituisce `IDB.put` dopo l'avvio; quando lo fa, la spia finisce sotto la
+     sua e lo stesso errore passerebbe due volte. Un doppione entro un secondo
+     è lo stesso errore visto due volte, non due errori. */
+  var ultimoMessaggio = '';
+  var ultimoIstante = 0;
+
+  function annuncia(origine, errore, dettaglio) {
+    var messaggio = origine + '|' + descrivi(errore);
+    var adesso = Date.now();
+    if (messaggio === ultimoMessaggio && adesso - ultimoIstante < 1000) return;
+    ultimoMessaggio = messaggio;
+    ultimoIstante = adesso;
+
+    Errors.log(origine, errore, dettaglio || null);
+    if (adesso - ultimoAvviso < INTERVALLO_AVVISO) return;
+    ultimoAvviso = adesso;
+    Errors.avvisa('Un salvataggio non è riuscito: ' + descrivi(errore),
+      'i dati appena inseriti potrebbero non essere stati conservati');
+  }
+
+  /* 1. `localStorage.setItem`. Misurato: tre patch storiche lo sostituiscono
+        sull'istanza dopo l'avvio — per l'auto-backup, per il contatore di
+        modifiche, per il salvataggio della sessione — e l'ultima che scrive
+        vince. Una spia messa una volta sola, sul prototipo o sull'istanza,
+        finisce sotto le loro e smette di essere quella che vede l'eccezione.
+
+        Si reinstalla quindi sulle stesse scadenze della sorveglianza del
+        database, avvolgendo ogni volta la funzione che c'è. Avvolgere due
+        volte non raddoppia nulla: `annuncia` scarta un doppione entro un
+        secondo. */
+  function sorvegliaLocalStorage() {
+    try {
+      var ls = global.localStorage;
+      if (!ls || typeof ls.setItem !== 'function' || ls.setItem.__inglySpia) return;
+      var precedente = ls.setItem;
+      var spiaSet = function (chiave, valore) {
+        try {
+          return precedente.call(ls, chiave, valore);
+        } catch (e) {
+          /* `Ingly.Storage.set` dice già quale chiave non è stata salvata e
+             cosa fare: ripeterlo con parole più vaghe non aiuta nessuno. */
+          if (!dentroArchivio) annuncia('localStorage.setItem', e, { chiave: String(chiave).slice(0, 60) });
+          throw e;                    // il comportamento resta quello di prima
+        }
+      };
+      spiaSet.__inglySpia = true;
+      ls.setItem = spiaSet;
+    } catch (e) { /* localStorage non sostituibile: si prosegue senza */ }
+  }
+
+  /* 2. `IDB.put`, `IDB.putBulk` e `IDB.del`. Il database non esiste ancora
+        quando questo file viene eseguito — è il primo del documento — quindi
+        lo si aspetta, con un numero finito di tentativi invece di un polling
+        che non finisce mai. */
+  var SCRITTURE_IDB = ['put', 'safePut', 'putBulk', 'del', 'remove', 'clearStore'];
+  var tentativi = 0;
+  /* Alcuni moduli storici sostituiscono `IDB.put` dopo l'avvio, per
+     registrarne un audit o per aggiungere una convalida. Quando lo fanno la
+     spia resta dentro la loro, ma smette di essere quella esterna: si
+     ricontrolla qualche volta, a distanze crescenti, finché l'applicazione
+     non ha finito di installarsi. */
+  var RICONTROLLI = [1500, 4000, 9000, 20000, 45000];
+  function sorvegliaIDB() {
+    var db = global.IDB;
+    if (!db) {
+      if (++tentativi > 60) return;   // un minuto: se non c'è, non ci sarà
+      global.setTimeout(sorvegliaIDB, 1000);
+      return;
+    }
+    SCRITTURE_IDB.forEach(function (nome) {
+      var f = db[nome];
+      if (typeof f !== 'function' || f.__inglySpia) return;
+      var spia = function () {
+        var args = arguments;
+        var etichetta = 'IDB.' + nome + (args[0] ? '(' + String(args[0]).slice(0, 40) + ')' : '');
+        try {
+          var r = f.apply(db, args);
+          if (r && typeof r.then === 'function') {
+            return r.then(null, function (e) {
+              annuncia(etichetta, e);
+              throw e;                // la promessa resta rifiutata
+            });
+          }
+          return r;
+        } catch (e) {
+          annuncia(etichetta, e);
+          throw e;
+        }
+      };
+      spia.__inglySpia = true;
+      db[nome] = spia;
+    });
+  }
+  function sorveglia() { sorvegliaLocalStorage(); sorvegliaIDB(); }
+  sorvegliaLocalStorage();
+  try {
+    global.setTimeout(sorveglia, 0);
+    RICONTROLLI.forEach(function (ms) { global.setTimeout(sorveglia, ms); });
+  } catch (e) { /* niente timer: si prosegue */ }
+
   Ingly.Errors = Errors;
   Ingly.Storage = Archivio;
   Ingly.safeAsync = safeAsync;
+  /* Esposta perché i collaudi possano verificare che la sorveglianza sia
+     installata, senza doverla dedurre da un effetto collaterale. */
+  Ingly.sorvegliaScritture = sorveglia;
 
   /* Nomi storici già usati altrove nel prodotto: si offrono come alias perché
      nessuno debba scegliere fra la via sicura e la via che conosce. */
