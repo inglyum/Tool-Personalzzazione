@@ -856,7 +856,7 @@ const Catalog={
                travestita da formula. Ora è la politica «premium» del motore —
                che ha un nome, una soglia minima e un pavimento — e il prezzo
                lo calcola chi calcola i prezzi. */
-            const suggested=Catalogo._prezzoConsigliato(p.costPrice);
+            const suggested=Catalog._prezzoConsigliato(p.costPrice);
             return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(239,68,68,.06);border-radius:8px;border:1px solid rgba(239,68,68,.15)">
               <div style="flex:1;font-size:12px;font-weight:600">${p.name}</div>
               <div style="font-size:11px;color:#ef4444;font-weight:700">${mg}% mg</div>
@@ -2322,66 +2322,163 @@ Genera ESATTAMENTE in questo formato:
     this.render();
   },
 
-  async bulkMarginFix() {
-    const items = await IDB.getAll('catalog').catch(()=>[]);
-    const low = items.filter(i=>i.costPrice>0&&i.salePrice>0&&(i.salePrice-i.costPrice)/i.salePrice<0.3);
-    if(!low.length){ if(typeof toast!=='undefined') toast('✅ Nessun prodotto sotto il 30% di margine!','success'); return; }
+  /* ── Ricalcolo con anteprima ───────────────────────────────────────────
+     Qui c'erano `bulkMarginFix`, `_applyNewPrice` e `_bulkApplyAll45`: un
+     elenco dei prodotti sotto il 30% con due pulsanti che riscrivevano il
+     prezzo al clic, e un «Applica 45% a tutti» che faceva esattamente quello
+     che dice — su tutti, senza mostrare prima cosa sarebbe successo e senza
+     modo di tornare indietro.
+
+     Tre difetti, non uno:
+
+       · nessuna anteprima dell'insieme: si vedeva riga per riga, mai il
+         totale, mai quanto sarebbe cambiato il listino;
+       · nessun annullamento: la scrittura avveniva al clic;
+       · tre matematiche per lo stesso prezzo — `costPrice/(1-0.45)` scritto
+         a mano due volte, con due margini diversi, accanto a un
+         `_prezzoConsigliato` che chiamava già il motore.
+
+     Ora: si sceglie il margine, si vede la proposta completa con delta e
+     margini, si sceglie riga per riga, e si scrive **solo** alla conferma,
+     in una transazione sola. Annullare vuol dire chiudere: non essendo stato
+     scritto niente, non c'è niente da disfare. */
+
+  _ricalcolo: null,
+
+  async apriRicalcolo() {
+    const R = window.InglyCatalogRicalcolo;
+    if (!R) { if (typeof toast !== 'undefined') toast('Modulo di ricalcolo non disponibile', 'error'); return; }
+    const items = await IDB.getAll('catalog').catch(() => []);
+    if (!items.length) { if (typeof toast !== 'undefined') toast('Catalogo vuoto', 'warning'); return; }
+
+    this._ricalcolo = {
+      prodotti: items,
+      marginePct: R.PREDEFINITI.marginePct,
+      arrotondamento: R.PREDEFINITI.arrotondamento,
+      escluse: {},
+    };
 
     const ov = document.createElement('div');
+    ov.id = 'cat-ricalcolo';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-    ov.onclick = e=>{ if(e.target===ov) ov.remove(); };
-    ov.innerHTML = `
-    <div style="background:var(--bg-card);border-radius:14px;width:min(560px,100%);max-height:88vh;overflow-y:auto;border:1px solid var(--border2)" onclick="event.stopPropagation()">
-      <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-size:14px;font-weight:800">
-        🔧 ${low.length} prodotti con margine basso — Correzione rapida
-      </div>
-      <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
-        ${low.map(p=>{
-          const curMargin = Math.round((p.salePrice-p.costPrice)/p.salePrice*100);
-          const price45 = Math.ceil(Catalogo._prezzoConsigliato(p.costPrice));
-          const price35 = Math.ceil(p.costPrice/(1-0.35));
-          return `<div style="background:var(--bg-card2);border-radius:10px;padding:11px 13px;border:1px solid rgba(239,68,68,.15)">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-              <div style="flex:1;font-size:13px;font-weight:700">${p.name}</div>
-              <span style="background:rgba(239,68,68,.12);color:#ef4444;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700">${curMargin}% mg</span>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;font-size:11px;flex-wrap:wrap">
-              <span style="color:var(--text-muted)">Costo: <b>€${p.costPrice}</b> · Attuale: <b>€${p.salePrice}</b></span>
-              <span style="color:var(--text-dim)">→</span>
-              <button onclick="Catalog._applyNewPrice(${p.id},${price35})" style="padding:4px 10px;background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">€${price35} (35%)</button>
-              <button onclick="Catalog._applyNewPrice(${p.id},${price45})" style="padding:4px 10px;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">€${price45} (45%)</button>
-            </div>
-          </div>`;
-        }).join('')}
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:10px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:13px">Chiudi</button>
-          <button onclick="Catalog._bulkApplyAll45();this.closest('[style*=fixed]').remove()"
-            style="flex:2;padding:10px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;border-radius:9px;cursor:pointer;font-size:13px;font-weight:800">✅ Applica 45% a tutti</button>
-        </div>
-      </div>
-    </div>`;
+    ov.onclick = e => { if (e.target === ov) Catalog.chiudiRicalcolo(); };
+    ov.innerHTML = '<div style="background:var(--bg-card);border-radius:14px;width:min(920px,100%);max-height:90vh;display:flex;flex-direction:column;border:1px solid var(--border2)" onclick="event.stopPropagation()">'
+      + '<div style="padding:14px 18px;border-bottom:1px solid var(--border);font-size:14px;font-weight:800">🧮 Ricalcolo prezzi — anteprima</div>'
+      + '<div id="cat-ric-corpo" style="padding:16px;overflow-y:auto;flex:1"></div>'
+      + '<div id="cat-ric-piede" style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center"></div>'
+      + '</div>';
+    document.getElementById('cat-ricalcolo')?.remove();
     document.body.appendChild(ov);
+    this._disegnaRicalcolo();
   },
 
-  async _applyNewPrice(id, price) {
-    const p = await IDB.get('catalog', +id||id).catch(()=>null);
-    if(!p) return;
-    p.salePrice = price;
-    await IDB.put('catalog', p);
-    if(typeof toast!=='undefined') toast(`✅ ${p.name}: €${price}`,'success');
-    // Remove from list
-    const all = document.querySelectorAll('[onclick*="_applyNewPrice('+id+',"]');
-    all.forEach(b=>b.closest('[style*="border:1px solid rgba(239,68,68"]')?.remove());
+  chiudiRicalcolo() {
+    /* Annullare non disfa niente perché niente è stato scritto. */
+    this._ricalcolo = null;
+    document.getElementById('cat-ricalcolo')?.remove();
   },
 
-  async _bulkApplyAll45() {
-    const items = await IDB.getAll('catalog').catch(()=>[]);
-    const low = items.filter(i=>i.costPrice>0&&i.salePrice>0&&(i.salePrice-i.costPrice)/i.salePrice<0.3);
-    for(const p of low) {
-      p.salePrice = Math.ceil(p.costPrice/(1-0.45));
-      await IDB.put('catalog', p);
+  _ricalcoloSetMargine(v) { if (this._ricalcolo) { this._ricalcolo.marginePct = parseFloat(v) || 0; this._disegnaRicalcolo(); } },
+  _ricalcoloSetArrotondamento(v) { if (this._ricalcolo) { this._ricalcolo.arrotondamento = v; this._disegnaRicalcolo(); } },
+  _ricalcoloEscludi(id, escludi) {
+    if (!this._ricalcolo) return;
+    if (escludi) this._ricalcolo.escluse[String(id)] = 1; else delete this._ricalcolo.escluse[String(id)];
+    this._disegnaRicalcolo();
+  },
+
+  _disegnaRicalcolo() {
+    const R = window.InglyCatalogRicalcolo;
+    const st = this._ricalcolo;
+    const corpo = document.getElementById('cat-ric-corpo');
+    const piede = document.getElementById('cat-ric-piede');
+    if (!R || !st || !corpo || !piede) return;
+    const _e = typeof sanitize === 'function' ? sanitize : (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const eu = (v) => v == null ? '—' : '€' + (Math.round(v * 100) / 100).toFixed(2);
+    const pc = (v) => v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1) + '%';
+
+    const prop = R.proposta(st.prodotti, { marginePct: st.marginePct, arrotondamento: st.arrotondamento });
+    st.proposta = prop;
+    const scelte = prop.righe.filter(r => r.cambia && !st.escluse[String(r.id)]);
+    const totScelte = scelte.reduce((a, r) => ({
+      attuale: a.attuale + r.prezzoAttuale, nuovo: a.nuovo + r.prezzoNuovo,
+    }), { attuale: 0, nuovo: 0 });
+    st.scelti = scelte.map(r => r.id);
+
+    const opzioniArr = Object.keys(R.ARROTONDAMENTI).map(k =>
+      '<option value="' + k + '"' + (st.arrotondamento === k ? ' selected' : '') + '>' + _e(R.ARROTONDAMENTI[k].label) + '</option>').join('');
+
+    const righe = prop.righe.map(r => {
+      const escluso = !!st.escluse[String(r.id)];
+      const tinta = r.deltaValore == null ? 'var(--text-dim)' : (r.deltaValore > 0 ? '#22c55e' : (r.deltaValore < 0 ? '#ef4444' : 'var(--text-muted)'));
+      return '<tr style="border-bottom:1px solid var(--border);opacity:' + (r.cambia && !escluso ? '1' : '.5') + '">'
+        + '<td style="padding:6px 8px">' + (r.cambia
+          ? '<input type="checkbox" ' + (escluso ? '' : 'checked') + ' onchange="Catalog._ricalcoloEscludi(' + JSON.stringify(r.id) + ',!this.checked)">'
+          : '') + '</td>'
+        + '<td style="padding:6px 8px;font-size:12px;font-weight:600">' + _e(r.nome)
+        + (r.motivo ? '<div style="font-size:9px;color:var(--text-dim)">' + _e(r.motivo) + '</div>' : '') + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:11px;color:var(--text-muted)">' + eu(r.costo) + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:12px">' + eu(r.prezzoAttuale) + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:700">' + eu(r.prezzoNuovo) + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:12px;color:' + tinta + ';font-weight:700">'
+          + (r.deltaValore == null ? '—' : (r.deltaValore > 0 ? '+' : '') + eu(r.deltaValore)) + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:11px;color:' + tinta + '">'
+          + (r.deltaPct == null ? '—' : (r.deltaPct > 0 ? '+' : '') + pc(r.deltaPct)) + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:11px;color:var(--text-muted)">' + pc(r.marginePctAttuale) + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700">' + pc(r.marginePctNuovo) + '</td>'
+        + '</tr>';
+    }).join('');
+
+    corpo.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">'
+      + '<label style="font-size:11px;color:var(--text-muted)">Margine obiettivo<br>'
+      + '<input type="number" id="cat-ric-margine" min="0" max="95" step="1" value="' + st.marginePct + '" class="form-control" style="width:100px" onchange="Catalog._ricalcoloSetMargine(this.value)"></label>'
+      + '<label style="font-size:11px;color:var(--text-muted)">Arrotondamento<br>'
+      + '<select id="cat-ric-arr" class="form-control" style="width:150px" onchange="Catalog._ricalcoloSetArrotondamento(this.value)">' + opzioniArr + '</select></label>'
+      + '<div style="flex:1;min-width:200px;font-size:11px;color:var(--text-muted)">'
+        + prop.totali.daCambiare + ' prodotti cambierebbero · ' + prop.totali.aumenti + ' in aumento · ' + prop.totali.ribassi + ' in ribasso'
+        + (prop.totali.nonCalcolabili ? '<br><span style="color:#f59e0b">' + prop.totali.nonCalcolabili + ' senza costo di produzione: non si consiglia un prezzo</span>' : '')
+      + '</div></div>'
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+      + '<thead><tr style="background:var(--bg-card2)">'
+      + '<th style="padding:6px 8px"></th>'
+      + '<th style="padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Prodotto</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Costo</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Attuale</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Nuovo</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Delta €</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Delta %</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Mg attuale</th>'
+      + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Mg nuovo</th>'
+      + '</tr></thead><tbody>' + righe + '</tbody></table></div>';
+
+    const delta = totScelte.nuovo - totScelte.attuale;
+    piede.innerHTML = '<div style="flex:1;font-size:12px" id="cat-ric-riepilogo">'
+      + '<b>' + scelte.length + '</b> prodotti selezionati · listino ' + eu(totScelte.attuale) + ' → <b>' + eu(totScelte.nuovo) + '</b> '
+      + '<span style="color:' + (delta >= 0 ? '#22c55e' : '#ef4444') + ';font-weight:700">' + (delta > 0 ? '+' : '') + eu(delta) + '</span></div>'
+      + '<button id="cat-ric-annulla" onclick="Catalog.chiudiRicalcolo()" style="padding:9px 16px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:13px">Annulla</button>'
+      + '<button id="cat-ric-conferma" onclick="Catalog.confermaRicalcolo()" ' + (scelte.length ? '' : 'disabled ')
+      + 'style="padding:9px 18px;background:' + (scelte.length ? 'var(--primary)' : 'var(--bg-card2)') + ';color:' + (scelte.length ? '#000' : 'var(--text-dim)') + ';border:none;border-radius:9px;cursor:' + (scelte.length ? 'pointer' : 'not-allowed') + ';font-size:13px;font-weight:800">Applica ' + scelte.length + ' prezzi</button>';
+  },
+
+  async confermaRicalcolo() {
+    const R = window.InglyCatalogRicalcolo;
+    const st = this._ricalcolo;
+    if (!R || !st || !st.proposta) return;
+    const record = R.daScrivere(st.prodotti, st.proposta, st.scelti);
+    if (!record.length) return;
+
+    /* Una transazione sola: o si scrivono tutti o non si scrive niente.
+       Mezzo listino aggiornato sarebbe peggio di nessuno. */
+    try {
+      const scritti = await IDB.putBulk('catalog', record);
+      if (scritti !== record.length) throw new Error('scritti ' + scritti + ' record su ' + record.length);
+      if (typeof AppStore !== 'undefined' && AppStore.invalidate) AppStore.invalidate('catalog');
+      if (typeof toast !== 'undefined') toast('✅ ' + record.length + ' prezzi aggiornati', 'success');
+    } catch (e) {
+      if (window.Ingly && Ingly.Errors) Ingly.Errors.log('Catalog.confermaRicalcolo', e, { record: record.length });
+      if (typeof toast !== 'undefined') toast('Nessun prezzo modificato: ' + (e && e.message || 'errore di scrittura'), 'error');
+      return;
     }
-    if(typeof toast!=='undefined') toast(`✅ ${low.length} prezzi aggiornati a 45% margine!`,'success');
+    this.chiudiRicalcolo();
     this.render();
   },
 

@@ -59,6 +59,9 @@ export const PRODUCT_FILES = [
   /* Capacità e scadenze di produzione: legge la macchina di un ordine
      attraverso `order-fields`, quindi dopo di lui. Puro: nessun DOM. */
   'production-capacity.js',
+  /* Il ricalcolo del catalogo: usa `InglyCostEngine.prezzo`, quindi dopo il
+     motore. Prepara una proposta e non scrive: scrivere è di chi conferma. */
+  'catalog-recalc.js',
   /* Il registro di magazzino: puro, poi la metà che parla con il database.
      Nessuno dei due dipende dal resto, ma l'ordine fra i due sì. */
   'inventory-ledger.js',

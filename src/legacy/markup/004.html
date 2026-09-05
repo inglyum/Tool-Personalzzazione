@@ -1377,8 +1377,8 @@
       <button onclick="CatalogCats.openManager()" style="padding:7px 14px;background:linear-gradient(135deg,#8b5cf615,#6366f110);color:#a78bfa;border:1.5px solid #8b5cf640;border-radius:9px;cursor:pointer;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px">
         <i class="fas fa-tags" style="font-size:11px"></i> Gestisci Categorie
       </button>
-      <button onclick="Catalog.bulkMarginFix()" style="padding:7px 12px;background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2);border-radius:9px;cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px">
-        🔧 Margini bassi
+      <button id="cat-ricalcola" onclick="Catalog.apriRicalcolo()" title="Calcola i prezzi consigliati, mostra il confronto e chiede conferma prima di scrivere" style="padding:7px 12px;background:rgba(34,197,94,.08);color:#22c55e;border:1px solid rgba(34,197,94,.2);border-radius:9px;cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px">
+        🧮 Ricalcola prezzi
       </button>
       <button class="btn btn-secondary btn-sm" onclick="Catalog.showImportModal()" style="color:#22c55e;border-color:#22c55e40"><i class="fas fa-file-import"></i> Importa Catalogo</button>
       <button class="btn btn-secondary btn-sm" onclick="ExcelExport.exportCatalog()" style="color:#22c55e;border-color:#22c55e40"><i class="fas fa-file-excel"></i> Export Excel</button>
