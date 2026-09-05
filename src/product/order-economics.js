@@ -284,8 +284,188 @@
     if (global.Orders && global.Orders.render) await global.Orders.render();
   }
 
+  /* ══ PREVENTIVATO · REALE · SCOSTAMENTO ═══════════════════════════════════
+     Un ordine ha tre numeri, non uno, e il gestionale finora ne mostrava uno:
+     quanto **dovrebbe** costare. Il secondo — quanto è costato davvero —
+     esisteva nei dati (ore registrate e spese annotate) ma non arrivava mai
+     sotto gli occhi di chi guarda l'ordine. Il terzo, la differenza fra i due,
+     è quello che dice se il mestiere sta andando bene.
+
+     Nessuno dei tre viene calcolato qui:
+
+       · il **preventivato** è lo snapshot congelato — non si ricalcola mai,
+         altrimenti non è più quel che era stato promesso;
+       · il **reale** lo possiede `InglyActualCost`;
+       · lo **scostamento** lo possiede `InglyScostamento`.
+
+     Questo file li mette in fila e li disegna. È una vista, non un motore. */
+
+  var VOCI_CONSUNTIVO = [
+    { id: 'materiale',  label: 'Materiale',  aiuto: 'capi, filamento, lastre, consumabili' },
+    { id: 'lavorazione', label: 'Lavorazione', aiuto: 'stampa, incisione, taglio' },
+    { id: 'manodopera', label: 'Manodopera', aiuto: 'ore non tracciate dal timer' },
+    { id: 'extra',      label: 'Extra e scarti', aiuto: 'rifacimenti, pezzi persi' },
+    { id: 'imballo',    label: 'Imballo e spedizione', aiuto: '' },
+  ];
+
+  function rigaTre(etichetta, prev, reale, forte) {
+    var scarto = (prev != null && reale != null) ? reale - prev : null;
+    var colore = scarto == null ? 'var(--text-muted)'
+      : Math.abs(scarto) < 0.005 ? 'var(--text-muted)'
+      : scarto > 0 ? 'var(--red, #ef4444)' : 'var(--green, #22c55e)';
+    var segno = scarto != null && scarto > 0 ? '+' : '';
+    return '<tr>'
+      + '<td style="padding:5px 8px;font-size:' + (forte ? '13' : '12') + 'px;font-weight:' + (forte ? 800 : 400) + '">' + esc(etichetta) + '</td>'
+      + '<td style="padding:5px 8px;font-size:12px;text-align:right;color:var(--text-muted)">' + esc(prev == null ? '—' : eu(prev)) + '</td>'
+      + '<td style="padding:5px 8px;font-size:12px;text-align:right;font-weight:' + (forte ? 800 : 600) + '">' + esc(reale == null ? '—' : eu(reale)) + '</td>'
+      + '<td style="padding:5px 8px;font-size:12px;text-align:right;color:' + colore + ';font-weight:700">'
+      + esc(scarto == null ? '—' : segno + eu(scarto)) + '</td>'
+      + '</tr>';
+  }
+
+  /**
+   * Il pannello del consuntivo di un ordine.
+   *
+   * @param {Object} ordine  l'ordine canonico
+   * @param {Object} reale   l'esito di `InglyActualCost.perOrdine()`
+   * @param {Object} spese   le voci già registrate, indicizzate per tipo
+   */
+  function pannelloConsuntivo(ordine, reale, spese) {
+    var S = global.InglyOrderSnapshot;
+    var SC = global.InglyScostamento;
+    var o = ordine || {};
+    var registrate = spese || {};
+
+    /* Il preventivato viene dallo snapshot se c'è: è quello congelato, il solo
+       che rappresenti la promessa fatta al cliente. Se manca si ripiega sui
+       campi dell'ordine, dichiarandolo. */
+    var letto = S ? S.leggi(o) : { disponibile: false };
+    var daSnapshot = letto.disponibile;
+    var t = daSnapshot ? letto.snapshot.totals : null;
+    var costoPrev = daSnapshot ? num(t.totalCost) : num(o.cost);
+    var ricavo = daSnapshot ? num(t.totalNet) : num(o.total || o.value);
+
+    var costoReale = (reale && reale.registrato) ? num(reale.costo) : null;
+
+    var confronto = SC ? SC.confronta(
+      { costo: costoPrev, prezzo: ricavo, quantita: 1 },
+      costoReale != null ? { costo: costoReale, prezzo: ricavo, quantita: 1 } : {}
+    ) : { disponibile: false, motivo: 'modulo di confronto non caricato' };
+
+    var campi = VOCI_CONSUNTIVO.map(function (v) {
+      var val = registrate[v.id];
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'
+        + '<span style="flex:1;font-size:12px;color:var(--text-muted)">' + esc(v.label)
+        + (v.aiuto ? '<small style="display:block;font-size:9px;color:var(--text-dim)">' + esc(v.aiuto) + '</small>' : '')
+        + '</span>'
+        + '<input type="number" step="0.01" min="0" placeholder="reale" value="' + esc(val == null ? '' : val) + '"'
+        + ' aria-label="Costo reale · ' + esc(v.label) + '"'
+        + ' onchange="InglyOrderEconomics.registraVoce(' + esc(JSON.stringify(String(o.id))) + ',\'' + esc(v.id) + '\',this.value)"'
+        + ' style="width:96px;padding:5px 7px;background:var(--bg-card2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;text-align:right;outline:none">'
+        + '</div>';
+    }).join('');
+
+    var oreTracciate = (reale && reale.registrato && reale.voci && reale.voci.minuti > 0)
+      ? '<div style="font-size:10px;color:var(--text-dim);margin-bottom:7px">'
+        + 'Il timer ha già registrato ' + esc((Math.round(reale.voci.minuti) / 60).toFixed(1)) + ' h — '
+        + esc(eu(reale.voci.manodopera + reale.voci.macchina)) + ' fra manodopera e macchina. '
+        + 'Qui si aggiunge quello che il timer non vede.</div>'
+      : '';
+
+    var tabella = '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">'
+      + '<tr>'
+      + '<th style="text-align:left;padding:5px 8px;font-size:10px;color:var(--text-dim);text-transform:uppercase">Voce</th>'
+      + '<th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--text-dim);text-transform:uppercase">Preventivato</th>'
+      + '<th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--text-dim);text-transform:uppercase">Reale</th>'
+      + '<th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--text-dim);text-transform:uppercase">Scostamento</th>'
+      + '</tr>'
+      + rigaTre('Costo', costoPrev, costoReale)
+      + rigaTre('Ricavo', ricavo, confronto.disponibile ? confronto.reale.ricavo : ricavo)
+      + rigaTre('Profitto',
+          confronto.preventivato ? confronto.preventivato.profitto : null,
+          confronto.disponibile ? confronto.reale.profitto : null, true)
+      + '</table>';
+
+    var esito;
+    if (!confronto.disponibile) {
+      esito = '<div style="font-size:11px;color:var(--text-dim)">'
+        + esc(confronto.cosaFare || confronto.motivo || 'Consuntivo non registrato.')
+        + '</div>';
+    } else {
+      var col = confronto.verdetto.colore === 'rosso' ? 'var(--red, #ef4444)'
+        : confronto.verdetto.colore === 'arancione' ? 'var(--amber, #f59e0b)' : 'var(--green, #22c55e)';
+      esito = '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">'
+        + '<span style="font-size:13px;font-weight:800;color:' + col + '">' + esc(confronto.verdetto.label) + '</span>'
+        + (confronto.reale.margine != null
+          ? '<span style="font-size:11px;color:var(--text-muted)">margine reale ' + esc(pc(confronto.reale.margine))
+            + ' · preventivato ' + esc(pc(confronto.preventivato.margine)) + '</span>' : '')
+        + '</div>';
+    }
+
+    return '<div style="display:flex;flex-direction:column;gap:12px">'
+      + intestazione('Preventivato · Reale · Scostamento',
+          daSnapshot ? null : 'preventivato dai campi dell\'ordine, non da uno storico congelato')
+      + tabella + esito
+      + '<div style="border-top:1px solid var(--border);padding-top:10px">'
+      + intestazione('Registra com\'è andata')
+      + oreTracciate + campi
+      + '<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'
+      + 'Il preventivo non cambia: resta quello promesso al cliente. Qui si scrive quanto è costato davvero.</div>'
+      + '</div></div>';
+  }
+
+  /** Registra una voce di costo reale. Non tocca il preventivo. */
+  async function registraVoce(orderId, tipo, valore) {
+    var A = global.InglyActualCost;
+    if (!A || typeof global.IDB === 'undefined') {
+      if (global.toast) global.toast('Registro dei costi reali non disponibile', 'warning');
+      return;
+    }
+    var importo = (valore === '' || valore == null) ? null : parseFloat(valore);
+    if (importo != null && !isFinite(importo)) return;
+
+    /* Una voce si corregge, non si accumula: se esiste già una spesa di questo
+       tipo per questo ordine la si sostituisce. Sommare ogni modifica
+       gonfierebbe il costo a ogni ripensamento. */
+    var esistenti = await A.getByOrder(orderId).catch(function () { return []; });
+    var mia = esistenti.filter(function (e) { return e && e.type === tipo && e._consuntivo; })[0];
+
+    if (importo == null || importo === 0) {
+      if (mia) await global.IDB.del('cost_entries', mia.id).catch(function () {});
+    } else if (mia) {
+      mia.amount = importo;
+      mia.date = new Date().toISOString();
+      await global.IDB.put('cost_entries', mia).catch(function () {});
+    } else {
+      await global.IDB.put('cost_entries', {
+        id: Date.now() + Math.floor(Math.random() * 999),
+        orderId: orderId, type: tipo, amount: importo, minutes: 0,
+        desc: 'Consuntivo', _consuntivo: true, date: new Date().toISOString(),
+      }).catch(function () {});
+    }
+
+    try { if (global.AppStore) global.AppStore.invalidate('cost_entries'); } catch (e) {}
+    try { if (global.GestioneOrdini && global.GestioneOrdini._openDetail) global.GestioneOrdini._openDetail(orderId); } catch (e) {}
+  }
+
+  /** Le voci di consuntivo già registrate, indicizzate per tipo. */
+  async function vociRegistrate(orderId) {
+    var A = global.InglyActualCost;
+    if (!A) return {};
+    var tutte = await A.getByOrder(orderId).catch(function () { return []; });
+    var fuori = {};
+    tutte.forEach(function (e) {
+      if (e && e._consuntivo && e.type) fuori[e.type] = e.amount;
+    });
+    return fuori;
+  }
+
   global.InglyOrderEconomics = {
     pannello: pannello,
+    pannelloConsuntivo: pannelloConsuntivo,
+    registraVoce: registraVoce,
+    vociRegistrate: vociRegistrate,
+    VOCI_CONSUNTIVO: VOCI_CONSUNTIVO,
     statoDaPreventivo: statoDaPreventivo,
     chiediRicalcolo: chiediRicalcolo,
   };

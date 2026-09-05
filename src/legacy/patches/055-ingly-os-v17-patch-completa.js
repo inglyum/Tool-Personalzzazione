@@ -112,6 +112,9 @@
           </div>
         </details>` : ''}
 
+        <!-- Preventivato · Reale · Scostamento -->
+        <div id="go-consuntivo"></div>
+
         <!-- Azioni -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--border)">
           <button onclick="GestioneOrdini._saveEdit(${o.id})" style="flex:1;min-width:100px;padding:9px;background:var(--primary);color:#000;border:none;border-radius:8px;font-weight:800;cursor:pointer;font-size:12px">💾 Salva modifiche</button>
@@ -124,6 +127,12 @@
     </div>`;
     document.body.appendChild(modal);
     document.getElementById('go-ed-client')?.focus();
+    /* Il consuntivo si legge da due archivi: si riempie dopo, così il dettaglio
+       si apre subito invece di aspettare due letture. Il metodo vive su
+       GestioneOrdini (patch 052) ed è di questa versione del dettaglio che ha
+       bisogno: quella del file 052 non viene mai eseguita, perché è questa
+       funzione a sostituirla. */
+    if (typeof this._riempiConsuntivo === 'function') this._riempiConsuntivo(o);
   };
 
   // ── _saveEdit: salva tutte le modifiche ───────────────────────────

@@ -208,8 +208,8 @@ Detto per intero, così non passa per fatto.
 | § | Punto | Stato |
 |---|-------|-------|
 | 14 | `ProductImageField` riutilizzabile in 6 moduli | **non fatto**. Oggi l'immagine prodotto è `OrderSpecs` (patch 066), un contenitore in `localStorage` per ordine, usato da Quoter e Gestione Ordini. Non è un campo riusabile, e Apparel, Product Builder e Catalogo non lo usano. |
-| 16 | Orders mostra Estimated / Actual / Variance | **non fatto**. I tre motori esistono e sono distinti (`InglyCostEngine`, `InglyActualCost`, `InglyScostamento`), ma Ordini non li affianca in una vista. |
-| 17 | Inserimento dei consuntivi al completamento | **non fatto** in Ordini. Esiste nel preventivatore 3D (`p3d_consuntivo_v1`). |
+| 16 | Orders mostra Estimated / Actual / Variance | **fatto** — vedi §16-17 qui sotto. |
+| 17 | Inserimento dei consuntivi al completamento | **fatto** — vedi §16-17 qui sotto. |
 | 4 | Lista con Immagine, Margine, Assegnato a, Priorità | **parziale**. La lista mostra cliente, ordine, stato, scadenza, importo e priorità come filtro; mancano colonna immagine, margine e assegnatario. |
 | 6 | Vista Produzione con i filtri macchina/operatore/tecnologia | **parziale**. La vista esiste; quei filtri no. |
 
@@ -217,3 +217,76 @@ Queste cinque cose sono lavoro vero, non rifiniture, e vanno fatte prima di
 considerare chiusa l'intera direttiva. Quello che è chiuso è il punto che la
 direttiva metteva come condizione: **un ordine, un record**, e una sola
 centrale che lo mostra.
+
+
+---
+
+## 16-17 · Un ordine ha tre numeri, non uno
+
+Il gestionale mostrava quanto un ordine **dovrebbe** costare. Quanto è costato
+davvero esisteva nei dati — ore registrate in `timelogs`, spese annotate in
+`cost_entries` — ma non arrivava mai sotto gli occhi di chi guarda l'ordine. E
+la differenza fra i due non la calcolava nessuno.
+
+### Il difetto sotto: una definizione sepolta
+
+La somma del costo reale per ordine esisteva già, ma viveva **dentro il
+costruttore del cruscotto** (`BDW`, in `settings/index.js`): una definizione
+chiusa in un consumatore, che nessun'altra parte del programma poteva chiedere.
+
+Ordini aveva bisogno della stessa risposta. La strada breve era ricalcolarla —
+cioè avere due definizioni di «quanto è costato davvero», che è il modo in cui
+due schermate finiscono per mostrare due numeri diversi sullo stesso lavoro.
+
+Il proprietario è ora `InglyActualCost`, che la Fase 33 aveva già dichiarato
+essere l'ACTUAL. Il cruscotto la chiede a lui.
+
+Il costo reale ha **due** sorgenti: le ore registrate — che diventano manodopera
+e macchina alle tariffe impostate — e le spese annotate. Sommarne una sola
+sarebbe peggio che non sommarne nessuna, perché sembrerebbe completa.
+
+### I tre numeri, e chi li possiede
+
+| Numero | Sorgente | Proprietario |
+|--------|----------|--------------|
+| Preventivato | snapshot congelato | `InglyOrderSnapshot` — non si ricalcola mai |
+| Reale | `timelogs` + `cost_entries` | `InglyActualCost` |
+| Scostamento | differenza fra i due | `InglyScostamento` |
+
+`InglyOrderEconomics.pannelloConsuntivo()` li mette in fila e li disegna. È una
+vista, non un motore: non calcola nessuno dei tre.
+
+### Registrare com'è andata
+
+Cinque voci nel dettaglio dell'ordine — materiale, lavorazione, manodopera,
+extra e scarti, imballo — che scrivono in `cost_entries`, l'archivio che già
+esisteva. **Nessun archivio nuovo**: qui la tentazione era usare
+`InglyConsuntivo` (nato per i preventivatori) e sarebbe stata la stessa
+duplicazione appena evitata sull'Apparel.
+
+Tre regole, verificate dai test:
+
+1. **Il preventivo non cambia.** Resta quello promesso al cliente: registrare un
+   consuntivo non tocca né `cost` né `total` dell'ordine.
+2. **Correggere sostituisce, non somma.** Altrimenti ogni ripensamento
+   gonfierebbe il costo.
+3. **Svuotare toglie.** È il modo per correggere un valore digitato per errore.
+
+Quando il timer ha già registrato delle ore, il pannello lo dice — *«il timer ha
+già registrato 1,0 h — € 19,80 fra manodopera e macchina»* — così non si
+ricontano a mano quelle stesse ore.
+
+### Una funzione che non veniva mai eseguita
+
+Il pannello era stato inserito in `GestioneOrdini._openDetail` dentro la patch
+052. Verificando, quella funzione **non gira mai**: la patch 055 la sostituisce
+per intero. Il pannello è stato spostato sulla versione viva; in 052 resta il
+metodo `_riempiConsuntivo`, che sta sull'oggetto e funziona con chiunque disegni
+il dettaglio.
+
+### Misurato
+
+`tests/qa/ordini-consuntivo.mjs` — 30 controlli, 0 errori JS. Fra questi: il
+costo reale vale esattamente la somma delle due sorgenti; senza dati dichiara
+«non lo so» invece di zero; registrare non tocca il preventivo; correggere non
+lascia due righe; e dopo una ricarica il consuntivo c'è ancora.

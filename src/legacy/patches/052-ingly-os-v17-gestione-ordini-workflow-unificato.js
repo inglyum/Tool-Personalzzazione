@@ -721,6 +721,36 @@ const GestioneOrdini = {
   },
 
   // ══ DETAIL MODAL ═══════════════════════════════════════════════════
+  /* ── Il consuntivo dentro il dettaglio ──────────────────────────────────
+     Un ordine ha tre numeri: quanto dovrebbe costare, quanto è costato e la
+     differenza. Il gestionale ne mostrava uno. Il pannello lo disegna
+     `InglyOrderEconomics`; il costo reale lo possiede `InglyActualCost`; il
+     confronto `InglyScostamento`. Qui si mettono insieme, non si calcolano.
+
+     Il metodo sta qui, sull'oggetto, e non dentro `_openDetail`: quella
+     funzione la patch 055 la sostituisce per intero, quindi la versione di
+     questo file non viene mai eseguita. Chi disegna il dettaglio chiama
+     questo metodo, chiunque sia. */
+  async _riempiConsuntivo(o) {
+    const n = document.getElementById('go-consuntivo');
+    if (!n) return;
+    const E = window.InglyOrderEconomics;
+    if (!E || !E.pannelloConsuntivo) { n.innerHTML = ''; return; }
+    const A = window.InglyActualCost;
+    try {
+      const [reale, spese] = await Promise.all([
+        A && A.perOrdine ? A.perOrdine(o.id, o.quoteId).catch(() => ({ registrato: false })) : Promise.resolve({ registrato: false }),
+        E.vociRegistrate ? E.vociRegistrate(o.id).catch(() => ({})) : Promise.resolve({}),
+      ]);
+      /* Il nodo può essere sparito nel frattempo: chi chiude il modale mentre
+         la lettura è in volo non deve vedere un errore in console. */
+      const vivo = document.getElementById('go-consuntivo');
+      if (vivo) vivo.innerHTML = E.pannelloConsuntivo(o, reale, spese);
+    } catch (e) {
+      if (window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('consuntivo ordine', e);
+    }
+  },
+
   async _openDetail(id) {
     const o = await IDB.get('orders', +id||id).catch(()=>null);
     if(!o) return;

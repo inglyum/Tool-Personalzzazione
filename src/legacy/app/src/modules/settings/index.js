@@ -7582,25 +7582,22 @@ const BDW = {
     // ── Real Cost Engine: timelogs → orders → real margins ─────────────
     // (moved BEFORE metrics assembly to avoid TDZ error on realMarginAvg)
     const timelogs = await IDB.getAll('timelogs').catch(()=>[]);
-    const costEntries = await IDB.getAll('cost_entries').catch(()=>[]);
     const settings = await IDB.get('settings','main').catch(()=>null)||{};
     const laborCostPerMin = parseFloat(settings.laborCost)||0.25; // €/min
-    const machineCostPerMin = parseFloat(settings.machineCost)||0.08; // €/min
 
-    // Build real cost per order from timelogs + cost_entries
-    const realCostByOrder = {};
-    timelogs.forEach(t=>{
-      if(!t.orderId && !t.quoteId) return;
-      const key = t.orderId || ('q'+t.quoteId);
-      const mins = (+t.minutes||0) + (+t.duration||0)/60;
-      const laborCost = mins * laborCostPerMin;
-      const machineCost = mins * machineCostPerMin * (+t.machineCount||1);
-      realCostByOrder[key] = (realCostByOrder[key]||0) + laborCost + machineCost;
-    });
-    costEntries.forEach(e=>{
-      if(!e.orderId) return;
-      realCostByOrder[e.orderId] = (realCostByOrder[e.orderId]||0) + (+e.amount||0);
-    });
+    /* Il costo reale per ordine si calcolava qui, dentro il costruttore del
+       cruscotto: una definizione sepolta in un consumatore, che nessun'altra
+       parte del programma poteva chiedere. Quando Ordini ha avuto bisogno
+       della stessa risposta, la scelta era ricalcolarla — cioè avere due
+       definizioni di «quanto è costato davvero», che è il modo in cui due
+       schermate mostrano due numeri diversi sullo stesso lavoro.
+
+       Il proprietario è `InglyActualCost`, che la Fase 33 ha dichiarato essere
+       l'ACTUAL. Qui si chiede a lui. */
+    let realCostByOrder = {};
+    if (typeof InglyActualCost !== 'undefined' && InglyActualCost.mappaPerOrdine) {
+      realCostByOrder = (await InglyActualCost.mappaPerOrdine().catch(()=>({costi:{}}))).costi || {};
+    }
 
     // Enrich sales with real costs where available
     const enrichedSales = paid.map(s=>{
@@ -7626,7 +7623,7 @@ const BDW = {
     this.segments = segs;
     this.productPerf = prodPerf;
     this.leadScores = leadScores;
-    this._raw = {sales:paid,allSales:sales,clients,quotes,orders,cashflow,catalog,items,gadgets,campaigns,openOrders,overdueOrders,pendingQ,now,thisMonth,lastMonth,revsArr,forecast,timelogs,costEntries,enrichedSales,realCostByOrder,realMarginAvg,totalLaborCost};
+    this._raw = {sales:paid,allSales:sales,clients,quotes,orders,cashflow,catalog,items,gadgets,campaigns,openOrders,overdueOrders,pendingQ,now,thisMonth,lastMonth,revsArr,forecast,timelogs,enrichedSales,realCostByOrder,realMarginAvg,totalLaborCost};
     this._cache = this.metrics;
     this._ts = Date.now();
 

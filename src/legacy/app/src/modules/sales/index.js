@@ -2807,6 +2807,92 @@ const InglyActualCost = {
     return all.filter(e => String(e.orderId) === String(orderId));
   },
 
+  /* ── Il costo reale di un ordine ────────────────────────────────────────
+     Questa somma esisteva già, ma viveva dentro il costruttore del cruscotto
+     (`BDW`, in settings): una definizione sepolta in un consumatore, che
+     nessun'altra parte del programma poteva chiedere. Ordini aveva bisogno
+     della stessa risposta e l'avrebbe ricalcolata a modo suo — due definizioni
+     di «quanto è costato davvero», che è il modo in cui due schermate finiscono
+     per mostrare due numeri diversi sullo stesso lavoro.
+
+     Il proprietario è questo modulo, che la Fase 33 ha dichiarato essere
+     l'ACTUAL. Il cruscotto ora la chiede qui.
+
+     Il costo reale ha due sorgenti e non una: le ore registrate (che diventano
+     manodopera e macchina ai costi impostati) e le spese annotate. Sommarne una
+     sola sarebbe peggio che non sommarne nessuna, perché sembrerebbe completa. */
+  _TARIFFE: null,
+  async _tariffe() {
+    if (this._TARIFFE) return this._TARIFFE;
+    const s = await IDB.get('settings', 'main').catch(()=>null) || {};
+    this._TARIFFE = {
+      manodoperaAlMinuto: parseFloat(s.laborCost) || 0.25,
+      macchinaAlMinuto: parseFloat(s.machineCost) || 0.08,
+    };
+    return this._TARIFFE;
+  },
+
+  /** La mappa `chiave → costo reale` per tutti gli ordini in una passata.
+      La chiave è l'id dell'ordine, o `q<idPreventivo>` per il lavoro tracciato
+      prima che l'ordine esistesse: è la convenzione già in uso, e cambiarla
+      qui scollegherebbe i dati storici. */
+  async mappaPerOrdine() {
+    const [timelogs, costEntries, tariffe] = await Promise.all([
+      IDB.getAll('timelogs').catch(()=>[]),
+      IDB.getAll('cost_entries').catch(()=>[]),
+      this._tariffe(),
+    ]);
+
+    const mappa = {};
+    const dettaglio = {};
+    const aggiungi = (chiave, quanto, tipo) => {
+      if (!chiave || !isFinite(quanto)) return;
+      mappa[chiave] = (mappa[chiave] || 0) + quanto;
+      dettaglio[chiave] = dettaglio[chiave] || { manodopera: 0, macchina: 0, spese: 0, minuti: 0 };
+      dettaglio[chiave][tipo] += quanto;
+    };
+
+    timelogs.forEach(t => {
+      if (!t || (!t.orderId && !t.quoteId)) return;
+      const chiave = t.orderId || ('q' + t.quoteId);
+      const minuti = (+t.minutes || 0) + (+t.duration || 0) / 60;
+      aggiungi(chiave, minuti * tariffe.manodoperaAlMinuto, 'manodopera');
+      aggiungi(chiave, minuti * tariffe.macchinaAlMinuto * (+t.machineCount || 1), 'macchina');
+      if (dettaglio[chiave]) dettaglio[chiave].minuti += minuti;
+    });
+
+    costEntries.forEach(e => {
+      if (!e || !e.orderId) return;
+      aggiungi(e.orderId, +e.amount || 0, 'spese');
+    });
+
+    return { costi: mappa, dettaglio: dettaglio };
+  },
+
+  /** Il costo reale di **un** ordine, con le sue voci.
+      Se non è stato registrato niente lo dice: «non lo so» e «è costato zero»
+      sono due cose diverse, e confonderle è il modo in cui un laboratorio
+      resta convinto di guadagnare quanto aveva previsto. */
+  async perOrdine(orderId, quoteId) {
+    const { costi, dettaglio } = await this.mappaPerOrdine();
+    const chiavi = [orderId, quoteId != null ? ('q' + quoteId) : null].filter(Boolean).map(String);
+    const presenti = chiavi.filter(k => costi[k] != null);
+    if (!presenti.length) {
+      return { registrato: false, motivo: 'nessun costo reale registrato su questo ordine' };
+    }
+    const somma = presenti.reduce((a, k) => a + costi[k], 0);
+    const voci = presenti.reduce((a, k) => {
+      const d = dettaglio[k] || {};
+      return {
+        manodopera: a.manodopera + (d.manodopera || 0),
+        macchina: a.macchina + (d.macchina || 0),
+        spese: a.spese + (d.spese || 0),
+        minuti: a.minuti + (d.minuti || 0),
+      };
+    }, { manodopera: 0, macchina: 0, spese: 0, minuti: 0 });
+    return { registrato: true, costo: somma, voci: voci };
+  },
+
   async getRealMarginForSale(sale) {
     await BDW.init();
     const rc = BDW._raw?.realCostByOrder;
