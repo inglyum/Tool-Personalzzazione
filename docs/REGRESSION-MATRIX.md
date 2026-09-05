@@ -86,4 +86,25 @@ sul file consegnato — `dist/INGLY-OS.html` — non sui sorgenti.
 | SafeStorage | scrittura accettata e non conservata | smascherata | ok:false | ✔ |
 | Baseline | modifiche al codice storico | tutte dichiarate | 22 dichiarate | ✔ |
 
-**Totale: 264 test unitari, 12 collaudi su browser. 0 fallimenti.**
+## Fase Ordini · Produzione · Catalogo · CRM · Cost Engine
+
+| Modulo | Prova | Atteso | Ottenuto | Esito |
+|---|---|---|---|---|
+| Ordini | margine dopo un cambio dei costi di oggi | invariato | 180 → 180 | ✔ |
+| Ordini | filtro macchina / operatore / tecnologia | filtra | 1 su 4 ciascuno | ✔ |
+| Ordini | assegnatario dopo il ricaricamento | resta | resta | ✔ |
+| Ordini | `<img>` senza sorgente nella lista | 0 | 0 | ✔ |
+| Produzione | capacità disponibile − carico | residua | 40 − 16 = 24 h | ✔ |
+| Produzione | ordine senza ore dichiarate | incognita, non zero | 0 h · 1 incognita | ✔ |
+| Produzione | scadenza non raggiungibile | rossa | rossa | ✔ |
+| Catalogo | «Annulla» dopo l'anteprima | nessun prezzo cambiato | nessuno | ✔ |
+| Catalogo | conferma parziale | scrive solo le righe scelte | 1 su 2 | ✔ |
+| CRM | valore di pipeline col criterio vecchio | — | 300 su 1700 | ✘ (corretto) |
+| CRM | valore di pipeline col vocabolario unico | tutti gli aperti | 1700 € | ✔ |
+| CRM | preventivo con ordine collegato | convertito | CONVERTED | ✔ |
+| Product Builder | 3 € di confezione | +3 € | 5,00 → 8,00 | ✔ |
+| Coerenza | costo di catalogo 12 → 30 | ordine storico fermo | 12 | ✔ |
+| Errori | `IDB.put` che fallisce | avviso, nessun falso successo | avviso | ✔ |
+| Errori | promessa rifiutata | l'utente lo sa | avvisato | ✔ |
+
+**Totale: 1302 test unitari, 38 collaudi su browser. 0 fallimenti.**
