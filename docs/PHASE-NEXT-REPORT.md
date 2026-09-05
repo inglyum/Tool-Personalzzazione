@@ -35,6 +35,7 @@ Ogni riga della tabella è un difetto **misurato**, non dedotto: la colonna
 | PERF-01 | Ordini | La vista Produzione rileggeva tutti gli ordini una seconda volta a ogni disegno | — | Gli ordini arrivano da `render()` che li ha già letti | PROD 26/26 | ✔ |
 | MACH-01 | Smart Quoter 3D | Il preventivatore ignorava il parco macchine registrato | `MACH` (listino di modelli noti) era l'unico registro letto; `equipment` è l'inventario vero | La tendina apre con «Le tue macchine»; potenza, prezzo, vita utile e manutenzione vengono dal record | quoter3d-parco, 14 controlli | ✔ |
 | ERR-02 | Tutto | 200 `catch {}` vuoti attorno a una scrittura: un salvataggio poteva non avvenire senza che nessuno lo dicesse | Duecento chiamanti, un canale solo | Spia su `localStorage.setItem` e sui metodi di scrittura di `IDB`: registra, avvisa, e rilancia identico | scritture-non-silenziose, 13 controlli | ✔ |
+| PROD-03 | Produzione | I giorni lavorativi erano una regola muta: sabato e domenica chiusi, nessuna ferie | Il calendario non esisteva come dato | `calendarioProduzione` nelle impostazioni: giorni della settimana e date di chiusura; il predefinito resta quello di prima e la vista dichiara quale sta usando | PROD-011…011i unit + 4 browser | ✔ |
 
 ## Parametri di costo — decisioni
 
@@ -52,14 +53,14 @@ Dettaglio in `docs/COST-PARAMETERS-AUDIT.md`.
 
 | | |
 |---|---|
-| **Bug trovati** | 23 |
-| **Bug risolti** | 23 |
+| **Bug trovati** | 24 |
+| **Bug risolti** | 24 |
 | **Moduli nuovi** | 4 (`order-fields`, `production-capacity`, `catalog-recalc`, `quote-status`) |
-| **Test totali (unitari)** | 1302 |
-| **Test passati** | 1302 |
+| **Test totali (unitari)** | 1311 |
+| **Test passati** | 1311 |
 | **Test falliti** | 0 |
 | **Suite su browser** | 40, tutte verdi (`npm run qa`, uscita 0) |
-| **Controlli su browser nelle suite nuove** | 153 (28 ordini · 26 produzione · 21 catalogo · 18 CRM · 8 confezione · 28 coerenza · 14 parco macchine · 13 scritture) |
+| **Controlli su browser nelle suite nuove** | 157 (28 ordini · 30 produzione · 21 catalogo · 18 CRM · 8 confezione · 28 coerenza · 14 parco macchine · 13 scritture) |
 | **Errori JavaScript nelle suite nuove** | 0 |
 | **Controlli superati nella regressione completa** | 879 · 0 falliti · 0 errori JavaScript |
 
@@ -82,11 +83,18 @@ Cose che questa fase **non** ha verificato, e il motivo.
    duecento, se il salvataggio ingoiato andava anche *ritentato* o annullato.
    Quella non è stata fatta.
 
-2. **Il carico su più giorni.** La stima di fine lavoro tratta la capacità
-   giornaliera come costante e la coda come sequenziale su una macchina sola.
-   Non modella turni, ferie, festività (il calendario non esiste nei dati),
-   né lavorazioni parallele su più macchine. Dove i dati non arrivano, la
-   stima si dichiara incompleta invece di inventare.
+2. **Il carico su più giorni.** Il calendario ora esiste: quali giorni della
+   settimana si produce e in quali date si è chiusi si dichiarano nelle
+   impostazioni (`calendarioProduzione`), e capacità e scadenze li usano. Il
+   predefinito resta lunedì-venerdì senza chiusure — cioè il comportamento di
+   prima — e la vista dice quando sta usando il calendario del laboratorio.
+   Le festività non si inventano: nessun elenco nazionale preconfezionato,
+   chi chiude a Ferragosto lo scrive.
+
+   Restano fuori: i turni (la capacità giornaliera è un numero solo per
+   macchina), le lavorazioni parallele sulla stessa macchina, e la coda che è
+   trattata come sequenziale. Dove i dati non arrivano, la stima si dichiara
+   incompleta invece di inventare.
 
 3. **La conversione «visto dal cliente».** Lo stato esiste nel vocabolario ma
    nessuna parte dell'applicazione registra una data di visione: nessun
@@ -104,7 +112,7 @@ Cose che questa fase **non** ha verificato, e il motivo.
 
 ```bash
 npm run verify   # 224 file JS parsati
-npm test         # 1302 test unitari
+npm test         # 1311 test unitari
 npm run qa       # 40 suite su browser reale
 ```
 

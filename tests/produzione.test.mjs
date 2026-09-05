@@ -275,3 +275,84 @@ test('PROD-009c · nessun dato non fa cadere niente', () => {
   assert.equal(a.righe.length, 0);
   assert.equal(a.totali.completo, false, 'senza macchine non si dichiara un conto completo');
 });
+
+/* ── PROD-011 · il calendario di lavoro ─────────────────────────────────── */
+
+test('PROD-011 · senza calendario si lavora lunedì-venerdì, come prima', () => {
+  const c = P.normalizzaCalendario(null);
+  assert.equal(c.giorniSettimana.join(','), '1,2,3,4,5');
+  assert.equal(c.predefinito, true);
+  /* Venerdì + 1 giorno lavorativo = lunedì. */
+  const d = P.aggiungiGiorniLavorativi(new Date('2026-06-05T08:00:00.000Z'), 1);
+  assert.equal(d.toISOString().slice(0, 10), '2026-06-08');
+});
+
+test('PROD-011b · chi lavora il sabato lo dichiara e il conto cambia', () => {
+  const cal = { giorniSettimana: [1, 2, 3, 4, 5, 6] };
+  const d = P.aggiungiGiorniLavorativi(new Date('2026-06-05T08:00:00.000Z'), 1, cal);
+  assert.equal(d.toISOString().slice(0, 10), '2026-06-06', 'sabato');
+  assert.equal(P.normalizzaCalendario(cal).predefinito, false);
+});
+
+test('PROD-011c · una chiusura dichiarata sposta la data', () => {
+  /* Chiuso lunedì 8: il lavoro di venerdì finisce martedì 9. */
+  const cal = { chiusure: ['2026-06-08'] };
+  const d = P.aggiungiGiorniLavorativi(new Date('2026-06-05T08:00:00.000Z'), 1, cal);
+  assert.equal(d.toISOString().slice(0, 10), '2026-06-09');
+});
+
+test('PROD-011d · le festività non si inventano: senza dichiararle si lavora', () => {
+  /* Ferragosto 2026 cade di sabato; il 17 agosto è un lunedì qualunque. */
+  assert.equal(P.eLavorativo(new Date('2026-08-17T08:00:00.000Z')), true);
+  assert.equal(P.eLavorativo(new Date('2026-08-17T08:00:00.000Z'), { chiusure: ['2026-08-17'] }), false);
+});
+
+test('PROD-011e · una chiusura scritta male non chiude niente', () => {
+  const c = P.normalizzaCalendario({ chiusure: ['15 agosto', '', null, '2026-13-45', '2026-06-08'] });
+  assert.equal(Object.keys(c.chiusure).join(','), '2026-06-08');
+});
+
+test('PROD-011f · la capacità della finestra conta i giorni del calendario', () => {
+  const macchine = [macchina('m1', { hoursPerDay: 8 })];
+  const ordini = [ordine(1, { estimatedHours: 4 })];
+  const cinque = P.analizza({ macchine, ordini, timelogs: [], finestraGiorni: 7, oggi: LUN });
+  const sei = P.analizza({ macchine, ordini, timelogs: [], finestraGiorni: 7, oggi: LUN,
+    calendario: { giorniSettimana: [1, 2, 3, 4, 5, 6] } });
+  assert.equal(cinque.giorniUtili, 5);
+  assert.equal(sei.giorniUtili, 6);
+  assert.equal(cinque.righe[0].disponibile, 40);
+  assert.equal(sei.righe[0].disponibile, 48);
+});
+
+test('PROD-011g · l analisi dichiara quale calendario ha usato', () => {
+  const macchine = [macchina('m1', { hoursPerDay: 8 })];
+  const a = P.analizza({ macchine, ordini: [], timelogs: [], finestraGiorni: 7, oggi: LUN });
+  assert.equal(a.calendario.predefinito, true);
+  const b = P.analizza({ macchine, ordini: [], timelogs: [], finestraGiorni: 7, oggi: LUN,
+    calendario: { giorniSettimana: [1, 2, 3, 4, 5, 6], chiusure: ['2026-06-03'] } });
+  assert.equal(b.calendario.predefinito, false);
+  assert.equal(b.calendario.chiusure.join(','), '2026-06-03');
+});
+
+test('PROD-011h · un calendario in cui non si lavora mai non fa girare a vuoto', () => {
+  const cal = { giorniSettimana: [] };
+  /* Un elenco vuoto non è una scelta: ricade sul predefinito. */
+  assert.equal(P.normalizzaCalendario(cal).giorniSettimana.join(','), '1,2,3,4,5');
+  /* E un calendario di sole chiusure ha comunque un limite di giri. */
+  const chiusure = [];
+  for (let i = 1; i <= 400; i += 1) {
+    const d = new Date(Date.parse('2026-06-01T00:00:00.000Z') + i * 24 * 3600 * 1000);
+    chiusure.push(d.toISOString().slice(0, 10));
+  }
+  assert.doesNotThrow(() => P.aggiungiGiorniLavorativi(new Date(LUN), 3, { chiusure }));
+});
+
+test('PROD-011i · la scadenza stimata usa lo stesso calendario', () => {
+  const o = ordine(1, { estimatedHours: 8, dueDate: '2026-06-30' });
+  const venerdi = '2026-06-05T08:00:00.000Z';
+  const feriale = P.scadenza(o, { macchine: [macchina('m1', { hoursPerDay: 8 })], ordini: [o], oggi: venerdi });
+  const conSabato = P.scadenza(o, { macchine: [macchina('m1', { hoursPerDay: 8 })], ordini: [o], oggi: venerdi,
+    calendario: { giorniSettimana: [1, 2, 3, 4, 5, 6] } });
+  assert.equal(feriale.dataStimata.toISOString().slice(0, 10), '2026-06-08');
+  assert.equal(conSabato.dataStimata.toISOString().slice(0, 10), '2026-06-06');
+});

@@ -365,7 +365,9 @@ const GestioneOrdini = {
     <div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:var(--bg-card)">
       <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px">
         <div style="font-size:12px;font-weight:800;flex:1;min-width:150px">📊 Capacità · prossimi ${a.finestraGiorni} giorni
-          <span style="font-weight:500;color:var(--text-dim);font-size:10px">(${a.giorniUtili} giorni lavorativi)</span>
+          <span style="font-weight:500;color:var(--text-dim);font-size:10px"
+            title="${a.calendario.predefinito ? 'Calendario predefinito: lunedì-venerdì, nessuna chiusura. Si configura in Impostazioni.' : 'Calendario del laboratorio' + (a.calendario.chiusure.length ? ' · ' + a.calendario.chiusure.length + ' chiusure dichiarate' : '')}"
+            >(${a.giorniUtili} giorni lavorativi${a.calendario.predefinito ? '' : ' · calendario del laboratorio'})</span>
         </div>
         ${riquadro('Disponibile', h(t.disponibile))}
         ${riquadro('Impegnate', h(t.carico))}
@@ -414,8 +416,13 @@ const GestioneOrdini = {
        macchina ha bisogno di tutti, non dei filtrati, quindi arrivano da
        sopra invece che da una seconda lettura. */
     const tutti = Array.isArray(tuttiGliOrdini) ? tuttiGliOrdini : orders;
-    const analisi = PR ? PR.analizza({ macchine:parco, ordini:tutti, timelogs, finestraGiorni:30 }) : null;
-    const contesto = { macchine:parco, ordini:tutti, timelogs };
+    /* Il calendario di lavoro sta nelle impostazioni del laboratorio: quali
+       giorni si produce e in quali date si è chiusi. Chi non l'ha compilato
+       ha lunedì-venerdì, che è il comportamento di sempre. */
+    const cfg = await IDB.get('settings','main').catch(()=>null);
+    const calendario = (cfg && cfg.calendarioProduzione) || null;
+    const analisi = PR ? PR.analizza({ macchine:parco, ordini:tutti, timelogs, finestraGiorni:30, calendario }) : null;
+    const contesto = { macchine:parco, ordini:tutti, timelogs, calendario };
 
     el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">

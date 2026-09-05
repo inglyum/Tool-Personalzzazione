@@ -64,33 +64,97 @@
     ignoto: { id: 'ignoto', label: 'Stima incompleta', colore: '#6b7280' },
   };
 
-  /* ── Giorni lavorativi ──────────────────────────────────────────────────
-     Sabato e domenica non producono. Le festività no: senza un calendario
-     configurato inventarle sarebbe una precisione che i dati non danno. */
-  function eLavorativo(d) { var g = d.getDay(); return g !== 0 && g !== 6; }
+  /* ── Il calendario di lavoro ────────────────────────────────────────────
+     Prima qui c'era una regola sola e muta: «sabato e domenica non
+     producono». Per molti laboratori è vera, per chi lavora il sabato no, e
+     per nessuno tiene conto delle due settimane di agosto in cui l'officina è
+     chiusa. Una data di consegna calcolata ignorando la chiusura è una
+     promessa che si scopre falsa quando è tardi.
 
-  function aggiungiGiorniLavorativi(da, giorni) {
+     Ora il calendario si dichiara: quali giorni della settimana si produce e
+     in quali date si è chiusi. Il predefinito resta lunedì-venerdì, che è il
+     comportamento di prima — cambiare i conti di chi non ha configurato
+     niente sarebbe peggio che lasciarli come sono — ma adesso è una scelta
+     visibile invece di una regola nascosta.
+
+     Le festività non si inventano: nessun elenco nazionale preconfezionato.
+     Chi chiude a Ferragosto lo scrive; chi non lo scrive lavora, e il conto
+     lo dice. */
+  var CALENDARIO_PREDEFINITO = {
+    /* 0 = domenica, 6 = sabato, come `Date.getDay()`. */
+    giorniSettimana: [1, 2, 3, 4, 5],
+    /* Date in formato AAAA-MM-GG in cui non si produce. */
+    chiusure: [],
+  };
+
+  function normalizzaCalendario(c) {
+    var d = c || {};
+    var giorni = Array.isArray(d.giorniSettimana) && d.giorniSettimana.length
+      ? d.giorniSettimana.map(function (g) { return parseInt(g, 10); })
+        .filter(function (g) { return g >= 0 && g <= 6; })
+      : CALENDARIO_PREDEFINITO.giorniSettimana;
+    var mappa = {};
+    (Array.isArray(d.chiusure) ? d.chiusure : []).forEach(function (x) {
+      var s = String(x || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return;
+      /* La forma giusta non basta: «2026-13-45» la rispetta e non è un
+         giorno. Una chiusura che non corrisponde a nessuna data non chiude
+         niente, e restare in elenco la farebbe sembrare attiva. */
+      var t = new Date(s + 'T12:00:00.000Z');
+      if (isNaN(t.getTime()) || t.toISOString().slice(0, 10) !== s) return;
+      mappa[s] = true;
+    });
+    return {
+      giorniSettimana: giorni.length ? giorni : CALENDARIO_PREDEFINITO.giorniSettimana,
+      chiusure: mappa,
+      predefinito: !c || (!c.giorniSettimana && !c.chiusure),
+    };
+  }
+
+  function giorno(d) {
+    /* La data locale, non quella UTC: una chiusura del 15 agosto è il 15
+       agosto qui, non il 14 sera da qualche altra parte. */
+    var m = d.getMonth() + 1; var g = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (g < 10 ? '0' : '') + g;
+  }
+
+  /**
+   * Vero se in quel giorno si produce.
+   * @param {Date} d
+   * @param {object} [cal] il calendario, già normalizzato o grezzo
+   */
+  function eLavorativo(d, cal) {
+    var c = (cal && cal.chiusure && typeof cal.chiusure === 'object' && !Array.isArray(cal.chiusure))
+      ? cal : normalizzaCalendario(cal);
+    if (c.chiusure[giorno(d)]) return false;
+    return c.giorniSettimana.indexOf(d.getDay()) >= 0;
+  }
+
+  function aggiungiGiorniLavorativi(da, giorni, cal) {
+    var c = normalizzaCalendario(cal);
     var d = new Date(da.getTime());
     var restanti = Math.ceil(pos(giorni));
-    /* Un limite: senza, un input assurdo girerebbe per sempre. */
+    /* Un limite: senza, un input assurdo — o un calendario in cui non si
+       lavora mai — girerebbe per sempre. */
     var giri = 0;
     while (restanti > 0 && giri < 10000) {
       d = new Date(d.getTime() + GIORNO);
-      if (eLavorativo(d)) restanti -= 1;
+      if (eLavorativo(d, c)) restanti -= 1;
       giri += 1;
     }
     return d;
   }
 
-  function giorniLavorativiTra(da, a) {
+  function giorniLavorativiTra(da, a, cal) {
     if (!(da instanceof Date) || !(a instanceof Date)) return null;
+    var c = normalizzaCalendario(cal);
     var avanti = a.getTime() >= da.getTime();
     var inizio = new Date(avanti ? da.getTime() : a.getTime());
     var fine = avanti ? a : da;
     var n = 0; var giri = 0;
     while (inizio.getTime() < fine.getTime() && giri < 10000) {
       inizio = new Date(inizio.getTime() + GIORNO);
-      if (eLavorativo(inizio)) n += 1;
+      if (eLavorativo(inizio, c)) n += 1;
       giri += 1;
     }
     return avanti ? n : -n;
@@ -178,7 +242,7 @@
        sui giorni di calendario. */
     var oggi = d.oggi ? new Date(d.oggi) : new Date();
     var fineFinestra = new Date(oggi.getTime() + finestra * GIORNO);
-    var giorniUtili = giorniLavorativiTra(oggi, fineFinestra);
+    var giorniUtili = giorniLavorativiTra(oggi, fineFinestra, d.calendario);
 
     var perMacchina = {};
     var senzaMacchina = [];
@@ -264,10 +328,16 @@
     totali.sovraccarico = totali.disponibile > 0 && totali.carico > totali.disponibile;
     totali.completo = totali.incognite === 0 && totali.macchineSenzaCapacita === 0 && righe.length > 0;
 
+    var cal = normalizzaCalendario(d.calendario);
     return {
       righe: righe,
       giorniUtili: giorniUtili,
       finestraGiorni: finestra,
+      calendario: {
+        giorniSettimana: cal.giorniSettimana,
+        chiusure: Object.keys(cal.chiusure),
+        predefinito: cal.predefinito,
+      },
       nonAssegnati: {
         ordini: senzaMacchina.length,
         ore: oreNonAssegnate,
@@ -348,12 +418,12 @@
     var setupOre = pos(o.setupMinutes) / 60;
     var oreTotali = oreCoda + mie.ore + setupOre;
     var giorni = oreTotali / cap.oreGiorno;
-    var stimata = aggiungiGiorniLavorativi(oggi, giorni);
+    var stimata = aggiungiGiorniLavorativi(oggi, giorni, c.calendario);
 
     var semaforo = SEMAFORI.ignoto;
     var margine = null;
     if (consegna) {
-      margine = giorniLavorativiTra(stimata, consegna);
+      margine = giorniLavorativiTra(stimata, consegna, c.calendario);
       if (margine < 0) semaforo = SEMAFORI.rosso;
       else if (margine <= pos(c.giorniRischio, PREDEFINITI.giorniRischio)) semaforo = SEMAFORI.giallo;
       else semaforo = SEMAFORI.verde;
@@ -380,6 +450,8 @@
   global.InglyProduzione = {
     VERSIONE: '1.0.0',
     PREDEFINITI: PREDEFINITI,
+    CALENDARIO_PREDEFINITO: CALENDARIO_PREDEFINITO,
+    normalizzaCalendario: normalizzaCalendario,
     SEMAFORI: SEMAFORI,
     eLavorativo: eLavorativo,
     aggiungiGiorniLavorativi: aggiungiGiorniLavorativi,

@@ -202,6 +202,46 @@ dico('PROD-009d · e ora la scadenza si stima (' + dopo.cella + ')', /\d{2}\/\d{
 dico('PROD-002c · il carico della macchina è cambiato di conseguenza (' + dopo.caricoStampante + ' h)', dopo.caricoStampante === 6);
 dico('PROD-010h · e quella macchina non è più incompleta', dopo.stampanteCompleta === true);
 
+/* ── PROD-011 · il calendario del laboratorio ───────────────────────────── */
+const calendario = await page.evaluate(async () => {
+  const a = (ms) => new Promise((s) => setTimeout(s, ms));
+  const leggi = () => {
+    const el = document.getElementById('go-content');
+    const m = el ? el.textContent.match(/\((\d+) giorni lavorativi([^)]*)\)/) : null;
+    return m ? { giorni: +m[1], nota: m[2].trim() } : null;
+  };
+  const prima = leggi();
+
+  /* Si dichiara che si lavora anche il sabato e che si è chiusi in tre date. */
+  const cfg = (await IDB.get('settings', 'main').catch(() => null)) || { key: 'main' };
+  const fra = (g) => { const d = new Date(); d.setDate(d.getDate() + g); return d.toISOString().slice(0, 10); };
+  cfg.calendarioProduzione = { giorniSettimana: [1, 2, 3, 4, 5, 6], chiusure: [fra(3), fra(4), fra(5)] };
+  await IDB.put('settings', cfg);
+  GestioneOrdini.render();
+  await a(2500);
+  const dopo = leggi();
+
+  /* E si rimette com'era, per non lasciare configurato un laboratorio finto. */
+  delete cfg.calendarioProduzione;
+  await IDB.put('settings', cfg);
+  GestioneOrdini.render();
+  await a(2000);
+  const ripristinato = leggi();
+  return { prima, dopo, ripristinato };
+});
+dico('PROD-011 · il pannello dice quanti giorni lavorativi conta ('
+  + (calendario.prima && calendario.prima.giorni) + ')',
+  !!calendario.prima && calendario.prima.giorni > 0 && calendario.prima.nota === '');
+dico('PROD-011b · dichiarando sabato e tre chiusure il conto cambia ('
+  + (calendario.dopo && calendario.dopo.giorni) + ')',
+  !!calendario.dopo && calendario.dopo.giorni !== calendario.prima.giorni);
+dico('PROD-011c · e la vista dichiara che il calendario è del laboratorio',
+  !!calendario.dopo && /calendario del laboratorio/.test(calendario.dopo.nota));
+dico('PROD-011d · tolto il calendario si torna al conto di prima ('
+  + (calendario.ripristinato && calendario.ripristinato.giorni) + ')',
+  !!calendario.ripristinato && calendario.ripristinato.giorni === calendario.prima.giorni
+  && calendario.ripristinato.nota === '');
+
 console.log('\nPRODUZIONE — CAPACITÀ, CARICO, SCADENZE\n');
 const problemi = [];
 for (const p of passi) {
