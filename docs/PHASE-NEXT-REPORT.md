@@ -35,6 +35,7 @@ Ogni riga della tabella è un difetto **misurato**, non dedotto: la colonna
 | PERF-01 | Ordini | La vista Produzione rileggeva tutti gli ordini una seconda volta a ogni disegno | — | Gli ordini arrivano da `render()` che li ha già letti | PROD 26/26 | ✔ |
 | MACH-01 | Smart Quoter 3D | Il preventivatore ignorava il parco macchine registrato | `MACH` (listino di modelli noti) era l'unico registro letto; `equipment` è l'inventario vero | La tendina apre con «Le tue macchine»; potenza, prezzo, vita utile e manutenzione vengono dal record | quoter3d-parco, 14 controlli | ✔ |
 | ERR-02 | Tutto | 200 `catch {}` vuoti attorno a una scrittura: un salvataggio poteva non avvenire senza che nessuno lo dicesse | Duecento chiamanti, un canale solo | Spia su `localStorage.setItem` e sui metodi di scrittura di `IDB`: registra, avvisa, e rilancia identico | scritture-non-silenziose, 13 controlli | ✔ |
+| CONS-01 | Consuntivi | Due consuntivi spariti dopo il ricaricamento, in modo intermittente | `leggiJSON` restituiva `{}` sia per «vuoto» sia per «non leggibile»: la migrazione ci fondeva dentro i consuntivi del vecchio 3D e riscriveva l'archivio senza il resto | `leggiSicuro` distingue i tre casi; la migrazione non scrive e non si segna fatta se un archivio non si è potuto leggere | consuntivo, 2 unit nuovi | ✔ |
 | PROD-03 | Produzione | I giorni lavorativi erano una regola muta: sabato e domenica chiusi, nessuna ferie | Il calendario non esisteva come dato | `calendarioProduzione` nelle impostazioni: giorni della settimana e date di chiusura; il predefinito resta quello di prima e la vista dichiara quale sta usando | PROD-011…011i unit + 4 browser | ✔ |
 
 ## Parametri di costo — decisioni
@@ -53,16 +54,16 @@ Dettaglio in `docs/COST-PARAMETERS-AUDIT.md`.
 
 | | |
 |---|---|
-| **Bug trovati** | 24 |
-| **Bug risolti** | 24 |
+| **Bug trovati** | 25 |
+| **Bug risolti** | 25 |
 | **Moduli nuovi** | 4 (`order-fields`, `production-capacity`, `catalog-recalc`, `quote-status`) |
-| **Test totali (unitari)** | 1311 |
-| **Test passati** | 1311 |
+| **Test totali (unitari)** | 1313 |
+| **Test passati** | 1313 |
 | **Test falliti** | 0 |
 | **Suite su browser** | 40, tutte verdi (`npm run qa`, uscita 0) |
 | **Controlli su browser nelle suite nuove** | 157 (28 ordini · 30 produzione · 21 catalogo · 18 CRM · 8 confezione · 28 coerenza · 14 parco macchine · 13 scritture) |
 | **Errori JavaScript nelle suite nuove** | 0 |
-| **Controlli superati nella regressione completa** | 879 · 0 falliti · 0 errori JavaScript |
+| **Controlli superati nella regressione completa** | 913 · 0 falliti · 0 errori JavaScript |
 
 ---
 
@@ -112,7 +113,7 @@ Cose che questa fase **non** ha verificato, e il motivo.
 
 ```bash
 npm run verify   # 224 file JS parsati
-npm test         # 1311 test unitari
+npm test         # 1313 test unitari
 npm run qa       # 40 suite su browser reale
 ```
 
