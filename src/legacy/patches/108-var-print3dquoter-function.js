@@ -302,19 +302,38 @@ function MODI_(){
    Si salva quello che c'è, si ridisegna, si rimette. Non è un rimedio
    elegante: quello sarebbe non ricostruire la pagina intera. È però onesto e
    verificabile, e il collaudo lo verifica. */
+/* La fotografia non è più solo quella del DOM di questo istante: è una
+   memoria che si accumula. In «rapida» metà dei campi non viene disegnata, e
+   con la sola fotografia del DOM un valore digitato in «professionale»
+   spariva uscendo e rientrando dalla modalità — tornava al predefinito
+   scritto nel template, cambiando il costo senza dirlo a nessuno. */
+var MEMORIA_CAMPI={};
+/* I comandi che cambiano i predefiniti — cambiare tecnologia, scegliere una
+   strategia di prezzo, caricare un preventivo salvato — dichiarano quali
+   campi stanno rigenerando. Ripristinare anche quelli riscriverebbe sopra la
+   decisione appena presa: era il motivo per cui la resina veniva costata con
+   i 150W della FDM e per cui il margine a schermo restava 40 mentre il
+   motore ne usava un altro. */
+var RIGENERA=null;
+function rigenerando(campi,fn){
+  RIGENERA=campi;
+  campi.forEach(function(id){ delete MEMORIA_CAMPI[id]; });
+  try{ fn(); } finally { RIGENERA=null; }
+}
+function _dimenticaCampi(){ MEMORIA_CAMPI={}; }
 function _valoriCorrenti(root){
-  var v={};
   try{
     root.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(e){
       if(!e.id) return;
-      v[e.id] = (e.type==='checkbox'||e.type==='radio') ? e.checked : e.value;
+      MEMORIA_CAMPI[e.id] = (e.type==='checkbox'||e.type==='radio') ? e.checked : e.value;
     });
   }catch(err){}
-  return v;
+  return MEMORIA_CAMPI;
 }
 function _ripristina(root,v){
   try{
     root.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(e){
+      if(RIGENERA && RIGENERA.indexOf(e.id)>=0) return;
       if(!(e.id in v)) return;
       if(e.type==='checkbox'||e.type==='radio') e.checked=v[e.id];
       else if(v[e.id]!=='' && v[e.id]!=null) e.value=v[e.id];
@@ -621,8 +640,12 @@ function render(){
       +'<div class="p3-ct">🧾 IVA &amp; SCONTO</div>'
       +'<div class="p3-fg"><label class="p3-fl">IVA</label>'
         +'<div class="p3-iva-btns">'
-          +'<button id="p3d-iva-yes" class="p3-iva-btn" onclick="Print3DQuoter.setIva(true)" style="background:var(--primary);color:#fff;flex:1">+'+((typeof window!=='undefined'&&window.InglyFisco)?window.InglyFisco.etichetta():'IVA 22%')+'</button>'
-          +'<button id="p3d-iva-no"  class="p3-iva-btn" onclick="Print3DQuoter.setIva(false)" style="background:var(--bg-card2);color:var(--text-muted);border:1px solid var(--border2);flex:1">Senza IVA</button>'
+          /* Lo stato acceso lo decide IVA_ON. Scritto fisso, il pulsante
+             «+IVA» restava illuminato anche su un preventivo senza IVA:
+             `setIva` coloriva i pulsanti e subito dopo il ridisegno
+             rimetteva il template. */
+          +'<button id="p3d-iva-yes" class="p3-iva-btn" onclick="Print3DQuoter.setIva(true)" style="'+(IVA_ON?'background:var(--primary);color:#fff':'background:var(--bg-card2);color:var(--text-muted);border:1px solid var(--border2)')+';flex:1">+'+((typeof window!=='undefined'&&window.InglyFisco)?window.InglyFisco.etichetta():'IVA 22%')+'</button>'
+          +'<button id="p3d-iva-no"  class="p3-iva-btn" onclick="Print3DQuoter.setIva(false)" style="'+(!IVA_ON?'background:var(--primary);color:#fff':'background:var(--bg-card2);color:var(--text-muted);border:1px solid var(--border2)')+';flex:1">Senza IVA</button>'
         +'</div>'
       +'</div>'
       +'<div class="p3-fg"><label class="p3-fl">SCONTO %</label>'
@@ -658,7 +681,7 @@ function render(){
   +'</div>'
   +'</div>'; // close p3-grid
 
-  _ripristina(root,_prima);
+  if(!SALTA_RIPRISTINO) _ripristina(root,_prima);
   montaFotoProgetto();
   /* Le due caselle e il decimale nascosto devono restare d'accordo dopo ogni
      ridisegno: sono la stessa grandezza scritta in due modi. */
@@ -1737,8 +1760,15 @@ function setType(t){
      ancora toccato — altrimenti si cancellerebbe un dato inserito. */
   var pre=(T==='resin')?20:0;
   if(LAVORO.post===pre) LAVORO.post=(t==='resin')?20:0;
-  T=t;render();
+  T=t;
+  /* Macchina, materiale e parametri macchina appartengono alla tecnologia:
+     tenerli significherebbe costare una stampa in resina con la potenza, la
+     vita utile e la percentuale di fallimenti di una FDM. */
+  rigenerando(CAMPI_TECNOLOGIA,render);
 }
+/* I campi il cui predefinito dipende dalla tecnologia scelta. */
+var CAMPI_TECNOLOGIA=['p3d-watt','p3d-mc','p3d-lh','p3d-mnt','p3d-fail','p3d-duty',
+                      'p3d-mach','p3d-mat'];
 function setIva(on){
   IVA_ON=on;
   var y=el('p3d-iva-yes'),n=el('p3d-iva-no');
@@ -2073,7 +2103,10 @@ function setStrategia(id){
   if(!s) return;
   STRATEGIA=id;
   MARG=s.marginTarget;
-  render();
+  /* Il campo e il cursore devono dire il margine della strategia scelta:
+     lasciare il valore di prima farebbe leggere «40%» a schermo mentre il
+     prezzo è calcolato su un altro numero. */
+  rigenerando(['p3d-margin','p3d-margin-num'],render);
 }
 
 function setMargine(v){
@@ -2317,7 +2350,19 @@ function doSave(){
   if(SAVED.length>30)SAVED=SAVED.slice(0,30);
   persist();render();showToastP('💾 Salvato: '+n+' · '+eur(total),'success');
 }
-function loadSaved(id){var q=SAVED.find(function(x){return x.id==id;});if(!q)return;LINES=JSON.parse(JSON.stringify(q.lines));T=q.t;render();showToastP('📋 Caricato: '+q.n,'info');}
+function loadSaved(id){
+  var q=SAVED.find(function(x){return x.id==id;});if(!q)return;
+  LINES=JSON.parse(JSON.stringify(q.lines));T=q.t;
+  /* Il preventivo caricato porta con sé il suo nome e il suo cliente: senza,
+     un salvataggio successivo lo archiviava sotto il nome rimasto nel campo
+     — o sotto nessun nome, dopo un ricaricamento della pagina. */
+  rigenerando(['p3d-name','p3d-client'],function(){
+    render();
+    var n=el('p3d-name'); if(n) n.value=q.n||'';
+    var c=el('p3d-client'); if(c) c.value=q.client||'';
+  });
+  showToastP('📋 Caricato: '+q.n,'info');
+}
 function delSaved(id){SAVED=SAVED.filter(function(x){return x.id!=id;});persist();render();}
 function clearSaved(){if(confirm('Eliminare tutti i preventivi salvati?')){SAVED=[];persist();render();}}
 
@@ -2384,10 +2429,27 @@ function sendQ(){
   if(typeof App!=='undefined')App.navigate('quoter');
 }
 
+/* ── BUG-3D-001 · «Reset» non azzerava niente ──────────────────────────────
+   `render()` fotografa i valori dei campi prima di ridisegnare e li rimette
+   dopo (`_valoriCorrenti` / `_ripristina`): è quello che impedisce a un
+   ridisegno — e ce n'è uno a ogni comando — di cancellare quello che si sta
+   scrivendo. Giusto per il ridisegno, sbagliato per il reset: azzerava lo
+   stato interno e poi si ripristinava da solo i campi che doveva svuotare.
+   Misurato: peso 777 g prima del reset, 777 g dopo.
+
+   Il reset è l'unico caso in cui il ridisegno **deve** dimenticare. */
+var SALTA_RIPRISTINO=false;
+
 function reset(){
   if(!confirm('Resettare tutto il preventivo 3D?'))return;
   LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=40;STRATEGIA='standard';
-  render();showToastP('🔄 Reset completato','info');
+  SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
+  PROGETTO={ nome:'', descrizione:'', foto:null };
+  IMBALLO=[]; HARDWARE=[]; MULTIMAT=[];
+  SALTA_RIPRISTINO=true;
+  _dimenticaCampi();
+  try{ render(); } finally { SALTA_RIPRISTINO=false; }
+  showToastP('🔄 Reset completato','info');
 }
 
 function openMat(){renderMatList();var m=el('p3d-mat-modal');if(m)m.classList.add('open');}
@@ -2488,6 +2550,11 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   _ingresso:ingresso,
   /* Letto dal collaudo: schermo, PDF e WhatsApp devono dire lo stesso numero. */
   _totali:totali,
+  /* Il risultato vivo del motore — quello che il pannello dei prezzi mostra
+     prima che una voce venga aggiunta al preventivo. `_totali()` somma le
+     voci già aggiunte: sono due domande diverse, e un collaudo che le
+     confonde misura la lista invece del calcolo. */
+  _calcolo:function(){ return R; },
   /* Letto da patch 109 per «→ Catalogo», che prima lo cercava e non lo
      trovava: `_state` non è mai stato esportato, e il pulsante salvava a
      costo 0 un prodotto il cui prezzo leggeva per scraping di una dimensione

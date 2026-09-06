@@ -420,6 +420,12 @@ const RecurringInvoices = {
 // ===== APP CORE =====
 const Quoter={
   lines:[],
+  /* Le righe consegnate da un calcolatore mentre il preventivo era chiuso.
+     Chi consegna — 3D, laser, catalogo, calcolatore macchine — quasi sempre
+     naviga qui subito dopo, e `init()` azzera `lines` a ogni ingresso: la
+     riga spariva fra il messaggio «inviate» e la schermata che si apriva
+     vuota. Questa è la sola copia che l'ingresso non butta via. */
+  _inArrivo:[],
   editId:null,
   _lastSavedId:null,
 
@@ -472,9 +478,16 @@ const Quoter={
 
   addLineFromCalc(d){
     if(!d) return;
-    this.lines.push({id:Date.now(), name:d.name, desc:d.name||'', catLabel:d.category||'', detail:'', unit:d.unit||'pz', qty:d.qty||1, unitCost:d.unitCost||0, markup:1.4, price:+((d.unitCost||0)*1.4).toFixed(2), subtotal:+((d.unitCost||0)*(d.qty||1)).toFixed(2),
+    const riga={id:Date.now(), name:d.name, desc:d.name||'', catLabel:d.category||'', detail:'', unit:d.unit||'pz', qty:d.qty||1, unitCost:d.unitCost||0, markup:1.4, price:+((d.unitCost||0)*1.4).toFixed(2), subtotal:+((d.unitCost||0)*(d.qty||1)).toFixed(2),
       itemId: d.itemId ?? null, itemStore: d.itemStore ?? null,
-      itemKey: (d.itemId!=null && d.itemStore) ? (d.itemStore+':'+d.itemId) : (d.itemKey ?? null)});
+      itemKey: (d.itemId!=null && d.itemStore) ? (d.itemStore+':'+d.itemId) : (d.itemKey ?? null)};
+    this.lines.push(riga);
+    /* Se il preventivo non è aperto, l'ingresso che sta per avvenire
+       ripartirebbe da zero: la riga si mette anche in attesa. Se invece è già
+       aperto, `init()` non verrà chiamata e metterla in attesa la farebbe
+       ricomparire, doppia, al prossimo ingresso. */
+    const vista=(typeof document!=='undefined') && document.querySelector('.section-view.active');
+    if(!vista || vista.id!=='view-quoter') this._inArrivo.push(riga);
     this.renderLines();
     this.recalcRight();
     toast(`"${d.name}" aggiunto al preventivo`, 'success');
@@ -482,7 +495,9 @@ const Quoter={
 
   async init(){
     await App.populateClientSelects();
-    this.lines=[];
+    /* Un ingresso normale parte da un preventivo vuoto; un ingresso che segue
+       una consegna parte dalle righe consegnate. */
+    this.lines=this._inArrivo.splice(0);
     this.renderLines();
     this.recalcRight();
     await this.renderList();
