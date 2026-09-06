@@ -1061,7 +1061,7 @@ const Catalog={
               <div style="font-size:11px;color:var(--text-muted)">Prima riga = intestazioni. Separatore virgola o punto e virgola</div>
             </div>
           </div>
-          <button onclick="this.closest('[style*=fixed]').remove();CatalogImportExport.importCSV()"
+          <button onclick="this.closest('[style*=fixed]').remove();Catalog.importExcel()"
             style="width:100%;padding:10px;background:var(--bg-card3);color:var(--text);border:1px solid var(--border2);border-radius:9px;cursor:pointer;font-size:13px;font-weight:700">
             📂 Scegli file CSV
           </button>

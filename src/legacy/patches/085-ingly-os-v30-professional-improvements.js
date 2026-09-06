@@ -273,6 +273,10 @@ window.MarginAlert = {
 
     // ── Machine Manager popup ────────────────────────────────────
     LaserB2B._openMachineManager = function(){
+    /* `eu` era usata qui e definita altrove, dentro l'IIFE di un'altra patch:
+       aprire «⚙️ Macchine» moriva con «eu is not defined» e il pannello non
+       compariva. Il formato è quello del preventivatore laser. */
+    var eu=function(n){ return '€'+parseFloat(n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); };
     var self=this;
     var custom=self._loadCustomMachines?self._loadCustomMachines():{};
     var builtins=self._MACHINES||{};

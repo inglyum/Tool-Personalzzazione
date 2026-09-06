@@ -3520,6 +3520,63 @@ const Timer = {
 };
 
 // ===== ③ ORDERS KANBAN =====
+/* ── DataReset · «Azzera tutti i dati operativi» ────────────────────────────
+   Il pulsante esisteva da sempre in Backup e chiamava `DataReset.run()`, che
+   non era definita da nessuna parte: premerlo non faceva niente e non lo
+   diceva. Quello che promette non è il ripristino di fabbrica — quello c'è già
+   ed è `Backup.factoryReset()`, che cancella anche catalogo e impostazioni.
+   Promette una cosa più stretta, e questa la fa: azzera l'operativo, lascia
+   in piedi l'anagrafica, e dei costi fissi tiene la lista mettendo a zero gli
+   importi. */
+const DataReset = {
+  /* Gli store che contengono lavoro svolto, non anagrafica. */
+  OPERATIVI: ['clients', 'orders', 'sales', 'cashflow', 'equipment'],
+
+  async run(){
+    if(!confirm('⚠️ Azzerare tutti i dati operativi?\n\nVengono cancellati: clienti, ordini, vendite, cashflow, attrezzatura.\nDei costi fissi resta la lista, con gli importi a zero.\n\nCatalogo, fornitori e impostazioni restano intatti.\n\nOperazione irreversibile.')) return;
+    if(!confirm('Confermi? I dati operativi verranno eliminati definitivamente.')) return;
+    const falliti=[];
+    let azzerati=0;
+    try{
+      if(typeof IDB!=='undefined' && IDB.ensureOpen) await IDB.ensureOpen();
+      for(const store of this.OPERATIVI){
+        try{ await IDB.clearStore(store); }
+        catch(e){ falliti.push(store); if(window.Ingly&&Ingly.Errors) Ingly.Errors.log('DataReset.run', e, { store:store }); }
+      }
+      /* I costi fissi non si cancellano: si azzerano. La lista è la
+         configurazione del laboratorio, gli importi sono il dato. */
+      try{
+        const costi=await IDB.getAll('fixed_costs').catch(()=>[]);
+        for(const c of costi){
+          if(Number(c.amount||0)===0) continue;
+          await IDB.put('fixed_costs', Object.assign({}, c, { amount:0 }));
+          azzerati+=1;
+        }
+      }catch(e){
+        falliti.push('fixed_costs');
+        if(window.Ingly&&Ingly.Errors) Ingly.Errors.log('DataReset.run/fixed_costs', e, {});
+      }
+      if(typeof AppStore!=='undefined' && AppStore.invalidate){
+        this.OPERATIVI.concat(['fixed_costs','pipeline']).forEach(function(s){ try{ AppStore.invalidate(s); }catch(e){} });
+      }
+    }catch(e){
+      if(typeof toast!=='undefined') toast('❌ Azzeramento non riuscito: '+(e&&e.message||'errore'),'error');
+      if(window.Ingly&&Ingly.Errors) Ingly.Errors.log('DataReset.run', e, {});
+      return;
+    }
+    /* Un fallimento parziale si dice: metà azzerato è peggio di non azzerato,
+       e chi legge deve sapere quale metà. */
+    if(falliti.length){
+      if(typeof toast!=='undefined') toast('⚠️ Non azzerati: '+falliti.join(', '),'warning',6000);
+      return;
+    }
+    if(typeof toast!=='undefined'){
+      toast('✅ Dati operativi azzerati'+(azzerati?' · '+azzerati+' costi fissi messi a zero':'')+'. Ricaricamento…','success');
+    }
+    setTimeout(function(){ location.reload(); }, 1500);
+  },
+};
+
 const Booking = {
   async render() {
     const el = eid('view-booking');
@@ -6143,12 +6200,20 @@ const ExcelExport = {
     if(!window.XLSX){ toast('SheetJS non disponibile','warning'); return; }
     // Carica JSZip on-demand se non ancora disponibile
     if(!window.JSZip){
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-        s.onload=res; s.onerror=rej;
-        document.head.appendChild(s);
-      });
+      /* JSZip arriva dalla rete: senza connessione il caricamento fallisce, e
+         il rifiuto della promessa non veniva raccolto da nessuno — il
+         pulsante non faceva niente e non lo diceva. */
+      try{
+        await new Promise((res,rej)=>{
+          const s=document.createElement('script');
+          s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+          s.onload=res; s.onerror=()=>rej(new Error('JSZip non raggiungibile'));
+          document.head.appendChild(s);
+        });
+      }catch(e){
+        toast('📦 Lo ZIP richiede una connessione: usa «Excel» o «CSV Out» per esportare senza rete','warning',6000);
+        return;
+      }
     }
     if(!window.JSZip){ toast('JSZip non disponibile — controlla la connessione','warning'); return; }
 
@@ -6176,7 +6241,11 @@ const ExcelExport = {
     });
     const ws = XLSX.utils.aoa_to_sheet([hdr,...rows]);
     ws['!cols']=[{wch:28},{wch:16},{wch:12},{wch:12},{wch:12},{wch:12},{wch:36},{wch:16},{wch:14},{wch:8},{wch:30}];
-    XLSX.utils.book_append_sheet(wb,'Catalogo',ws);
+    /* `book_append_sheet(cartella, foglio, nome)`: qui foglio e nome erano
+       invertiti. SheetJS provava a validare il foglio come se fosse un nome
+       («e.indexOf is not a function») e il pulsante «ZIP+Foto» moriva prima di
+       scrivere un byte — a ogni pressione, da sempre. */
+    XLSX.utils.book_append_sheet(wb,ws,'Catalogo');
 
     // Convert XLSX to base64 for ZIP
     const xlsxBuf = XLSX.write(wb, {type:'base64', bookType:'xlsx'});
@@ -6357,6 +6426,17 @@ const ExcelExport = {
 // ══════════════════════════════════════════════════════════════════
 // SOLLECITI AUTOMATICI
 // ══════════════════════════════════════════════════════════════════
+/* Un argomento di stringa dentro un gestore in linea: apici singoli per il
+   JavaScript, entità per ciò che romperebbe l'attributo HTML. */
+function _arg(v){
+  return "'" + String(v == null ? '' : v)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/[\r\n]+/g, ' ') + "'";
+}
+
 const StockAlert = {
   /* Il motore che dice quando ricomprare. Non è di questo file: qui si
      interroga soltanto. */
@@ -6463,7 +6543,11 @@ const StockAlert = {
         </td>
         <td style="padding:10px 12px;text-align:right;font-size:12px;color:var(--text-muted)">${m.price>0?`€${m.price}/${m.unit}`:'—'}</td>
         <td style="padding:10px 12px;text-align:center">
-          ${m.status!=='ok'?`<button onclick="if(typeof StockAlert!==typeof undefined)StockAlert._order(${(m.name||'').replace(/'/g,'')},${m.stock||0},${m.unit})" style="padding:5px 10px;background:#fbbf24;color:#000;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Ordina</button>
+          ${/* Gli argomenti vanno **quotati**, non ripuliti dagli apici: la riga
+                di prima produceva `_order(Plywood Tiglio 3mm,4,mq)`, cioè tre
+                identificatori inesistenti, e il pulsante moriva con un errore
+                di sintassi prima di chiamare qualsiasi cosa. */''}
+          ${m.status!=='ok'?`<button onclick="if(typeof StockAlert!==typeof undefined)StockAlert._order(${_arg(m.name)},${+m.stock||0},${_arg(m.unit)})" style="padding:5px 10px;background:#fbbf24;color:#000;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Ordina</button>
               <button onclick="if(typeof StockAlert!==typeof undefined){StockAlert.createPO(${m.id||m._id})}" style="padding:5px 10px;background:#3b82f620;color:#60a5fa;border:1px solid #3b82f640;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">&#x1F6D2; OA</button>`:''}
         </td>
       </tr>`;

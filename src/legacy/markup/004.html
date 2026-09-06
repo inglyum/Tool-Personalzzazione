@@ -1383,8 +1383,8 @@
       <button class="btn btn-secondary btn-sm" onclick="Catalog.showImportModal()" style="color:#22c55e;border-color:#22c55e40"><i class="fas fa-file-import"></i> Importa Catalogo</button>
       <button class="btn btn-secondary btn-sm" onclick="ExcelExport.exportCatalog()" style="color:#22c55e;border-color:#22c55e40"><i class="fas fa-file-excel"></i> Export Excel</button>
       <button class="btn btn-secondary btn-sm" onclick="ExcelExport.exportCatalogZip()" style="color:#f59e0b;border-color:#f59e0b40" title="Esporta Excel + immagini in ZIP"><i class="fas fa-file-archive"></i> ZIP+Foto</button>
-      <button class="btn btn-secondary btn-sm" onclick="CatalogImportExport.importCSV()" style="gap:5px"><i class="fas fa-file-import"></i> CSV In</button>
-      <button class="btn btn-secondary btn-sm" onclick="CatalogImportExport.exportCSV()" style="gap:5px"><i class="fas fa-file-export"></i> CSV Out</button>
+      <button class="btn btn-secondary btn-sm" onclick="Catalog.importExcel()" style="gap:5px"><i class="fas fa-file-import"></i> CSV In</button>
+      <button class="btn btn-secondary btn-sm" onclick="Catalog.exportCatalogCSV()" style="gap:5px"><i class="fas fa-file-export"></i> CSV Out</button>
       <button class="btn btn-secondary btn-sm" onclick="Catalog.exportImagePrompts()" style="gap:5px"><i class="fas fa-image"></i> Prompt Immagini</button>
       <button class="btn btn-secondary btn-sm" onclick="CatalogPDF.toggle()" style="gap:5px"><i class="fas fa-file-pdf"></i> PDF</button>
       <button class="btn btn-secondary btn-sm" onclick="PriceAdvisor.showPanel()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;gap:5px"><i class="fas fa-robot"></i> AI Prezzi</button>
@@ -2807,7 +2807,7 @@
     <div class="module-header">
       <div><div class="module-title"><i class="fas fa-calendar-check" style="color:#10b981"></i> Prenotazioni</div>
       <div class="module-subtitle">Gestisci appuntamenti con i clienti · Calendario disponibilità · Reminder</div></div>
-      <button onclick="BookingModule.openNew()" class="btn btn-primary"><i class="fas fa-plus"></i> Nuova Prenotazione</button>
+      <button onclick="Booking.openNew()" class="btn btn-primary"><i class="fas fa-plus"></i> Nuova Prenotazione</button>
     </div>
     <div id="booking-root"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fas fa-spinner fa-spin fa-2x"></i></div></div>
   </div>

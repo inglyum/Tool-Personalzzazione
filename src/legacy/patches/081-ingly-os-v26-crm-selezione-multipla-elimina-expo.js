@@ -303,9 +303,12 @@
       this._selectMode = !this._selectMode;
       var btn = document.getElementById('crm-sel-toggle');
       if(btn) btn.textContent = this._selectMode ? '✅ Modalità Selezione ON' : '☐ Seleziona';
-      // Show/hide checkbox column
+      /* `[id^="crm-chk-"]` prende anche la casella dell'intestazione, che sta
+         in un `<th>`: `closest('td')` tornava null e il pulsante moriva lì,
+         con l'etichetta già cambiata e la modalità selezione a metà. */
       document.querySelectorAll('[id^="crm-chk-"]').forEach(function(el){
-        el.closest('td').style.display = '';
+        var cella = el.closest('td,th');
+        if (cella) cella.style.display = '';
       });
       var bar = document.getElementById('crm-sel-bar');
       if(!this._selectMode && bar){ bar.style.display='none'; this._deselectAll(); }
