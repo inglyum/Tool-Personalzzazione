@@ -273,16 +273,56 @@ const Materials={
     {id:276,name:'Acrilico Specchio 4mm',type:'material',cat:'plexy',cost:44.00,unit:'€/mq',thickness:'4mm',supplier:'shop.laseridea.com',supplierUrl:'https://shop.laseridea.com',machine:'xTool P3',notes:'5 fornitori: shop.laseridea.com €44/mq · AliExpress €24/mq · Temu €20/mq · plexishop.it €48/mq · designtrasparente.com €46/mq'},
     {id:277,name:'Acrilico Opalino 4mm',type:'material',cat:'plexy',cost:36.00,unit:'€/mq',thickness:'4mm',supplier:'plexishop',supplierUrl:'https://www.plexishop.it',machine:'xTool P3',notes:'Diffusore LED. 5 fornitori: plexishop.it €36/mq · AliExpress €21/mq · Temu €18/mq · designtrasparente.com €39/mq · shop.laseridea.co.it'},
   ],
+  /* ── Un materiale predefinito si propone una volta sola ──────────────────
+     Il difetto misurato: si ripristinava un backup con 3 materiali e il
+     magazzino ne mostrava 69. La regola di prima era «se il materiale
+     predefinito non è in archivio, rimettilo», e non sa distinguere due casi
+     opposti — «non l'ho mai avuto» e «l'ho cancellato apposta». Dopo un
+     ripristino vinceva sempre il secondo, e i materiali cancellati tornavano
+     accanto a quelli veri.
+
+     La regola nuova: si tiene memoria di quali predefiniti sono **già stati
+     proposti**. Se un materiale è stato proposto e adesso non c'è, non c'è
+     perché qualcuno l'ha tolto: non si rimette. Un predefinito nuovo — una
+     macchina aggiunta in un aggiornamento — non è mai stato proposto e quindi
+     arriva. */
+  PROPOSTI_KEY: 'ingly_materiali_proposti_v1',
+
+  _proposti(){
+    try{ const v=JSON.parse(localStorage.getItem(this.PROPOSTI_KEY)||'[]');
+         return new Set(Array.isArray(v)?v:[]); }
+    catch(e){ return new Set(); }
+  },
+  _segnaProposti(ids){
+    try{
+      const insieme=this._proposti();
+      (ids||[]).forEach(function(i){ insieme.add(i); });
+      localStorage.setItem(this.PROPOSTI_KEY, JSON.stringify(Array.from(insieme)));
+    }catch(e){ /* quota piena: al giro dopo si riproporranno, non si perde nulla */ }
+  },
+  /* Chiamata dopo un ripristino: il backup **è** la decisione dell'utente sul
+     magazzino, quindi nessun predefinito va riproposto sopra di esso. */
+  segnaTuttiProposti(){ this._segnaProposti(this.DEFAULTS.map(function(m){ return m.id; })); },
+
   async seed() {
-  const ex=await AppStore.get('materials');
-    if(!ex.length){for(const m of this.DEFAULTS)await IDB.put('materials',m);}
-    else{
-      // Add new xTool P3 materials (id>=212) if not yet in DB
-      const existingIds=new Set(ex.map(m=>m.id));
-      const newMats=this.DEFAULTS.filter(m=>m.id>=212&&!existingIds.has(m.id));
-      for(const m of newMats)await IDB.put('materials',m);
-      if(newMats.length)console.log(`✅ Aggiunti ${newMats.length} nuovi materiali xTool P3`);
+    const ex=await AppStore.get('materials');
+    const proposti=this._proposti();
+    if(!ex.length && !proposti.size){
+      /* Primo avvio davvero vuoto: si parte con il corredo completo. */
+      for(const m of this.DEFAULTS) await IDB.put('materials',m);
+      this.segnaTuttiProposti();
+      return;
     }
+    const presenti=new Set(ex.map(m=>m.id));
+    const nuovi=this.DEFAULTS.filter(m=>!presenti.has(m.id)&&!proposti.has(m.id));
+    for(const m of nuovi) await IDB.put('materials',m);
+    if(nuovi.length){
+      this._segnaProposti(nuovi.map(function(m){ return m.id; }));
+      console.log(`✅ Aggiunti ${nuovi.length} materiali predefiniti nuovi`);
+    }
+    /* Quelli già in archivio risultano proposti: serve a non riproporli se
+       domani vengono cancellati. */
+    this._segnaProposti(this.DEFAULTS.filter(m=>presenti.has(m.id)).map(function(m){ return m.id; }));
   },
   async render(){await this.tab(this.activeTab,null);},
   async tab(t,btn){

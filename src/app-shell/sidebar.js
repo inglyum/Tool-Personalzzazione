@@ -131,13 +131,26 @@
        `overflow-y:auto` e misura 1610 px di contenuto in 593 di finestra.
        Nascondere moduli per non far scorrere una barra è il rimedio sbagliato
        al problema sbagliato. */
+    /* ── E adesso «Altro» non è più un interruttore ──────────────────────
+       Il `<details open>` risolveva metà del problema: le voci si vedevano.
+       Restava l'altra metà, misurata cliccandoci sopra: la riga «Altro (9)»
+       ha l'aspetto di una voce di menu, ma è il comando che **chiude** il
+       gruppo. Un utente che ci clicca aspettandosi di vedere altro vede
+       sparire sei voci — 110 visibili prima del clic, 104 dopo — e conclude
+       che il pulsante non funziona.
+
+       Un comando che si chiama «Altro» e fa «meno» non si aggiusta cambiando
+       l'icona. Le voci secondarie restano dove sono, sotto un'etichetta che
+       le separa e basta: non si preme, non si chiude, non promette niente.
+       Il conteggio se ne va con l'interruttore — era anche sbagliato, perché
+       diceva `secondary.length` mentre le patch storiche aggiungono voci
+       dentro lo stesso blocco (4 dichiarate, 6 disegnate). */
     if (secondary.length) {
       html +=
-        '<details class="nav-more" open><summary class="nav-item nav-item--more">' +
-        '<i class="fas fa-ellipsis" aria-hidden="true"></i><span>Altro (' + secondary.length + ')</span>' +
-        '</summary>';
+        '<div class="nav-sub" role="group" aria-label="' + esc(group.label) + ' — altre voci">' +
+        '<div class="nav-sub__label" aria-hidden="true"><span></span></div>';
       for (var j = 0; j < secondary.length; j += 1) html += itemMarkup(secondary[j], isFavorito(secondary[j].id));
-      html += '</details>';
+      html += '</div>';
     }
 
     return html + '</div></div>';

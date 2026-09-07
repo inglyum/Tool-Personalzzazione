@@ -252,6 +252,99 @@ const scettaDopo = await page.evaluate((id) => {
 }, scelta && scelta.id);
 dico('§4 · un gruppo compresso a mano resta compresso dopo il ricaricamento', scettaDopo === true);
 
+/* ── NAV-015 · niente in questa colonna nasconde quando lo si preme ──────
+   Il `<details open>` di «Altro (n)» risolveva metà del problema: le voci si
+   vedevano all'avvio. L'altra metà si è misurata cliccandoci sopra — 110 voci
+   visibili prima, 104 dopo — perché quella riga ha l'aspetto di una voce di
+   menu ed è invece il comando che chiude il gruppo. */
+const nascondimento = await page.evaluate(async () => {
+  const a = (ms) => new Promise((s) => setTimeout(s, ms));
+  const voci = () => [...document.querySelectorAll('#sidebar-nav [data-section]')];
+  const visibili = () => voci().filter((v) => v.offsetParent !== null).length;
+  const prima = visibili();
+  const details = document.querySelectorAll('#sidebar-nav details').length;
+  /* Si preme tutto quello che non è una voce di navigazione: intestazioni,
+     separatori, riassunti. Nessuno deve far calare il conto. */
+  const nonVoci = [...document.querySelectorAll('#sidebar-nav summary, #sidebar-nav .nav-sub__label')];
+  let minimo = prima;
+  for (const n of nonVoci) {
+    try { n.click(); } catch (e) { /* un divisore non si preme: è il punto */ }
+    await a(60);
+    minimo = Math.min(minimo, visibili());
+  }
+  return { prima, dopo: visibili(), minimo, details, quantiNonVoci: nonVoci.length };
+});
+dico('NAV-015 · nessun «Altro» che si chiude nella barra (' + nascondimento.details + ' details)',
+  nascondimento.details === 0);
+dico('NAV-015b · premendo intestazioni e divisori il conto non cala ('
+  + nascondimento.prima + ' → ' + nascondimento.minimo + ')',
+  nascondimento.minimo >= nascondimento.prima);
+dico('NAV-015c · tutte le voci restano visibili senza usare la ricerca ('
+  + nascondimento.dopo + ')',
+  nascondimento.dopo === nascondimento.prima && nascondimento.prima >= 100);
+
+/* ── NAV-016 · ogni rotta dichiarata è raggiungibile dalla barra ───────── */
+const copertura = await page.evaluate((sezioni) => {
+  const inBarra = new Set([...document.querySelectorAll('#sidebar-nav [data-section]')]
+    .map((v) => v.dataset.section));
+  /* Due dichiarazioni, entrambe nella mappa di navigazione, entrambe con un
+     motivo scritto accanto: gli **alias** (`clients` apre la stessa schermata
+     di `clienti`, e una voce sola è la scelta giusta) e le rotte **ritirate**
+     (`stockplanner` non ha più una vista propria: la rotta resta valida e
+     porta al pannello dentro Magazzino, la voce di menu no). Quello che il
+     controllo non ammette è una sezione senza voce e senza dichiarazione. */
+  const nav = window.InglyNav || {};
+  const alias = nav.NAV_ALIASES || {};
+  const ritirate = nav.NAV_EXCLUDED || {};
+  const mancanti = sezioni.filter((s) => !inBarra.has(s) && !inBarra.has(alias[s]) && !ritirate[s]);
+  return { inBarra: inBarra.size, mancanti, ritirate: Object.keys(ritirate).length };
+}, JSON.parse(fs.readFileSync('baseline/ingly-os.json', 'utf8')).sections);
+dico('NAV-016 · ogni sezione ha una voce, un alias o un ritiro dichiarato ('
+  + copertura.inBarra + ' voci · ' + copertura.ritirate + ' ritiri'
+  + (copertura.mancanti.length ? ' — mancano: ' + copertura.mancanti.join(', ') : '') + ')',
+  copertura.mancanti.length === 0);
+
+/* ── NAV-017 · la colonna lunga si legge ─────────────────────────────────
+   Le voci secondarie non si nascondono più: 110 righe in 593 px di finestra,
+   4211 px di contenuto. Quello che resta a orientare è il colore per famiglia
+   delle icone, e si verifica dagli stili calcolati — le schermate in headless
+   escono nere e non provano niente.
+
+   L'intestazione appiccicata è stata provata e tolta: vedi il commento in
+   `shell.css`. Il controllo qui sotto verifica che **non** ci sia, così se
+   qualcuno la rimette senza guardare il rilevatore di sovrapposizioni, questo
+   diventa rosso prima. */
+const leggibilita = await page.evaluate(() => {
+  const intestazioni = [...document.querySelectorAll('#sidebar-nav .ng-header')];
+  const appiccicate = intestazioni.filter((h) => getComputedStyle(h).position === 'sticky');
+  const conSfondo = intestazioni.filter((h) => {
+    const b = getComputedStyle(h).backgroundColor;
+    return b && b !== 'transparent' && !/rgba\(0, 0, 0, 0\)/.test(b);
+  });
+  /* Il colore dell'icona per famiglia: gruppi diversi, glifi di colore
+     diverso. Si contano i colori distinti, non si controlla quali. */
+  const perGruppo = {};
+  [...document.querySelectorAll('#sidebar-nav .nav-group')].forEach((g) => {
+    const i = g.querySelector('.nav-item i');
+    if (i) perGruppo[g.id] = getComputedStyle(i).color;
+  });
+  const colori = new Set(Object.values(perGruppo));
+  return {
+    intestazioni: intestazioni.length,
+    appiccicate: appiccicate.length,
+    conSfondo: conSfondo.length,
+    gruppiConColore: Object.keys(perGruppo).length,
+    coloriDistinti: colori.size,
+    altezzaContenuto: (document.getElementById('sidebar-nav') || {}).scrollHeight || 0,
+  };
+});
+dico('NAV-017 · nessuna intestazione appiccicata: coprirebbe le voci ('
+  + leggibilita.appiccicate + '/' + leggibilita.intestazioni + ')',
+  leggibilita.intestazioni > 0 && leggibilita.appiccicate === 0);
+dico('NAV-017c · le icone distinguono le famiglie ('
+  + leggibilita.coloriDistinti + ' colori su ' + leggibilita.gruppiConColore + ' gruppi)',
+  leggibilita.coloriDistinti >= 5);
+
 console.log('\nNAVIGAZIONE — LA BARRA MOSTRA L APPLICAZIONE\n');
 const problemi = [];
 for (const p of passi) {

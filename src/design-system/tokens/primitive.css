@@ -182,4 +182,19 @@
   --z-toast: 2000;
   --z-tooltip: 3000;
   --z-critical: 9000;
+
+  /* ── Le famiglie del menu ───────────────────────────────────────────────
+     Un colore per gruppo di navigazione, tenue, usato **solo sul glifo**
+     dell'icona. Serve a raggruppare con la coda dell'occhio in una colonna di
+     110 voci: senza, per trovare «Magazzino» si leggono le righe una per una.
+     Sono tinte chiare su fondo scuro, tutte con lo stesso peso percepito:
+     nessuna deve saltare all'occhio più delle altre. */
+  --famiglia-workspace: #7dd3fc;
+  --famiglia-produzione: #fbbf24;
+  --famiglia-business: #86efac;
+  --famiglia-laboratorio: #c4b5fd;
+  --famiglia-intelligence: #f0abfc;
+  --famiglia-marketing: #fda4af;
+  --famiglia-finanze: #5eead4;
+  --famiglia-sistema: #a1a1aa;
 }

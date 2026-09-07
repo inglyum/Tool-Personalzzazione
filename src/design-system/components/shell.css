@@ -68,6 +68,50 @@
   gap: 1px;
 }
 
+/* ── Perché l'intestazione di gruppo NON è appiccicata ────────────────────
+   Provata e tolta. Con le voci secondarie sempre in elenco la colonna è
+   lunga — 110 voci, 4211 px di contenuto in 593 di finestra — e un'etichetta
+   che resta a vista mentre si scorre sembrava la risposta giusta.
+
+   Il rilevatore di sovrapposizioni l'ha bocciata: a 1024 px l'intestazione
+   «Intelligence» finiva sopra «Growth Engine» e «Financial Forecaster». È il
+   comportamento normale di `position: sticky` — copre ciò che le scorre sotto
+   — ma in questo progetto la regola «la navigazione non disegna mai due
+   scritte una sull'altra» ha già trovato difetti veri, e vale più di una
+   comodità. Indebolire il controllo per tenersi l'effetto sarebbe stato il
+   modo sbagliato di risolvere.
+
+   Quello che resta a orientare nella colonna lunga: lo spazio fra i gruppi e
+   il colore per famiglia delle icone. */
+
+/* Un respiro fra un gruppo e l'altro: prima erano attaccati e i confini si
+   leggevano solo dal maiuscoletto. */
+.nav-group + .nav-group {
+  margin-top: var(--space-3);
+}
+
+/* ── Il colore dice di che famiglia è la voce ─────────────────────────────
+   Le icone erano tutte dello stesso grigio: 110 righe identiche, e per
+   trovare «Magazzino» si finiva a leggerle una per una. Il colore sta **solo
+   sul glifo** — non sullo sfondo, non sul testo, non su un bordo — e a bassa
+   saturazione: serve a raggruppare con la coda dell'occhio, non a decorare.
+   Ogni riga resta leggibile in bianco su fondo scuro. */
+#ng-workspace .nav-item i { color: var(--famiglia-workspace); }
+#ng-production .nav-item i { color: var(--famiglia-produzione); }
+#ng-business .nav-item i { color: var(--famiglia-business); }
+#ng-lab .nav-item i { color: var(--famiglia-laboratorio); }
+#ng-intelligence .nav-item i { color: var(--famiglia-intelligence); }
+#ng-marketing .nav-item i { color: var(--famiglia-marketing); }
+#ng-finance .nav-item i { color: var(--famiglia-finanze); }
+#ng-system .nav-item i { color: var(--famiglia-sistema); }
+
+/* La voce attiva porta il proprio colore al massimo: è l'unica riga che deve
+   saltare all'occhio. */
+.nav-item.active i,
+.nav-item[aria-current='page'] i {
+  filter: saturate(1.35);
+}
+
 /* ── Voce di navigazione ──────────────────────────────────────────────────  */
 .nav-item {
   position: relative;
@@ -517,25 +561,34 @@
 }
 
 /* ── Voci secondarie ──────────────────────────────────────────────────────
-   Progressive disclosure: ogni gruppo mostra le voci in evidenza e raccoglie
-   le altre. Con 105 sezioni, mostrarle tutte insieme è il motivo per cui il
-   prodotto sembrava un elenco di funzioni invece di uno strumento.          */
-.nav-more > summary {
-  list-style: none;
-  color: var(--color-text-subtle);
-  font-size: var(--text-xs);
+   Erano dentro un «Altro (n)» che si poteva chiudere. Adesso sono sempre in
+   elenco, separate da una linea sottile: la gerarchia si legge lo stesso —
+   prima quello che si usa ogni giorno, poi il resto — ma niente in questa
+   colonna nasconde qualcosa quando lo si preme.
+
+   La linea è un divisore, non un controllo: nessun cursore a mano, nessuno
+   stato di passaggio, nessun fuoco da tastiera. Se sembra premibile, qualcuno
+   la premerà. */
+.nav-sub {
+  display: block;
 }
 
-.nav-more > summary::-webkit-details-marker {
-  display: none;
+.nav-sub__label {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 6px;
+  pointer-events: none;
 }
 
-.nav-more[open] > summary {
-  color: var(--color-text-muted);
-}
-
-.nav-item--more i {
-  font-size: 11px;
+.nav-sub__label > span {
+  display: block;
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    var(--color-border-subtle, rgba(255, 255, 255, 0.09)),
+    transparent
+  );
 }
 
 .nav-item__fav {
@@ -660,7 +713,13 @@ mark.sh {
   outline-offset: 1px;
 }
 
-/* ── Il contenuto di «Altro (n)» chiuso deve restare chiuso ────────────────
+/* ── La guardia dell'«Altro» chiuso, tenuta per le pagine vecchie ──────────
+   Il `<details class="nav-more">` è stato ritirato: le voci secondarie non si
+   chiudono più. La regola resta perché una scheda aperta prima
+   dell'aggiornamento può averne ancora uno in pagina, e in quel caso il
+   difetto qui sotto tornerebbe.
+
+   ── Il difetto originale ─────────────────────────────────────────────────
    `.nav-more` è un `<details>`. Il browser nasconde i figli di un `<details>`
    chiuso con `details:not([open]) > *:not(summary){display:none}` — ma è una
    regola dell'agente utente, e il CSS storico la batte con `.nav-item{display:flex}`.

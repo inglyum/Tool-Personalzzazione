@@ -2111,17 +2111,24 @@ const Backup={
         }
       }
       // Use putBulk for speed
+      /* Uno store che non entra va **detto**. Prima l'errore finiva in un
+         contatore generico: si leggeva «3 errori» senza sapere se mancavano
+         tre note o tutti gli ordini. */
+      const falliti=[];
       for(const s of stores){
         s_done++;
         showProg(`Importando ${s} (${s_done}/${stores.length})...`);
         const rows=dataMap[s];
+        let entrati=0;
         try{
           const n=await IDB.putBulk(s,rows);
-          count+=n||rows.length;
+          entrati=n||rows.length;
         }catch(e){
           // fallback to one-by-one
-          for(const item of rows){try{await IDB.safePut(s,item);count++;}catch{errors++;}}
+          for(const item of rows){try{await IDB.safePut(s,item);entrati++;}catch{errors++;}}
         }
+        count+=entrati;
+        if(entrati<rows.length) falliti.push(s+' '+entrati+'/'+rows.length);
       }
       // Restore images
       if(isFullBackup&&raw.images){
@@ -2137,8 +2144,22 @@ const Backup={
       }
       hideProg();
       input.value='';
-      toast(`✅ Import: ${count.toLocaleString()} record${errors?', '+errors+' errori':''}. Ricarico...`);
-      setTimeout(()=>location.reload(),1800);
+      /* Le cache vanno invalidate anche se poi si ricarica: se il
+         ricaricamento non parte, le viste continuerebbero a mostrare i dati
+         di prima come se l'importazione non fosse avvenuta. */
+      try{ Object.keys(AppStore._cache||{}).forEach(x=>AppStore.invalidate(x)); }catch(e){}
+      /* Il magazzino del backup è la decisione dell'utente: nessun materiale
+         predefinito va riproposto sopra di essa al riavvio. */
+      try{
+        if(Array.isArray(dataMap.materials) && typeof Materials!=='undefined'
+           && typeof Materials.segnaTuttiProposti==='function') Materials.segnaTuttiProposti();
+      }catch(e){}
+      if(falliti.length){
+        toast(`⚠️ Import parziale: ${count.toLocaleString()} record. Non completi: ${falliti.join(' · ')}`,'warning',9000);
+      } else {
+        toast(`✅ Import: ${count.toLocaleString()} record in ${stores.length} categorie. Ricarico...`,'success');
+      }
+      setTimeout(()=>location.reload(),falliti.length?4000:1800);
     }catch(e){
       hideProg();
       input.value='';
@@ -2257,7 +2278,16 @@ const Backup={
     toast(`✅ Backup COMPLETO scaricato — ${nImg} immagini incluse`,'success');
   },
 
+  /* Il ripristino è uno solo. Questa funzione esisteva in parallelo a
+     `onImport` e faceva quasi le stesse cose, ma non puliva gli store prima
+     di scrivere (i record vecchi restavano accanto ai nuovi) e non saltava
+     gli store effimeri. Due ripristini per lo stesso file, con esiti diversi
+     a seconda del pulsante premuto. */
   async restoreWithImages(input){
+    return this.onImport(input);
+  },
+
+  async _restoreWithImagesLegacy(input){
     const file = input?.files?.[0]; if(!file) return;
     try{
       const text = await file.text();

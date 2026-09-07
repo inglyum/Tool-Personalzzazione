@@ -968,7 +968,7 @@
       '<button class="v2-btn v2-btn-secondary" id="bk-import-btn">📤 Importa JSON</button>'+
       '<input type="file" id="bk-import-file" accept=".json" style="display:none">'+
       '</div>'+
-      '<div style="font-size:10px;color:#52525b;margin-bottom:12px">Auto-backup ogni 30 minuti · Ultimi 20 backup conservati</div>'+
+      '<div style="font-size:10px;color:#52525b;margin-bottom:12px">Scatti automatici delle <b>preferenze</b> ogni 30 minuti · ultimi 20 conservati.<br>I dati del laboratorio stanno in IndexedDB: per quelli usa «Esporta JSON» qui sopra o la scheda Backup completo.</div>'+
       '<div id="bk-slots"></div>';
 
     section.insertBefore(bar, section.firstChild);
@@ -1001,38 +1001,44 @@
       toastr('💾 Backup salvato — '+Object.keys(entry.data).length+' sezioni', 'success', 2500);
     });
 
+    /* ── Un solo backup, non due ────────────────────────────────────────
+       Questo pannello esportava le sole chiavi di localStorage: preferenze e
+       poco altro. I dati del laboratorio — clienti, ordini, catalogo,
+       magazzino — stanno in IndexedDB, e non finivano nel file. Un backup che
+       si scarica, pesa poco e non contiene i dati è peggio di nessun backup,
+       perché sembra fatto. Adesso questo pulsante chiama lo stesso motore
+       della scheda «Backup completo». */
     document.getElementById('bk-export-btn').addEventListener('click', function(){
-      var entry = performBackup('manual');
-      var json = JSON.stringify(entry.data, null, 2);
-      var blob = new Blob([json], {type:'application/json'});
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'ingly-backup-'+new Date().toISOString().slice(0,10)+'.json';
-      a.click();
-      renderBackups();
-      toastr('📥 Backup esportato', 'success', 2000);
+      var B = (typeof Backup !== 'undefined') ? Backup : (window.Backup || null);
+      if (B && typeof B.downloadWithImages === 'function') { B.downloadWithImages(); return; }
+      if (B && typeof B.download === 'function') { B.download(); return; }
+      toastr('❌ Modulo backup non disponibile', 'error', 4000);
     });
 
     document.getElementById('bk-import-btn').addEventListener('click', function(){
       document.getElementById('bk-import-file').click();
     });
 
+    /* ── Il difetto misurato ────────────────────────────────────────────
+       Questo gestore faceva `localStorage.setItem(k, data[k])` su ogni chiave
+       di primo livello del file. Su un backup nel formato INGLY_FULL le
+       chiavi di primo livello sono `_ts`, `_v`, `data` e `images`: scriveva
+       quattro voci di cui due valevano la stringa «[object Object]», non
+       importava un solo record, e annunciava «✅ Dati ripristinati con
+       successo». Misurato con un backup vero da 2,6 MB: 82 clienti, 364
+       prodotti, 699 articoli e 50 ordini, e dopo l'importazione zero di
+       ognuno.
+
+       Il ripristino vero è uno solo e sta in `Backup.onImport`: riconosce i
+       formati, pulisce, importa a blocchi e rimette le immagini. Questo
+       pulsante gli passa il file e basta. */
     document.getElementById('bk-import-file').addEventListener('change', function(e){
-      var file = e.target.files[0];
-      if (!file) return;
-      var reader = new FileReader();
-      reader.onload = function(ev){
-        try {
-          var data = JSON.parse(ev.target.result);
-          if (confirm('Ripristinare i dati dal file '+file.name+'? I dati attuali saranno sovrascritti.')) {
-            Object.keys(data).forEach(function(k){ localStorage.setItem(k, data[k]); });
-            toastr('✅ Dati ripristinati con successo', 'success', 3000);
-            setTimeout(function(){ location.reload(); }, 1500);
-          }
-        } catch(err) { toastr('❌ File non valido: '+err.message, 'error', 4000); }
-      };
-      reader.readAsText(file);
-      this.value = '';
+      var input = this;
+      if (!input.files || !input.files[0]) return;
+      var B = (typeof Backup !== 'undefined') ? Backup : (window.Backup || null);
+      if (B && typeof B.onImport === 'function') { B.onImport(input); return; }
+      toastr('❌ Modulo di ripristino non disponibile', 'error', 4000);
+      input.value = '';
     });
 
     document.getElementById('bk-slots').addEventListener('click', function(e){
