@@ -1087,6 +1087,23 @@ const Quoter={
        una semantica diversa da quella che il motore riceve (100 diventa 1,
        non 2), e un preventivo riletto darebbe un prezzo che nessuno ha mai
        proposto al cliente. Si conserva il conto, non gli ingredienti. */
+    /* ── La distinta economica ────────────────────────────────────────
+       Il preventivo conservava tre numeri — costo, netto, lordo — e le voci
+       che li avevano prodotti restavano nel calcolo. L'ordine che ne nasceva
+       aveva un totale e nient'altro, e alla domanda «perché costa così?» non
+       poteva rispondere nessuno.
+       `costBreakdown` è la distinta strutturata: una riga per ogni voce
+       davvero calcolata, con quantità, unità, costo unitario e provenienza.
+       `pricingSnapshot` è la stessa cosa congelata: da qui in poi non si
+       tocca più, perché è quello che è stato promesso al cliente. */
+    const _bd = typeof window !== 'undefined' && window.InglyCostBreakdown;
+    if(_bd){
+      const distinta = _bd.daRighe(this.lines, _r, { quantita: 1 });
+      q.costBreakdown = distinta;
+      q.pricingSnapshot = JSON.parse(JSON.stringify(distinta));
+      q.pricingEngineVersion = (window.InglyCostEngine && window.InglyCostEngine.version) || null;
+    }
+
     const _snap = typeof window !== 'undefined' && window.InglyOrderSnapshot;
     if(_snap) q.economicSnapshot = _snap.costruisci(_r, {
       spiegazione: this._spiega(),
@@ -1125,7 +1142,11 @@ const Quoter={
     if(!riletto) return _no('Preventivo scritto ma non rileggibile: non è stato salvato','error');
     this._lastSavedId=id;
     await logAction('quote',id,this.editId?'updated':'created',{name,amount:gross});
-    toast('Preventivo salvato!');this.editId=null;
+    /* Dopo il salvataggio il preventivo a schermo **è** quello salvato.
+       Azzerare `editId` faceva sì che il salvataggio successivo — quello che
+       `sendToWorkflow` fa da sé — ne creasse un secondo identico, e l'ordine
+       finiva collegato al duplicato invece che all'originale. */
+    toast('Preventivo salvato!');this.editId=id;
     await this.renderList();
     return {ok:true,id,quote:riletto};
   },

@@ -121,10 +121,56 @@
 
   /** Costo orario della macchina: si ammortizza ciò che si perde, non il
       prezzo pieno — una macchina a fine vita si rivende. */
+  /* ── Il costo orario della macchina ──────────────────────────────────────
+     La divisione qui sotto è corretta e resta. Quello che mancava è la
+     domanda successiva: «questo numero è plausibile?». Una macchina da 5000 €
+     dichiarata a 500 ore dà 10 €/h, e nove ore di stampa portano 90 € di sola
+     macchina senza che niente lo segnali — non per un errore di formula, ma
+     perché la formula non sa quando i suoi ingressi sono assurdi.
+
+     `InglyMachineRate` conosce le tre modalità (dichiarata, ammortamento,
+     ibrida) e la soglia oltre la quale una tariffa merita un secondo sguardo.
+     Quando manca — nei test del motore puro, per esempio — si ricade sulla
+     divisione di sempre, che non è un ripiego inventato ma esattamente il
+     conto che questa funzione faceva prima. */
   function oraMacchina(i) {
+    var M = global.InglyMachineRate;
+    if (M && typeof M.tariffa === 'function') {
+      return M.tariffa({
+        purchasePrice: i.machinePrice,
+        residualValue: i.residualValue,
+        expectedLifeHours: i.machineLifeHours,
+        annualMaintenance: i.annualMaintenance,
+        expectedAnnualHours: i.expectedAnnualHours,
+        machineHourlyRate: i.machineHourlyRate,
+        machineRateMode: i.machineRateMode,
+        maxRagionevole: i.maxRagionevole,
+        categoria: i.tecnologia || i.technology,
+        /* La manutenzione è già una voce sua nel conto per pezzo: passarla
+           anche qui la conterebbe due volte. */
+        maintenancePerHour: 0,
+      }).euroOra;
+    }
     var vita = pos(i.machineLifeHours);
     if (!vita) return 0;
     return Math.max(0, pos(i.machinePrice) - pos(i.residualValue)) / vita;
+  }
+
+  /** Il dettaglio della tariffa, per chi deve spiegarla: modalità, componenti,
+      e se la soglia è scattata. Non entra nel conto — lo racconta. */
+  function dettaglioMacchina(i) {
+    var M = global.InglyMachineRate;
+    if (!M || typeof M.tariffa !== 'function') {
+      return { euroOra: oraMacchina(i), modo: 'ammortamento', avvisi: [],
+        confidence: pos(i.machineLifeHours) > 0 ? 'declared' : 'missing', tettoScattato: false };
+    }
+    return M.tariffa({
+      purchasePrice: i.machinePrice, residualValue: i.residualValue,
+      expectedLifeHours: i.machineLifeHours, annualMaintenance: i.annualMaintenance,
+      expectedAnnualHours: i.expectedAnnualHours, machineHourlyRate: i.machineHourlyRate,
+      machineRateMode: i.machineRateMode, maxRagionevole: i.maxRagionevole,
+      categoria: i.tecnologia || i.technology, maintenancePerHour: 0,
+    });
   }
 
   /* ── L'energia, e come si sa di cosa si sta parlando ──────────────────────
@@ -760,6 +806,16 @@
          1,90 € all'ora di macchina» confrontato con il listino sì. Sono
          derivati, non un secondo calcolo: nessuno di questi numeri può
          divergere dal totale perché discende da lui. */
+      /* Gli ingressi, accanto al risultato. Non è ridondanza: chi deve
+         disegnare la distinta economica ha bisogno delle **quantità** — i
+         grammi, i minuti, le ore — che il conto ha consumato e che il
+         risultato da solo non conserva. Senza, una riga può dire «€ 6,38» e
+         non «290 g a € 0,022 il grammo», ed è la differenza fra un totale e
+         un preventivo che si può discutere.
+         L'adapter lo esponeva già con lo stesso nome; qui mancava, e il
+         costruttore dello snapshot lo cercava a vuoto. */
+      _ingresso: i,
+
       costoPer: (function () {
         var g = pos(i.grams) + pos(i.supportGrams) + pos(i.purgeGrams);
         var oreUomo = oreDiPersona(i);
@@ -1621,6 +1677,7 @@
     livelliDi: livelliDi,
     prezziConsigliati: prezziConsigliati,
     calcola: calcola,
+    dettaglioMacchina: dettaglioMacchina,
     prezzo: prezzo,
     scaglioni: scaglioni,
     preventiva: preventiva,

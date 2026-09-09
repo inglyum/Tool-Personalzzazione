@@ -566,19 +566,43 @@ const Orders={
       o = pl.find(x=>x.id===id || x._sourceId===id)||null;
     }
     if(!o){ toast('Ordine non trovato','error'); return; }
-    if(!await askConfirm(`€${o.value||0} — verrà aggiunta in Vendite & Fatture`,{title:`Creare vendita da ordine "${o.name||o.id}"?`,confirmLabel:'Crea vendita',danger:false})) return;
+    /* ── Quanto vale davvero questa vendita ────────────────────────────
+       Qui c'era `+o.value||0`. Gli ordini nati dal preventivatore scrivono il
+       totale in `total`, non in `value`: una vendita creata da uno di quegli
+       ordini nasceva a **zero euro**, e nessuno se ne accorgeva finché non
+       arrivava il conto di fine mese. Si legge quello che c'è, nell'ordine in
+       cui è attendibile: il prezzo corrente se l'ordine è stato modificato in
+       lavorazione, altrimenti il totale con cui è nato. */
+    const _corr = o.currentPricing && o.currentPricing.totals;
+    const importo = +( (_corr && _corr.netto) || o.total || o.totalNet || o.value || 0 );
+    if(!await askConfirm(`€${importo.toFixed(2)} — verrà aggiunta in Vendite & Fatture`,{title:`Creare vendita da ordine "${o.name||o.id}"?`,confirmLabel:'Crea vendita',danger:false})) return;
     const sale = {
       id: Date.now(),
       clientId: o.clientId||null,
       clientName: o.clientName||'',
       date: today(),
       desc: o.name||o.desc||'Ordine #'+o.id,
-      amount: +o.value||0,
+      amount: importo,
+      netAmount: importo,
       status: 'da_pagare',
       channel: 'Diretto',
       fromOrderId: o.id,
+      /* La distinta viaggia fino in fondo. Una vendita che conserva solo nome
+         e totale non permette più di sapere che margine si è fatto davvero, ed
+         è il punto in cui l'informazione economica si perdeva. */
+      quoteId: o.quoteId || null,
+      orderId: o.id,
+      costBreakdown: o.currentPricing || o.costBreakdown || null,
+      pricingSnapshot: o.pricingSnapshot || null,
+      totalCost: (_corr && _corr.costoTotale) != null ? _corr.costoTotale : (o.totalCost != null ? o.totalCost : null),
+      margine: (_corr && _corr.margine) != null ? _corr.margine : null,
+      marginePct: (_corr && _corr.marginePct) != null ? _corr.marginePct : null,
+      economicSnapshot: o.economicSnapshot || null,
     };
     const saleId = await IDB.put('sales', sale);
+    /* Si rilegge prima di dichiarare la vendita creata. */
+    const _riletta = await IDB.get('sales', saleId).catch(()=>null);
+    if(!_riletta){ toast('Vendita scritta ma non rileggibile: non è stata creata','error'); return; }
     await logAction('sale', saleId, 'created_from_order', {orderId: o.id});
     Bus.emit('sale:created', {id: saleId});
     // v3.4: sync pipeline stage to paid
@@ -1762,7 +1786,20 @@ const OrderFlow = {
 
       <!-- Tab content -->
       <div id="ofe-tab-content">${renderTab(activeTab)}</div>
+
+      <!-- La distinta economica: le voci che il totale contiene, e da dove
+           vengono. Si monta dopo, perché il modulo disegna e lega i suoi
+           pulsanti da sé, scoped al nodo. -->
+      <div id="ofe-economia"></div>
     `;
+
+    /* Un ordine che porta la distinta la mostra; uno vecchio dice che non ce
+       l'ha, invece di far vedere una tabella vuota che sembra un errore. */
+    const _eco = body.querySelector('#ofe-economia');
+    if (_eco && window.InglyOrderEconomics) {
+      try { window.InglyOrderEconomics.render(_eco, o); }
+      catch (e) { if (window.Ingly && Ingly.Errors) Ingly.Errors.log('OrderFlow.economia', e, { id: o.id }); }
+    }
 
     drawer.style.display = 'block';
     // v4.6: backdrop per click-outside
@@ -2449,10 +2486,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
     id = typeof id === 'string' ? +id || id : id;
     const o = await IDB.get('orders', id).catch(()=>null);
     if (!o) { toast('Ordine non trovato','warning'); return; }
-    const total = +(o.total||o.value)||0;
+    /* Il prezzo corrente se l'ordine è stato modificato in lavorazione,
+       altrimenti quello con cui è nato. `o.value` era l'unica fonte in
+       `Orders.toSale` e gli ordini del preventivatore non lo scrivono. */
+    const _corr = o.currentPricing && o.currentPricing.totals;
+    const total = +((_corr && _corr.netto) || o.total || o.totalNet || o.value) || 0;
     if (!total) { toast('Imposta il totale prima di convertire','warning'); return; }
     if (!await askConfirm(`Convertire "${o.name||'Ordine #'+id}" in vendita da ${fmtCur(total)}?`,{confirmLabel:'Converti',danger:false})) return;
-    // Create sale record
     const sale = {
       id: Date.now(),
       clientId:    o.clientId||null,
@@ -2460,12 +2500,33 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
       date:        new Date().toISOString().split('T')[0],
       desc:        o.name||o.desc||'',
       amount:      total,
+      netAmount:   total,
       status:      'pagato',
       channel:     o.channel||'Diretto',
       originOrder: id,
+      fromOrderId: id,
       createdAt:   new Date().toISOString(),
+      /* La distinta arriva fino alla vendita: senza, il margine di fine mese
+         non si può più ricostruire da nessuna parte. */
+      quoteId:         o.quoteId || null,
+      orderId:         id,
+      costBreakdown:   o.currentPricing || o.costBreakdown || null,
+      pricingSnapshot: o.pricingSnapshot || null,
+      totalCost:       (_corr && _corr.costoTotale) != null ? _corr.costoTotale : (o.totalCost != null ? o.totalCost : null),
+      margine:         (_corr && _corr.margine) != null ? _corr.margine : null,
+      marginePct:      (_corr && _corr.marginePct) != null ? _corr.marginePct : null,
+      economicSnapshot: o.economicSnapshot || null,
     };
-    await IDB.put('sales', sale).catch(e=>{ toast('Errore: '+e.message,'error'); return; });
+    /* Si scrive, si rilegge, e solo allora si dice «registrata». */
+    let _saleId;
+    try { _saleId = await IDB.put('sales', sale); }
+    catch(e){
+      if(window.Ingly&&window.Ingly.Errors) Ingly.Errors.log('OrderFlow.convertToSale', e, { id });
+      toast('Vendita non registrata: '+(e&&e.message||e),'error');
+      return;
+    }
+    const _riletta = await IDB.get('sales', _saleId).catch(()=>null);
+    if(!_riletta){ toast('Vendita scritta ma non rileggibile: non è stata registrata','error'); return; }
     // Move order to paid stage
     o.stage = 'paid'; o.updatedAt = new Date().toISOString();
     await IDB.put('orders', o).catch(()=>{});

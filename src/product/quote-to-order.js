@@ -74,6 +74,13 @@
     gestioneAssente: 'Ordini & Workflow non è disponibile',
   };
 
+  /** Una copia profonda, perché lo snapshot e il corrente non devono
+      condividere gli stessi oggetti: modificare l'uno cambierebbe l'altro, ed
+      è esattamente la cosa che questi tre campi esistono per impedire. */
+  function clona(v) {
+    try { return JSON.parse(JSON.stringify(v)); } catch (e) { return v; }
+  }
+
   function esito(ok, passo, extra) {
     var o = { ok: !!ok, passo: passo };
     for (var k in (extra || {})) if (Object.prototype.hasOwnProperty.call(extra, k)) o[k] = extra[k];
@@ -260,6 +267,33 @@
     /* Lo storico economico si porta con sé, non si ricostruisce: è congelato
        nel preventivo con la versione del motore che l'ha prodotto. */
     if (quote.economicSnapshot) dati.economicSnapshot = quote.economicSnapshot;
+
+    /* ── La distinta economica, in tre copie che vogliono dire tre cose ────
+       · `costBreakdown`    — le voci, come si leggono oggi sull'ordine;
+       · `pricingSnapshot`  — la fotografia di quello che era stato preventivato,
+                              e non si tocca mai più;
+       · `currentPricing`   — quello che si sta facendo davvero. Parte identico
+                              allo snapshot e diverge quando qualcuno modifica
+                              una voce in lavorazione.
+
+       La differenza fra il secondo e il terzo è lo scostamento, ed è l'unica
+       cosa che a fine mese dice se si è guadagnato quanto si pensava.
+       Modificare l'ordine non modifica il preventivo: sono due momenti diversi
+       della stessa storia, e confonderli vuol dire perdere il termine di
+       paragone. */
+    var distinta = quote.costBreakdown || (quote.pricingSnapshot || null);
+    if (distinta) {
+      dati.costBreakdown = clona(distinta);
+      dati.pricingSnapshot = clona(quote.pricingSnapshot || distinta);
+      dati.currentPricing = clona(quote.pricingSnapshot || distinta);
+      dati.pricingHistory = [];
+    }
+    if (quote.pricingEngineVersion) dati.pricingEngineVersion = quote.pricingEngineVersion;
+    if (quote.pricingProfile) dati.pricingProfile = quote.pricingProfile;
+
+    /* I dati del prodotto viaggiano con l'economia: un ordine che sa quanto
+       costa e non sa di che cosa è un ordine a metà. */
+    if (Array.isArray(quote.lines)) dati.items = clona(quote.lines);
     dati = decora(dati, quote, porte);
 
     /* 6 · Creazione. */

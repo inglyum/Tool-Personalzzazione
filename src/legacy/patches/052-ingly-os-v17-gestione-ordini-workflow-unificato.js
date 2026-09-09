@@ -112,7 +112,12 @@ const GestioneOrdini = {
     };
     /* I totali del preventivo si copiano come sono, dichiarando quale è quale:
        un «totale» senza unità è un totale ambiguo, e `total` qui è il netto. */
-    ['totalNet','totalGross','totalCost','discount','ivaMode','economicSnapshot','specs','imageUrl']
+    ['totalNet','totalGross','totalCost','discount','ivaMode','economicSnapshot','specs','imageUrl',
+      /* La distinta economica e le sue tre copie: senza queste l'ordine torna
+         a essere un totale, ed è il difetto che il preventivo strutturato
+         esiste per chiudere. */
+      'costBreakdown','pricingSnapshot','currentPricing','pricingHistory',
+      'pricingEngineVersion','pricingProfile','items']
       .forEach(function(k){ if(d[k]!==undefined) order[k]=d[k]; });
 
     try {
@@ -1021,9 +1026,22 @@ const GestioneOrdini = {
           <button onclick="typeof OrderQuickNote!=='undefined'&&OrderQuickNote.open(${o.id},'${(o.name||'').replace(/'/g,'')}');this.closest('[style*=fixed]').remove()"
             style="padding:9px 12px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:11px;color:var(--text-muted)">📝 Nota</button>
         </div>
+
+        <!-- La distinta economica dell'ordine: le voci che il totale contiene,
+             da dove vengono e quanto si sono mosse rispetto al preventivo. -->
+        <div id="go-economia"></div>
       </div>
     </div>`;
     document.body.appendChild(modal);
+
+    /* Il modulo disegna e lega i suoi pulsanti da sé, scoped al nodo: qui si
+       dice solo dove. Un ordine senza distinta lo dichiara, invece di mostrare
+       una tabella vuota che sembra un guasto. */
+    const _eco = modal.querySelector('#go-economia');
+    if (_eco && window.InglyOrderEconomics) {
+      try { window.InglyOrderEconomics.render(_eco, o); }
+      catch (e) { if (window.Ingly && Ingly.Errors) Ingly.Errors.log('GestioneOrdini.economia', e, { id: o.id }); }
+    }
   },
 
   // ══ CREATE MODAL ═══════════════════════════════════════════════════

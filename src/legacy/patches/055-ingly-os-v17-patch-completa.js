@@ -123,10 +123,27 @@
           ${(norm==='completato'||norm==='venduto') ? `<button onclick="GestioneOrdini._archiveToSales(${o.id})" style="padding:9px 11px;background:#22c55e15;border:1px solid #22c55e40;border-radius:8px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">📦 → Archivio</button>` : ''}
           <button onclick="GestioneOrdini._confirmDelete(${o.id},'${(o.clientName||'').replace(/'/g,'')}')" style="padding:9px 11px;background:#ef444415;border:1px solid #ef444440;border-radius:8px;cursor:pointer;font-size:11px;color:#ef4444;font-weight:700">🗑 Elimina</button>
         </div>
+
+        <!-- La distinta economica dell'ordine: le voci che il totale
+             contiene, da dove vengono e quanto si sono mosse rispetto al
+             preventivo. Sta qui e non nella patch 052 perché questa è la
+             versione del dettaglio che si apre davvero: il metodo esiste in
+             sei copie, e le cinque che lo avvolgono cercano tutte un modale
+             con id go-detail-modal che solo questa crea. -->
+        <div id="go-economia"></div>
       </div>
     </div>`;
     document.body.appendChild(modal);
     document.getElementById('go-ed-client')?.focus();
+
+    /* Il modulo disegna e lega i suoi pulsanti da sé, scoped al nodo. Un
+       ordine senza distinta lo dichiara, invece di mostrare una tabella vuota
+       che sembra un guasto. */
+    const _eco = modal.querySelector('#go-economia');
+    if (_eco && window.InglyOrderEconomics) {
+      try { window.InglyOrderEconomics.render(_eco, o); }
+      catch (e) { if (window.Ingly && Ingly.Errors) Ingly.Errors.log('GestioneOrdini.economia', e, { id: o.id }); }
+    }
     /* Il consuntivo si legge da due archivi: si riempie dopo, così il dettaglio
        si apre subito invece di aspettare due letture. Il metodo vive su
        GestioneOrdini (patch 052) ed è di questa versione del dettaglio che ha

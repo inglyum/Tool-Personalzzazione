@@ -42,6 +42,8 @@ export const PRODUCT_FILES = [
   'command-palette.js',
   /* Il motore di costo prima del quoter 3D, che ne è un profilo: chi legge il
      bundle incontra la matematica comune prima delle sue applicazioni. */
+  /* la tariffa macchina prima del motore: il motore la interroga */
+  'machine-rate.js',
   'cost-engine.js',
   'print3d-cost.js',
   /* L'adapter del preventivo: dopo il motore, prima di chi lo usa. */
@@ -86,7 +88,9 @@ export const PRODUCT_FILES = [
   'cost-profiles.js',
   'cost-profiles-store.js',
   'cost-profiles-view.js',
+  'cost-breakdown.js',
   'quote-to-order.js',
+  'order-economics-view.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i
