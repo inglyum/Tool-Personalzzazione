@@ -140,8 +140,8 @@
        ordine senza distinta lo dichiara, invece di mostrare una tabella vuota
        che sembra un guasto. */
     const _eco = modal.querySelector('#go-economia');
-    if (_eco && window.InglyOrderEconomics) {
-      try { window.InglyOrderEconomics.render(_eco, o); }
+    if (_eco && window.InglyOrderBreakdown) {
+      try { window.InglyOrderBreakdown.render(_eco, o); }
       catch (e) { if (window.Ingly && Ingly.Errors) Ingly.Errors.log('GestioneOrdini.economia', e, { id: o.id }); }
     }
     /* Il consuntivo si legge da due archivi: si riempie dopo, così il dettaglio

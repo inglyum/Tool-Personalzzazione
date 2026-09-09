@@ -38,11 +38,11 @@ const dico = (k, v) => passi.push({ passo: k, esito: !!v });
 /* ── I moduli ci sono ────────────────────────────────────────────────────── */
 const moduli = await page.evaluate(() => ({
   distinta: typeof window.InglyCostBreakdown,
-  vista: typeof window.InglyOrderEconomics,
+  vista: typeof window.InglyOrderBreakdown,
   tariffa: typeof window.InglyMachineRate,
 }));
 dico('la distinta economica è raggiungibile (' + moduli.distinta + ')', moduli.distinta === 'object');
-dico('la vista dell economia ordine pure (' + moduli.vista + ')', moduli.vista === 'object');
+dico('la vista della distinta pure (' + moduli.vista + ')', moduli.vista === 'object');
 dico('e la tariffa macchina esplicita (' + moduli.tariffa + ')', moduli.tariffa === 'object');
 
 /* ── Il preventivo porta la distinta ─────────────────────────────────────── */

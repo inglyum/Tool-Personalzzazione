@@ -301,7 +301,15 @@
 
   function avvisa(m, t) { if (typeof global.toast === 'function') global.toast(m, t || 'info'); }
 
-  global.InglyOrderEconomics = {
+  /* ── Il nome ────────────────────────────────────────────────────────────
+     Questo modulo si chiamava `InglyOrderEconomics`, che è il nome di un
+     modulo che esisteva già — quello del consuntivo «Preventivato / Reale /
+     Scostamento» — e glielo **sovrascriveva**: il suo `pannello()` spariva e
+     la card del consuntivo smetteva di disegnarsi. Se ne è accorta la suite
+     `storico-economico.mjs`, e aveva ragione.
+     Sono due cose diverse: quello confronta preventivato e consuntivo di
+     produzione, questo apre la distinta delle voci. Due nomi. */
+  global.InglyOrderBreakdown = {
     VERSIONE: VERSIONE,
     render: render,
     fonte: fonte,

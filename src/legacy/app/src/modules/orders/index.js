@@ -1796,8 +1796,8 @@ const OrderFlow = {
     /* Un ordine che porta la distinta la mostra; uno vecchio dice che non ce
        l'ha, invece di far vedere una tabella vuota che sembra un errore. */
     const _eco = body.querySelector('#ofe-economia');
-    if (_eco && window.InglyOrderEconomics) {
-      try { window.InglyOrderEconomics.render(_eco, o); }
+    if (_eco && window.InglyOrderBreakdown) {
+      try { window.InglyOrderBreakdown.render(_eco, o); }
       catch (e) { if (window.Ingly && Ingly.Errors) Ingly.Errors.log('OrderFlow.economia', e, { id: o.id }); }
     }
 

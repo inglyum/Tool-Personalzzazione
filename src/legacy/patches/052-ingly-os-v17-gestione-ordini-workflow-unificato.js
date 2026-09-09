@@ -1034,14 +1034,6 @@ const GestioneOrdini = {
     </div>`;
     document.body.appendChild(modal);
 
-    /* Il modulo disegna e lega i suoi pulsanti da sé, scoped al nodo: qui si
-       dice solo dove. Un ordine senza distinta lo dichiara, invece di mostrare
-       una tabella vuota che sembra un guasto. */
-    const _eco = modal.querySelector('#go-economia');
-    if (_eco && window.InglyOrderEconomics) {
-      try { window.InglyOrderEconomics.render(_eco, o); }
-      catch (e) { if (window.Ingly && Ingly.Errors) Ingly.Errors.log('GestioneOrdini.economia', e, { id: o.id }); }
-    }
   },
 
   // ══ CREATE MODAL ═══════════════════════════════════════════════════
