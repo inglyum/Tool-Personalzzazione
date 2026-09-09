@@ -75,7 +75,18 @@ const RecurringInvoices = {
     if (!data.freq)  { toast('Seleziona la frequenza','warning'); return; }
     if (!data.nextDate) data.nextDate = data.startDate;
     data.active = data.active !== false;
-    const id = await IDB.put('recurring_invoices', data).catch(()=>{});
+    /* Il `✅` arrivava dopo un `catch(()=>{})`: la scrittura poteva fallire e
+       l'utente leggeva «salvato». Si scrive, si rilegge, e solo allora si
+       parla. */
+    let id;
+    try{ id = await IDB.put('recurring_invoices', data); }
+    catch(e){
+      if(window.Ingly&&window.Ingly.Errors) Ingly.Errors.log('Ricorrenti.save',e,{nome:data.name});
+      toast('Template non salvato: '+(e&&e.message||e),'error');
+      return null;
+    }
+    const riletto = id!=null ? await IDB.get('recurring_invoices', id).catch(()=>null) : null;
+    if(!riletto){ toast('Template scritto ma non rileggibile: non è stato salvato','error'); return null; }
     toast(`✅ Template "${data.name}" salvato`, 'success');
     this.render();
     return id;
@@ -232,7 +243,21 @@ const RecurringInvoices = {
       invoiceNo: `RC-${today().replace(/-/g,'')}-${tmpl.id}`,
       fromRecurringId: tmpl.id,
     };
-    const saleId = await IDB.put('sales', sale).catch(()=>{});
+    /* Qui il difetto costava più di un messaggio sbagliato: la scrittura della
+       fattura era inghiottita, ma il contatore del template avanzava lo stesso.
+       Risultato possibile — nessuna fattura in archivio, e il template che
+       dichiara di averla generata, con la prossima scadenza già spostata
+       avanti. La fattura di quel mese non la emetteva più nessuno. */
+    let saleId;
+    try{ saleId = await IDB.put('sales', sale); }
+    catch(e){
+      if(window.Ingly&&window.Ingly.Errors) Ingly.Errors.log('Ricorrenti.genera',e,{template:tmpl.id});
+      toast('Fattura non generata: '+(e&&e.message||e),'error');
+      return;
+    }
+    const fattura = saleId!=null ? await IDB.get('sales', saleId).catch(()=>null) : null;
+    if(!fattura){ toast('Fattura scritta ma non rileggibile: il template non è stato avanzato','error'); return; }
+
     tmpl.nextDate = this._nextDate(today(), tmpl.freq);
     tmpl.lastGenerated = today();
     tmpl.generatedCount = (tmpl.generatedCount || 0) + 1;

@@ -558,13 +558,40 @@
       categories,
       settings: {
         machineCostPerMin: num(settings.machineCost, 0.35),
-        laborCostPerMin: num(settings.laborCost, 0.5),
+        /* ── La quarta tariffa oraria ────────────────────────────────────
+           Qui c'era `0,5 €/min` — trenta euro l'ora — scritto a mano, mentre
+           Impostazioni ne aveva un altro (`0,25`, quindici l'ora) e il
+           preventivatore 3D un terzo (`18`). Tre numeri per la stessa cosa,
+           in tre unità diverse, e nessuno collegato ai profili economici del
+           laboratorio: cambiare la tariffa nel pannello non toccava né il
+           Product Builder né il catalogo.
+
+           Ora la precedenza è dichiarata: quello che l'utente ha scritto in
+           Impostazioni, altrimenti il profilo del laboratorio. La conversione
+           €/h → €/min è **qui**, esplicita e in un punto solo: mescolare le
+           due unità senza dirlo è il modo in cui un costo diventa sessanta
+           volte quello che dovrebbe. */
+        laborCostPerMin: num(settings.laborCost, 0) > 0
+          ? num(settings.laborCost)
+          : tariffaProfiloPerMinuto(),
         markup: num(settings.markup, 40),
         vat: num(settings.vat, 22),
       },
       hasMachines: machines.length > 0,
       hasMaterials: materials.length > 0,
     };
+  }
+
+  /** La tariffa del laboratorio in euro al minuto. L'unità del profilo è
+      l'ora — è come si ragiona quando si decide quanto costa una persona — e
+      questa è l'unica conversione, così che non ce ne siano altre sparse. */
+  function tariffaProfiloPerMinuto() {
+    try {
+      var P = global.InglyCostProfilesStore;
+      var v = P && P.ingressoSincrono ? P.ingressoSincrono({}).laborPerHour : 0;
+      if (v > 0) return v / 60;
+    } catch (e) {}
+    return 0.3;   /* 18 €/h: lo stesso ripiego dichiarato del preventivatore 3D */
   }
 
   /* Il preventivo del Product Builder passa dal motore esistente: qui non c'è
@@ -605,7 +632,7 @@
       costiPerPezzo: [
         { id: 'materiale', label: 'Materiale', value: num(i.materialCost) },
         { id: 'macchina', label: 'Macchina', value: num(i.machineMin) * num(s.machineCostPerMin, 0.35), detail: num(i.machineMin) + ' min' },
-        { id: 'manodopera', label: 'Manodopera', value: num(i.laborMin) * num(s.laborCostPerMin, 0.5), detail: num(i.laborMin) + ' min', perdibile: false },
+        { id: 'manodopera', label: 'Manodopera', value: num(i.laborMin) * num(s.laborCostPerMin, tariffaProfiloPerMinuto()), detail: num(i.laborMin) + ' min', perdibile: false },
         { id: 'packaging', label: 'Confezione', value: num(i.packaging), perdibile: false },
         { id: 'extra', label: 'Altri costi', value: num(i.other) },
       ].filter((v) => v.value > 0),

@@ -7781,7 +7781,15 @@ const BDW = {
     // (moved BEFORE metrics assembly to avoid TDZ error on realMarginAvg)
     const timelogs = await IDB.getAll('timelogs').catch(()=>[]);
     const settings = await IDB.get('settings','main').catch(()=>null)||{};
-    const laborCostPerMin = parseFloat(settings.laborCost)||0.25; // €/min
+    /* Era `0,25 €/min` — quindici euro l'ora — mentre il Product Builder ne
+       usava 0,5 e il preventivatore 3D 18. Lo stesso numero, tre valori. Il
+       ripiego ora è uno solo e viene dai profili economici, convertito una
+       volta sola. */
+    const laborCostPerMin = parseFloat(settings.laborCost) > 0
+      ? parseFloat(settings.laborCost)
+      : ((window.InglyCostProfilesStore
+          ? (window.InglyCostProfilesStore.ingressoSincrono({}).laborPerHour || 18)
+          : 18) / 60); // €/min
 
     /* Il costo reale per ordine si calcolava qui, dentro il costruttore del
        cruscotto: una definizione sepolta in un consumatore, che nessun'altra
