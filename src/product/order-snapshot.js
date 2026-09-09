@@ -413,6 +413,21 @@
         taxableBase: num(calcolo.subtotalNet),
       },
 
+      /* ── Chi ha deciso quanto costa un'ora ───────────────────────────
+         Il costo del lavoro è la voce che cambia più spesso e che più spesso
+         viene messa in discussione mesi dopo. Congelare il numero non basta:
+         serve sapere **da dove veniva**. Un preventivo a 18 €/h fatto quando
+         il profilo diceva 18 è una cosa; lo stesso numero scritto a mano
+         mentre il profilo diceva 25 è un'altra, e senza questo campo le due
+         sono indistinguibili. */
+      laborSnapshot: {
+        rate: num((calcolo._ingresso || {}).laborPerHour),
+        source: (calcolo._ingresso || {}).laborRateSource || null,
+        override: !!(calcolo._ingresso || {}).laborRateOverride,
+        profileRate: (calcolo._ingresso || {}).laborRateProfile != null
+          ? num((calcolo._ingresso || {}).laborRateProfile) : null,
+      },
+
       shippingSnapshot: {
         cost: num((calcolo.shipping || {}).cost),
         charged: num((calcolo.shipping || {}).charged),

@@ -345,30 +345,20 @@ window.WorkflowBridge = WorkflowBridge;
   const ready = () => {
     if(typeof App==='undefined'||typeof IDB==='undefined') return setTimeout(ready, 500);
 
-    // Patch Quoter.sendToWorkflow to use WorkflowBridge
-    if(typeof Quoter!=='undefined' && !Quoter.__bridgePatched) {
-      Quoter.__bridgePatched = true;
-      const origSend = Quoter.sendToWorkflow?.bind(Quoter);
-      if(origSend) {
-        Quoter.sendToWorkflow = async function() {
-          // First save the quote
-          if(typeof this.saveQuote==='function') await this.saveQuote().catch(()=>{});
-          // Build order data from current state
-          const clientEl   = document.getElementById('q-client');
-          const clientName = clientEl?.selectedIndex>0 ? clientEl.options[clientEl.selectedIndex].text : '';
-          const markup     = parseFloat(document.getElementById('qr-markup')?.value||100)/100;
-          const total      = (this.lines||[]).reduce((a,l)=>a+l.subtotal*(1+markup),0);
-          await WorkflowBridge.fromQuoter({
-            name:       document.getElementById('q-name')?.value||'Preventivo',
-            clientName,
-            total:      parseFloat(total.toFixed(2)),
-            notes:      document.getElementById('q-notes')?.value||'',
-            deadline:   document.getElementById('q-deadline')?.value||null,
-          });
-          App.navigate('pipeline');
-        };
-      }
-    }
+    /* Qui c'era la quarta sostituzione di `Quoter.sendToWorkflow`, e a 2000 ms
+       era anche l'ultima: vinceva su tutte le altre. Faceva tre cose che il
+       flusso critico non può permettersi — inghiottiva l'errore di salvataggio
+       con `catch(()=>{})` e creava l'ordine lo stesso; calcolava il totale con
+       una formula sua (`subtotal × (1 + markup)`) invece di leggerlo dal
+       preventivo verificato, producendo un ordine che non corrispondeva a
+       quello che il cliente aveva visto; e non passava né `quoteId` né
+       `clientId`, lasciando l'ordine senza il suo preventivo e senza il suo
+       cliente.
+
+       La pipeline autorevole è `InglyQuoteToOrder`, chiamata dal metodo del
+       preventivatore. Chi deve aggiungere campi all'ordine registra un
+       decoratore — `InglyQuoteToOrder.aggiungiDecoratore(fn)` — invece di
+       sostituire di nuovo il metodo. */
 
     // Listen for orderUpdated to keep all UIs in sync
     document.addEventListener('orderUpdated', () => {

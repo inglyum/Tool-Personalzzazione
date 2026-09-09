@@ -463,7 +463,18 @@ const Quoter={
     };
   },
 
-  /** Il preventivo calcolato dal motore. Nessuna aritmetica in questo file. */
+  /** Il preventivo calcolato dal motore. Nessuna aritmetica in questo file.
+      ── Un solo stato, per tutti ────────────────────────────────────────────
+      Sette chiamate su otto passavano `{setupCost:0}` e una no. I sei campi
+      dei costi extra — imballo, spedizione, verniciatura, lavorazione,
+      personalizzato, altro — entravano quindi solo in `_recalcNow()`: sulla
+      stessa schermata la tabella delle voci diceva un totale e il riepilogo a
+      destra un altro, e quello che finiva nel preventivo salvato, nel PDF, in
+      WhatsApp e nell'ordine era il totale senza gli extra. Misurato: € 30
+      a schermo, € 20 salvati, su un preventivo da una riga.
+      Ora lo stato è uno solo. Chi vuole un calcolo diverso lo dichiara
+      passando i campi che cambia, e sono due soli casi legittimi: il PDF che
+      stampa una selezione di righe, e l'anteprima di un modello. */
   _calcola(extra){
     const A = typeof window !== 'undefined' && window.InglyQuoteAdapter;
     if (!A) return { indisponibile: true, motivo: 'motore di costo non disponibile', lines: [] };
@@ -895,7 +906,7 @@ const Quoter={
         <td style="padding:10px 6px;text-align:right;font-weight:700;color:#fff">${fmtCur(l.subtotal)}</td>
         <td style="padding:10px 4px;text-align:right"><button onclick="Quoter.removeLine(${l.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:2px 4px">✕</button></td>
       </tr>`).join('');
-    const r=this._calcola({setupCost:0});
+    const r=this._calcola();
     if(r.indisponibile){ this._updateTotals(0,0,0,0); return; }
     this._updateTotals(r.totalCost,r.subtotalNet,r.vat,r.totalGross);
     /* I costi dal registro arrivano dopo, senza far aspettare la tabella:
@@ -1028,15 +1039,20 @@ const Quoter={
     this.recalcRight();
   },
 
+  /* Restituisce sempre un esito, mai `undefined`. Chi salva deve poter
+     distinguere «non salvato perché manca il titolo» da «non salvato perché
+     il disco è pieno», e `undefined` non distingue niente: era il motivo per
+     cui `sendToWorkflow` proseguiva su un salvataggio fallito. */
   async saveQuote(){
+    const _no=(motivo,tipo)=>{ toast(motivo,tipo||'warning'); return {ok:false,motivo}; };
     const name=eid('q-name')?.value;
-    if(!name){toast('Inserisci il titolo del lavoro','warning');return;}
-    if(!this.lines.length){toast('Aggiungi almeno una voce','warning');return;}
+    if(!name) return _no('Inserisci il titolo del lavoro');
+    if(!this.lines.length) return _no('Aggiungi almeno una voce');
     const clientEl=eid('q-client');
     const clientId=clientEl?.value?+clientEl.value:null;
     const clientName=clientId?clientEl.options[clientEl.selectedIndex].text:'';
-    const _r=this._calcola({setupCost:0});
-    if(_r.indisponibile){ toast('Motore di costo non disponibile: preventivo non salvato','error'); return; }
+    const _r=this._calcola();
+    if(_r.indisponibile) return _no('Motore di costo non disponibile: preventivo non salvato','error');
     const totalCost=+_r.totalCost.toFixed(2);
     const net=+_r.subtotalNet.toFixed(2);
     const gross=+_r.totalGross.toFixed(2);
@@ -1048,7 +1064,7 @@ const Quoter={
        proposto al cliente. Si conserva il conto, non gli ingredienti. */
     const _snap = typeof window !== 'undefined' && window.InglyOrderSnapshot;
     if(_snap) q.economicSnapshot = _snap.costruisci(_r, {
-      spiegazione: this._spiega({setupCost:0}),
+      spiegazione: this._spiega(),
       /* Il costo dal registro, congelato riga per riga con la sua provenienza.
          Non sostituisce il costo del preventivo — quello resta quello che
          l'utente ha costruito — ma da qui in poi l'ordine sa anche quanto quel
@@ -1056,7 +1072,15 @@ const Quoter={
       extra: await this._extraDaRegistro(),
     });
     if(this.editId){q.id=this.editId;await snapshotRecord('quotes',this.editId);}else{q.id=Date.now();}
-    const id=await IDB.put('quotes',q);
+    /* La scrittura non si avvolge in un catch muto: se l'archivio rifiuta, chi
+       ha chiesto di salvare deve saperlo con il motivo, non con un silenzio. */
+    let id;
+    try{ id=await IDB.put('quotes',q); }
+    catch(e){
+      if(window.Ingly&&window.Ingly.Errors) Ingly.Errors.log('Quoter.saveQuote',e,{name});
+      return _no('Preventivo non salvato: '+(e&&e.message||e),'error');
+    }
+    if(id==null) return _no('Preventivo non salvato: l archivio non ha restituito un identificativo','error');
 
     /* Qui il preventivo veniva specchiato nello store `pipeline` con
        `_sourceId` uguale all'id del **preventivo**. La pipeline però è una
@@ -1068,15 +1092,22 @@ const Quoter={
 
        Un preventivo vive in `quotes` e diventa pipeline quando diventa un
        ordine, non prima. Lo specchio è rimosso. */
+    /* Si rilegge prima di dire «salvato». Un `put` che non solleva non
+       dimostra che il record sia leggibile: la quota può essere esaurita, la
+       serializzazione può perdere un campo. Un «✅ salvato» detto senza
+       rileggere è la bugia più costosa che un gestionale possa dire. */
+    const riletto=await IDB.get('quotes',id).catch(()=>null);
+    if(!riletto) return _no('Preventivo scritto ma non rileggibile: non è stato salvato','error');
     this._lastSavedId=id;
     await logAction('quote',id,this.editId?'updated':'created',{name,amount:gross});
     toast('Preventivo salvato!');this.editId=null;
     await this.renderList();
+    return {ok:true,id,quote:riletto};
   },
   async shareWhatsApp(){
     if(!this.lines.length){toast('Aggiungi voci al preventivo prima','warning');return;}
     // Inline data extraction (no _buildPDFData dependency)
-    const _wa=this._calcola({setupCost:0});
+    const _wa=this._calcola();
     if(_wa.indisponibile){ toast('Motore di costo non disponibile','error'); return; }
     const netFinal=_wa.subtotalNet;
     const grossPrice=_wa.totalGross;
@@ -1139,7 +1170,7 @@ const Quoter={
     const quoteNum='INT-'+Date.now().toString().slice(-6);
 
     // Cost aggregates
-    const _an=this._calcola({setupCost:0});
+    const _an=this._calcola();
     if(_an.indisponibile){ toast('Motore di costo non disponibile','error'); return; }
     const totalCost=_an.totalCost;
     const netAfterDiscount=_an.subtotalNet;
@@ -1432,7 +1463,7 @@ const Quoter={
     const withIVA=this._ivaMode!==false;
     const deadline=eid('q-deadline')?.value;
     const selectedLines=this.lines.filter(l=>selectedIds.includes(l.id));
-    const _pdf=this._calcola({lines:selectedLines,setupCost:0});
+    const _pdf=this._calcola({lines:selectedLines});
     if(_pdf.indisponibile){ toast('Motore di costo non disponibile: PDF non generato','error'); win.close(); return; }
     const subTotalNet=_pdf.subtotalNet;
     const finalNet=_pdf.subtotalNet;
@@ -1659,34 +1690,60 @@ const Quoter={
 
   },
 
+  /* ── L'unica implementazione ─────────────────────────────────────────
+     Il metodo esisteva in cinque copie — questa, una sostituzione in
+     `modules/orders`, un involucro nella patch 085 a 1200 ms e una seconda
+     sostituzione nella patch 051 a 2000 ms. Misurato nel browser, vinceva
+     l'ultima: inghiottiva l'errore di salvataggio con `catch(()=>{})`,
+     ricalcolava il totale con una formula sua e creava l'ordine anche quando
+     il preventivo non era stato salvato.
+
+     Qui non c'è più logica: c'è la pipeline, che sta in un modulo suo ed è
+     provabile. Un add-on che vuole aggiungere campi all'ordine registra un
+     decoratore invece di sostituire questo metodo. */
   async sendToWorkflow(){
-    await this.saveQuote().catch(()=>{});
-    const clientEl = eid('q-client');
-    const clientName = clientEl?.selectedIndex>0 ? clientEl.options[clientEl.selectedIndex].text : '';
-    const _wf = this._calcola({setupCost:0});
-    if(_wf.indisponibile){ toast('Motore di costo non disponibile: ordine non creato','error'); return; }
-    const total = _wf.subtotalNet;
-    const finalTotal = _wf.subtotalNet;
-    // Create order in GestioneOrdini unified workflow
-    if(typeof GestioneOrdini!=='undefined'){
-      await GestioneOrdini._saveOrderFromQuoter({
-        clientName,
-        name:     eid('q-name')?.value||'Preventivo',
-        total:    parseFloat(finalTotal.toFixed(2)),
-        notes:    eid('q-notes')?.value||'',
-        dueDate:  eid('q-deadline')?.value||'',
-        quoteId:  this._lastSavedId||null,
-      });
-    } else {
-      // Fallback to pipeline
-      App.navigate('pipeline');
+    const P=window.InglyQuoteToOrder;
+    if(!P){ toast('Pipeline preventivo→ordine non disponibile','error'); return {ok:false,motivo:'pipeline assente'}; }
+
+    /* Tre difese contro il doppio ordine, e servono tutte e tre perché
+       proteggono da tre cose diverse:
+         · il pulsante disabilitato ferma il secondo clic sullo stesso pulsante;
+         · l'invio in corso fa sì che una seconda chiamata **aspetti la prima**
+           invece di partire in parallelo — è il caso che il pulsante non copre
+           (invio da tastiera, una scorciatoia, due chiamate contemporanee);
+         · l'idempotenza su `quoteId`, dentro la pipeline, ferma il secondo
+           ordine quando le prime due non bastano. */
+    if(this._invioInCorso) return this._invioInCorso;
+
+    const btn=document.querySelector('[onclick*="sendToWorkflow"]');
+    const etichetta=btn?btn.innerHTML:null;
+    if(btn){ btn.disabled=true; btn.innerHTML='⏳ Invio…'; }
+
+    const giro=(async()=>{
+      const r=await P.invia(this);
+      /* Dopo un invio riuscito il preventivo a schermo **è** quello salvato:
+         tenerne l'id vuol dire che ripremere aggiorna quello, invece di
+         crearne un secondo identico che porterebbe con sé un secondo ordine. */
+      if(r.ok && r.quoteId!=null) this.editId=r.quoteId;
+      const m=P.messaggio(r);
+      toast(m.testo,m.tipo);
+      if(r.ok || r.duplicatoEvitato) App.navigate('gestione_ordini');
+      return r;
+    })();
+
+    this._invioInCorso=giro;
+    try{ return await giro; }
+    finally{
+      this._invioInCorso=null;
+      if(btn){ btn.disabled=false; if(etichetta!=null) btn.innerHTML=etichetta; }
     }
   },
 
   async confirmToSale(){
     if(!this.lines.length){toast('Nessuna voce nel preventivo','warning');return;}
-    await this.saveQuote();
-    if(this._lastSavedId)await QuoterBridge.convert(this._lastSavedId);
+    const s=await this.saveQuote();
+    if(!s||!s.ok) return;   /* un preventivo non salvato non diventa una vendita */
+    await QuoterBridge.convert(s.id);
   },
 
   clearAll(){
@@ -2212,7 +2269,7 @@ const QuoterTemplates = {
         prev.innerHTML = '<span style="color:var(--red)">⚠ Aggiungi almeno una voce prima di salvare un template</span>';
       } else {
         const r = M.riepilogo(M.daStato(this._statoCorrente(), { name: 'anteprima' }));
-        const c = Quoter._calcola ? Quoter._calcola({ setupCost: 0 }) : null;
+        const c = Quoter._calcola ? Quoter._calcola() : null;
         prev.innerHTML =
           `<div style="font-weight:800;color:var(--text);font-size:13px;margin-bottom:8px">${r.voci} voci · ${r.pezzi} pezzi · ${fmtCur(r.costo)} di costo</div>`
           + (c && !c.indisponibile ? `<div style="margin-bottom:8px">Con le impostazioni attuali: <strong style="color:var(--text)">${fmtCur(c.totalGross)}</strong> · margine ${c.marginPct.toFixed(1)}%</div>` : '')

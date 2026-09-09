@@ -295,17 +295,27 @@ window.QuoterImagePanel = QuoterImagePanel;
     if (GestioneOrdini.__specsPatch) return;
     GestioneOrdini.__specsPatch = true;
 
+    /* Questo è un adattatore, non una sostituzione: aggiunge le specifiche e
+       lascia intatto il risultato di chi sa scrivere l'ordine. Da quando
+       `_saveOrderFromQuoter` restituisce `{ok,id,order}` invece dell'ordine
+       nudo, l'esito si passa avanti così com'è — leggerlo come un ordine
+       avrebbe fatto sparire le specifiche in silenzio. */
     const origSave = GestioneOrdini._saveOrderFromQuoter.bind(GestioneOrdini);
     GestioneOrdini._saveOrderFromQuoter = async function(data) {
-      // Add specs from QuoterImagePanel
       if (typeof QuoterImagePanel !== 'undefined') {
         data.specs = QuoterImagePanel.getSpecs();
       }
-      const order = await origSave(data);
-      if (order && order.id && data.specs) {
-        OrderSpecs.save(order.id, data.specs);
+      const esito = await origSave(data);
+      const id = esito && (esito.ok === true ? esito.id : esito.id);
+      if (id != null && data.specs) {
+        try { await OrderSpecs.save(id, data.specs); }
+        catch (e) {
+          /* Le specifiche sono un accessorio: se non si salvano lo si registra,
+             ma non si dichiara fallito un ordine che esiste. */
+          if (window.Ingly && window.Ingly.Errors) Ingly.Errors.log('OrderSpecs.save', e, { id });
+        }
       }
-      return order;
+      return esito;
     };
     console.log('[OrderSpecs] sendToWorkflow patched ✅');
   };

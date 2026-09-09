@@ -2750,29 +2750,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
 };
 
 
-// ── SMART QUOTER: Upgrade "Invia a Workflow" button ────────────────────────
-// Override sendToWorkflow to use OrderFlow
-Quoter.sendToWorkflow = async function() {
-  if (!this.lines||!this.lines.length) { toast('Aggiungi voci al preventivo prima','warning'); return; }
-  const saved = await this.saveQuote().catch(e=>{ toast('Errore salvataggio: '+e.message,'danger'); return null; });
-  if (!saved && !this._lastSavedQuoteId) { toast('Salva il preventivo prima','warning'); return; }
-  const quoteId = this._lastSavedId || this._lastSavedQuoteId || saved;
-  const q = await IDB.get('quotes', quoteId).catch(()=>null);
-  if (!q) { toast('Preventivo non trovato','danger'); return; }
+/* ── Qui c'era la seconda sostituzione di `Quoter.sendToWorkflow` ──────────
+   Aveva già l'idea giusta — cercare un ordine con lo stesso `quoteId` prima
+   di crearne un altro — e un difetto che la rendeva inutile: `saveQuote()`
+   restituiva `undefined` anche quando andava a buon fine, e il controllo
+   `if (!saved && !this._lastSavedQuoteId)` guardava una proprietà che non
+   esiste (`_lastSavedQuoteId`, mentre il preventivatore scrive
+   `_lastSavedId`). Dopo un salvataggio riuscito diceva «Salva il preventivo
+   prima» e si fermava.
 
-  // Check if order already exists for this quote
-  const existing = await AppStore.get('orders').catch(()=>[]);
-  const linked = existing.find(o=>String(o.quoteId)===String(quoteId));
-  if (linked) {
-    toast('ℹ️ Ordine già presente nel pipeline — apro la pipeline','info');
-    App.navigate('workflow');
-    return;
-  }
-
-  const order = await OrderFlow.createFromQuote(q);
-  toast(`✅ "${q.name}" → Pipeline Ordini (Bozza) | ORD: ${order.orderNum}`,'🔄');
-  App.navigate('workflow');
-};
+   Entrambe le cose sono nella pipeline: `saveQuote()` ora restituisce
+   `{ok,id,quote}`, e l'idempotenza su `quoteId` sta in
+   `InglyQuoteToOrder`. */
 
 // ── LEGACY: Redirect (typeof Workflow!=='undefined'&&Workflow.render()) → (typeof OrderFlow!=='undefined'&&OrderFlow.render()) ───────────────
 if (typeof Workflow !== 'undefined') {

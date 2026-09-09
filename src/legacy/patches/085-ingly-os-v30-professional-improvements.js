@@ -152,40 +152,13 @@ window.QuoteLineEditor = {
     if(typeof Quoter==='undefined'||!Quoter.sendToWorkflow){setTimeout(_p,800);return;}
     if(Quoter._v30workflow) return; Quoter._v30workflow=true;
 
-    var _origSTW=Quoter.sendToWorkflow.bind(Quoter);
-    Quoter.sendToWorkflow=async function(){
-      // Capture current form values BEFORE saveQuote recalculates
-      var snapshot={
-        notes:    document.getElementById('q-notes')?.value||'',
-        price:    document.getElementById('q-price')?.value||document.getElementById('od-value')?.value||'',
-        name:     document.getElementById('q-name')?.value||'',
-        imageUrl: Quoter._attachedImage||document.getElementById('q-image-preview')?.src||'',
-        lines:    JSON.parse(JSON.stringify(Quoter.lines||[])),
-        markup:   document.getElementById('qr-markup')?.value||'',
-        discount: document.getElementById('qr-discount')?.value||'',
-      };
-
-      try{
-        await _origSTW();
-        // After sending, restore any UI that may have been reset
-        if(snapshot.notes && document.getElementById('q-notes')){
-          // Notes preserved — good
-        }
-        if(typeof toast!=='undefined'){
-          // Workflow sent successfully - snapshot was preserved
-        }
-      }catch(e){
-        console.warn('[Workflow] Error:',e);
-        // Restore snapshot on error
-        if(snapshot.notes && document.getElementById('q-notes')) document.getElementById('q-notes').value=snapshot.notes;
-        if(snapshot.name && document.getElementById('q-name')) document.getElementById('q-name').value=snapshot.name;
-        if(snapshot.lines.length){
-          Quoter.lines=snapshot.lines;
-          if(typeof Quoter.renderLines==='function') Quoter.renderLines();
-        }
-        if(typeof toast!=='undefined') toast('⚠️ Errore workflow — dati ripristinati. Riprova.','warning');
-      }
-    };
+    /* Qui c'era il terzo involucro di `sendToWorkflow`: fotografava i campi
+       prima dell'invio e li rimetteva a posto in caso di eccezione. Serviva
+       perché il flusso di allora poteva svuotare il modulo a metà strada.
+       La pipeline nuova non tocca il modulo finché non ha finito, e quando
+       fallisce dice a che passo — quindi non c'è niente da ripristinare e
+       niente da indovinare. Un involucro che cattura tutto è anche un
+       involucro che nasconde il motivo vero. */
 
     // Also patch saveQuote to not overwrite price if already manually set
     var _origSQ=Quoter.saveQuote.bind(Quoter);

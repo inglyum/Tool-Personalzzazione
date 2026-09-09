@@ -1528,11 +1528,11 @@ function cardLavoro(){
     }).join('')
     +'</div>'
     +'<div class="p3-fg" style="margin-top:8px"><label class="p3-fl">💶 €/H MANODOPERA</label>'
-      +'<input class="p3-fc" id="p3d-lr" type="number" step="1" value="'+(_profili().laborPerHour||18)+'" oninput="Print3DQuoter.tariffaToccata();Print3DQuoter.calc()">'
+      +'<input class="p3-fc" id="p3d-lr" type="number" step="1" value="'+tariffaOraria()+'" oninput="Print3DQuoter.tariffaToccata();Print3DQuoter.calc()">'
       /* Il campo dice quanto costa un'ora; il pannello dice da dove viene, e
          permette di cambiarlo una volta per tutti i preventivi invece che qui
          a ogni preventivo. */
-      +'<div class="p3-ht">'+(_profili()._predefiniti && _profili()._predefiniti.manodopera ? 'Valore predefinito' : 'Dal tuo profilo')
+      +'<div class="p3-ht">'+({preventivo:'Scritto per questo preventivo',profilo:'Dal tuo profilo',predefinito:'Valore predefinito — non l hai ancora deciso',ripiego:'Valore di ripiego'}[fonteTariffa()])
       +' · <button type="button" onclick="Print3DQuoter.apriProfili()" style="background:none;border:none;padding:0;font:inherit;color:var(--primary);text-decoration:underline;cursor:pointer">profili economici</button></div>'
       +'</div>'
     +'<div style="margin-top:8px;padding:8px 10px;background:var(--bg-card2);border-radius:8px;font-size:10px;color:var(--text-muted);line-height:1.6" id="p3d-lavoro-tot"></div>'
@@ -1754,7 +1754,7 @@ function aggiornaLavoro(){
   var min=FASI.reduce(function(a,f){ return a+(LAVORO[f.id]||0); },0);
   var perJob=LAVORO.setup||0, perPezzo=min-perJob;
   var q=Math.max(1,gv('p3d-qty',1));
-  var tar=gv('p3d-lr',18);
+  var tar=tariffaOraria();
   el2.innerHTML='<b style="color:var(--text)">'+min+' min</b> di persona · '
     +eur((perPezzo/60*tar)+((perJob/60*tar)/q))+'/pz'
     +(q>1?' <span style="color:var(--text-dim)">(avviamento diviso su '+q+')</span>':'');
@@ -1970,6 +1970,53 @@ function _allineaTariffa(){
   if(v>0 && Math.abs(parseFloat(e.value)-v)>0.005) e.value=v;
 }
 
+/* ── Quanto costa un'ora, e chi l'ha deciso ────────────────────────────────
+   Il 18 stava scritto in quattro punti di questo file: nel markup del campo,
+   nel ripiego di `aggiornaLavoro`, in quello di `ingresso()` e nel
+   predefinito salvato. Quattro copie dello stesso numero sono quattro numeri
+   che prima o poi divergono, e nessuno di loro diceva da dove veniva.
+
+   Quattro fonti, in quest'ordine di precedenza:
+
+     1. `preventivo`  — quello che l'utente ha scritto qui, se l'ha scritto;
+     2. `profilo`     — la tariffa che il laboratorio ha configurato;
+     3. `predefinito` — il valore dichiarato dei profili, per chi non li ha
+                        ancora compilati;
+     4. `ripiego`     — la costante qui sotto, se i profili non ci sono
+                        proprio.
+
+   Le ultime due sono lo stesso numero e non sono la stessa cosa, ed è il
+   motivo per cui sono due nomi. «Il laboratorio ha deciso 18» e «nessuno ha
+   deciso, e 18 è quello che il programma propone» portano allo stesso costo
+   oggi e a due discussioni diverse fra sei mesi, quando qualcuno chiederà
+   perché quel preventivo aveva quella tariffa.
+
+   Il livello 3 esiste perché un preventivo senza costo del lavoro sarebbe più
+   falso di uno con un predefinito: il lavoro c'è comunque, e non contarlo dice
+   zero, che è certamente sbagliato. Ma si dichiara. */
+var TARIFFA_RIPIEGO=18;
+
+function tariffaOraria(){
+  if(TARIFFA_TOCCATA){
+    var scritta=gv('p3d-lr',0);
+    if(scritta>0) return scritta;
+  }
+  var profilo=_profili().laborPerHour;
+  if(profilo>0) return profilo;
+  return TARIFFA_RIPIEGO;
+}
+
+function fonteTariffa(){
+  if(TARIFFA_TOCCATA && gv('p3d-lr',0)>0) return 'preventivo';
+  var p=_profili();
+  if(p.laborPerHour>0){
+    /* I profili dichiarano da soli se stanno rispondendo con un predefinito:
+       leggerlo qui evita di doverlo indovinare dal valore. */
+    return (p._predefiniti && p._predefiniti.manodopera) ? 'predefinito' : 'profilo';
+  }
+  return 'ripiego';
+}
+
 function _profili(opzioni){
   try{
     var S = (typeof window!=='undefined') && window.InglyCostProfilesStore;
@@ -2005,7 +2052,15 @@ function ingresso(){
     /* Il lavaggio è la fase «post» della card lavoro, non un campo a parte:
        finché ne esistevano due, chi compilava entrambi pagava il
        post-processo due volte. */
-    washCureMin:LAVORO.post, laborPerHour:gv('p3d-lr', _profili().laborPerHour || 18),
+    washCureMin:LAVORO.post,
+    /* Il costo del lavoro, e la sua provenienza: chi legge un preventivo di
+       sei mesi fa deve poter sapere se quel numero era il profilo di allora o
+       una decisione presa per quel lavoro. */
+    laborPerHour:tariffaOraria(),
+    laborRate:tariffaOraria(),
+    laborRateSource:fonteTariffa(),
+    laborRateOverride:fonteTariffa()==='preventivo',
+    laborRateProfile:_profili().laborPerHour || null,
     /* L'avviamento è per **lavoro** e si divide per la quantità; tutte le
        altre fasi sono per **pezzo**. Confonderli è il modo in cui il costo di
        cento pezzi diventa cento volte l'avviamento. */
@@ -2497,6 +2552,9 @@ function reset(){
   SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
   PROGETTO={ nome:'', descrizione:'', foto:null };
   IMBALLO=[]; HARDWARE=[]; MULTIMAT=[];
+  /* Il reset riporta anche la tariffa a seguire il laboratorio: un valore
+     scritto per il preventivo precedente non deve sopravvivergli. */
+  TARIFFA_TOCCATA=false;
   SALTA_RIPRISTINO=true;
   _dimenticaCampi();
   try{ render(); } finally { SALTA_RIPRISTINO=false; }
@@ -2569,7 +2627,7 @@ function delMat(id){
 }
 
 return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc:setDisc,
-  tariffaToccata:tariffaToccata,apriProfili:apriProfili,
+  tariffaToccata:tariffaToccata,apriProfili:apriProfili,tariffaOraria:tariffaOraria,fonteTariffa:fonteTariffa,
   pickMach:pickMach,pickMat:pickMat,addExtra:addExtra,rmE:rmE,upE:upE,
   addLine:addLine,rmLine:rmLine,editLine:editLine,clearLines:clearLines,
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,

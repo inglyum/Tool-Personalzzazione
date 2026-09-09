@@ -76,24 +76,57 @@ const GestioneOrdini = {
     } catch(e) { return []; }
   },
 
+  /* ── L'ordine nato da un preventivo ────────────────────────────────────
+     Tre cose che questa funzione faceva e non doveva fare, e una che non
+     faceva e doveva:
+
+     · diceva «✅ Ordine creato» **prima** di aver riletto il record. Un `put`
+       che non solleva non dimostra che il dato sia leggibile, e un successo
+       dichiarato su una scrittura non verificata è la bugia più costosa che un
+       gestionale possa dire;
+     · emetteva `orderUpdated` e navigava da sé, quindi ogni chiamante si
+       trovava spostato di sezione che lo volesse o no — decidere dove va
+       l'utente non è compito di chi scrive un record;
+     · su errore mostrava un toast e restituiva `undefined`, che chi chiama non
+       può distinguere da un successo silenzioso;
+     · non portava `clientId`. Il nome del cliente è informativo, l'identità è
+       l'id: due clienti omonimi diventavano lo stesso cliente, e uno rinominato
+       spariva dal suo ordine.
+
+     Ora restituisce un esito, verifica rileggendo, e lascia a chi chiama il
+     messaggio, l'evento e la navigazione — che nella pipeline partono solo
+     dopo la verifica. */
   async _saveOrderFromQuoter(data) {
+    const d = data || {};
+    const order = {
+      id: Date.now(),
+      clientId: d.clientId != null ? d.clientId : null,
+      clientName: d.clientName||'',
+      name: d.name||'Ordine da preventivo',
+      total: +d.total||0,
+      dueDate: d.dueDate||'', notes: d.notes||'',
+      quoteId: d.quoteId||null, stage:'inviato', status:'inviato',
+      source:'quoter', createdAt: new Date().toISOString(),
+      priority: d.priority||'normal',
+      _history:[{from:null,to:'inviato',ts:new Date().toISOString(),note:'Da preventivo'}],
+    };
+    /* I totali del preventivo si copiano come sono, dichiarando quale è quale:
+       un «totale» senza unità è un totale ambiguo, e `total` qui è il netto. */
+    ['totalNet','totalGross','totalCost','discount','ivaMode','economicSnapshot','specs','imageUrl']
+      .forEach(function(k){ if(d[k]!==undefined) order[k]=d[k]; });
+
     try {
-      const order = {
-        id: Date.now(), clientName: data.clientName||'',
-        name: data.name||'Ordine da preventivo', total: data.total||0,
-        dueDate: data.dueDate||'', notes: data.notes||'',
-        quoteId: data.quoteId||null, stage:'inviato', status:'inviato',
-        source:'quoter', createdAt: new Date().toISOString(),
-        priority: 'normal',
-        _history:[{from:null,to:'inviato',ts:new Date().toISOString(),note:'Da preventivo'}],
-      };
       await IDB.put('orders', order);
-      if(typeof AppStore!=='undefined') AppStore.invalidate('orders');
-      document.dispatchEvent(new CustomEvent('orderUpdated',{detail:{id:order.id,to:'inviato',order}}));
-      toast('✅ Ordine creato in Gestione Workflow!','success');
-      setTimeout(()=>App.navigate('gestione_ordini'),300);
-      return order;
-    } catch(e) { toast('Errore: '+e.message,'error'); }
+    } catch(e) {
+      if(window.Ingly&&window.Ingly.Errors) Ingly.Errors.log('GestioneOrdini._saveOrderFromQuoter',e,{quoteId:order.quoteId});
+      return { ok:false, motivo:'Ordine non salvato: '+(e&&e.message||e) };
+    }
+
+    const riletto = await IDB.get('orders', order.id).catch(function(){ return null; });
+    if(!riletto) return { ok:false, motivo:'Ordine scritto ma non rileggibile: non è stato creato' };
+
+    if(typeof AppStore!=='undefined') AppStore.invalidate('orders');
+    return { ok:true, id:riletto.id, order:riletto };
   },
 
   // ══ RENDER PRINCIPALE ══════════════════════════════════════════════
