@@ -132,6 +132,62 @@
   /* Tech groups for filter */
   var TECHS = ['Tutte','CO₂','Diodo','Fibra','UV','DTF','Sub','Pressa','CNC'];
 
+  /* ── Il laboratorio, il motore, la politica ───────────────
+     Tre numeri che questo file decideva da solo e che hanno già un padrone
+     altrove: la tariffa oraria (profili economici), il prezzo (motore dei
+     costi) e il margine minimo (politiche di prezzo). Qui si leggono, non si
+     reinventano. */
+
+  function _tariffaProfilo() {
+    try {
+      var S = window.InglyCostProfilesStore;
+      var v = S && S.ingressoSincrono ? S.ingressoSincrono({ ruolo: 'laser' }).laborPerHour : 0;
+      if (v > 0) return v;
+    } catch (e) {}
+    return 18;
+  }
+
+  /** L'elenco delle politiche, dalla stessa fonte che usa il resto dell'app. */
+  function _politiche() {
+    try {
+      var P = window.InglyPricingPolicies;
+      var l = P && P.elenco ? P.elenco() : null;
+      if (l && l.length) return l;
+    } catch (e) {}
+    return [{ id: 'standard', label: 'Standard', marginTarget: 40, maxDiscount: 15, floorMargin: 20 }];
+  }
+
+  function _politica(id) {
+    var l = _politiche();
+    for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
+    for (var j = 0; j < l.length; j++) if (l[j].id === 'standard') return l[j];
+    return l[0];
+  }
+
+  /* Prima qui c'era `unitCost × ricarico × (1 − sconto)`, e nient'altro. Con un
+     ricarico 2,2 e uno sconto del 60% il prezzo usciva sotto il costo: la riga
+     mostrava un margine negativo e lo vendeva lo stesso. Il motore conosce il
+     pavimento, e il pavimento è l'unica cosa che impedisce di firmare una
+     perdita. Il ricarico resta — è come ragiona chi fa il preventivo — ma
+     passa da `strategia: 'ricarico'`, dichiarato, e accanto al prezzo si legge
+     il margine che ne esce: sono due numeri diversi e non vanno confusi. */
+  function _prezzoTier(costo, ricarico, sconto, iva, politica) {
+    var E = window.InglyCostEngine;
+    if (E && typeof E.prezzo === 'function') {
+      var r = E.prezzo(costo, {
+        strategia: 'ricarico', ricarico: ricarico,
+        scontoPct: sconto, ivaPct: iva,
+        marginePavimentoPct: politica ? politica.floorMargin : null,
+      });
+      return { p: +r.netto.toFixed(2), pct: Math.round(r.marginePct),
+        pavimento: !!r.pavimentoScattato, perdita: !!r.inPerdita };
+    }
+    /* Senza motore non si calcola un prezzo di ripiego: un secondo conto,
+       anche identico oggi, è il modo in cui due prezzi diversi per la stessa
+       riga nascono domani. Si dichiara che manca. */
+    return { p: 0, pct: 0, pavimento: false, perdita: false, indisponibile: true };
+  }
+
   /* ── Data helpers ─────────────────────────────────────── */
   function getCustom()       { return LS.get(K.custom, []); }
   function saveCustom(arr)   { LS.set(K.custom, arr); }
@@ -139,28 +195,129 @@
   function toggleFav(id)     { var f=getFavs(); var i=f.indexOf(id); i>-1?f.splice(i,1):f.unshift(id); LS.set(K.favs,f); }
   function getHistory()      { return LS.get(K.history, []); }
   function pushHistory(id)   { var h=getHistory().filter(function(x){return x!==id;}); h.unshift(id); LS.set(K.history,h.slice(0,8)); }
-  function getInput()        { return LS.get(K.input, {qty:1,kwh:0.28,labor:18,markup:3.5,iva:22,disc:0}); }
+  function getInput()        { return LS.get(K.input, {qty:1,kwh:0.28,labor:_tariffaProfilo(),markup:3.5,iva:22,disc:0}); }
   function saveInput(d)      { LS.set(K.input, d); }
   function getExtras(id)     { var e=LS.get(K.extras,{}); return e[id]||[]; }
   function saveExtras(id,arr){ var e=LS.get(K.extras,{}); e[id]=arr; LS.set(K.extras,e); }
 
+  /* ── Il parco vero ───────────────────────────────────────
+     `BUILT_IN` è un listino: novanta modelli commerciali con il prezzo di
+     catalogo. Il parco — le macchine che INGLY possiede davvero, con il prezzo
+     pagato, le ore di vita dichiarate e la manutenzione di quella macchina —
+     sta in `equipment`, ed è quello che il preventivatore 3D legge già.
+     Due registri per la stessa macchina, e qui vinceva sempre il listino.
+
+     Non si sostituiscono: sono due cose diverse e servono entrambe. Il parco
+     si mette davanti, marcato, perché è quello che descrive il costo reale.
+     Una macchina registrata a metà si mostra lo stesso, dichiarata incompleta:
+     nasconderla nasconderebbe una macchina che esiste, e completarla con un
+     valore di listino direbbe una cosa falsa sul suo costo orario. */
+  var _parco = null;
+
+  function _macchinaDalParco(rec) {
+    if (!rec || rec._archived) return null;
+    var n = function(v){ var x = parseFloat(v); return isFinite(x) ? x : 0; };
+    var prezzo = n(rec.purchasePrice) || n(rec.costBuy) || n(rec.price) || 0;
+    var ore    = n(rec.usefulLifeHours) || n(rec.hoursLife) || (n(rec.lifeYears) * 1650) || 0;
+    var watt   = n(rec.measuredPowerW) || n(rec.averagePowerW) || n(rec.ratedPowerW) || n(rec.powerW) || 0;
+    var manut  = rec.maintenancePerHour != null ? n(rec.maintenancePerHour) : 0;
+    var nome   = [rec.brand, rec.model].filter(Boolean).join(' ') || rec.name || ('Macchina ' + rec.id);
+    var incompleta = !(prezzo > 0) || !(ore > 0);
+    return {
+      id: 'parco:' + rec.id,
+      brand: 'Le tue macchine',
+      model: nome + (incompleta ? ' · da completare' : ''),
+      tech: rec.tech || rec.tecnologia || '',
+      power_w: watt,
+      area: rec.area || '',
+      /* Zero qui non è «gratis»: è «non lo so». Si lascia vuoto e il campo del
+         calcolatore tiene il suo predefinito, che almeno è dichiarato tale. */
+      price: prezzo || undefined,
+      life_h: ore || undefined,
+      kw: watt > 0 ? watt / 1000 : undefined,
+      maint: manut > 0 ? manut : undefined,
+      setup_min: rec.setupMin != null ? +rec.setupMin : undefined,
+      color: rec.color || '#22c55e',
+      icon: rec.icon || '🏭',
+      note: incompleta
+        ? 'Macchina tua, ma senza prezzo o ore di vita: il costo orario che vedi è parziale.'
+        : 'Macchina tua: prezzo pagato, ore di vita e manutenzione dal registro.',
+      _mia: true,
+      _incompleta: incompleta,
+    };
+  }
+
+  function _aggiornaParco() {
+    var db = window.IDB;
+    if (!db || typeof db.getAll !== 'function') return;
+    Promise.resolve(db.getAll('equipment')).then(function(lista){
+      var primaVolta = _parco === null;
+      _parco = (lista || []).map(_macchinaDalParco).filter(Boolean);
+      if (primaVolta && _parco.length) render();
+    }).catch(function(){});
+  }
+
   function allMachines() {
-    return BUILT_IN.concat(getCustom()).filter(function(m){ return !m.archived; });
+    return (_parco || []).concat(BUILT_IN).concat(getCustom())
+      .filter(function(m){ return !m.archived; });
   }
   function getMachine(id) {
     return allMachines().find(function(m){ return m.id===id; }) || BUILT_IN[0];
   }
 
   /* ── Magazzino materials ──────────────────────────────── */
-  function getMaterials() {
-    try {
-      var db = JSON.parse(localStorage.getItem('ingly_saas_db')||'{}');
-      var items = (db.items||[]).filter(function(i){return i.nome||i.name;});
-      if (items.length) return items.map(function(i){
-        return { id:i.id, name:i.nome||i.name||'?', price:+(i.prezzo||i.price||0), unit:i.unit||i.unita||'pz',
-                 cat:i.categoria||i.category||'Generico', note:i.note||'', stock:i.stock||i.qty||0 };
+  /* ── Il magazzino vero ───────────────────────────────────
+     Questa funzione leggeva `ingly_saas_db.items`: quella chiave è il
+     database di licenze e utenti, non il magazzino. Il magazzino sta in
+     IndexedDB (`items`, `gadgets`, `inventory`, `components`) ed è quello che
+     legge il resto dell'applicazione. Risultato: la tendina dei materiali
+     mostrava sempre i quindici articoli di esempio, e chi caricava il proprio
+     magazzino non lo ritrovava qui.
+
+     La lettura di IndexedDB è asincrona, il disegno della schermata no: si
+     tiene una copia in memoria, aggiornata a ogni render, e la tendina usa
+     quella. Al primo ingresso la copia è vuota per una frazione di secondo e
+     si vedono gli esempi; al render successivo ci sono gli articoli veri. */
+  var _matCache = null;
+
+  function _aggiornaMagazzino() {
+    var db = window.IDB;
+    if (!db || typeof db.getAll !== 'function') return;
+    var archivi = ['items', 'gadgets', 'inventory', 'components'];
+    Promise.all(archivi.map(function(a){
+      return Promise.resolve(db.getAll(a)).catch(function(){ return []; });
+    })).then(function(gruppi){
+      var fuori = [];
+      gruppi.forEach(function(righe, i){
+        (righe||[]).forEach(function(r){
+          if (!r || !(r.name||r.nome)) return;
+          /* Le macchine stanno nel magazzino ma non sono materiali: metterle
+             nella tendina dei consumabili è come vendere la stampante. */
+          if (String(r.type||'').toLowerCase() === 'machine') return;
+          var prezzo = +(r.costPrice != null ? r.costPrice
+                       : (r.cost != null ? r.cost : (r.prezzo != null ? r.prezzo : r.price))) || 0;
+          fuori.push({
+            id: archivi[i]+':'+r.id,
+            name: r.name||r.nome,
+            price: prezzo,
+            unit: r.unit||r.unita||'pz',
+            cat: r.category||r.categoria||'Magazzino',
+            note: r.notes||r.note||'',
+            stock: +(r.quantity != null ? r.quantity : (r.stock != null ? r.stock : r.qty)) || 0,
+          });
+        });
       });
-    } catch(e){}
+      /* Il ridisegno avviene una volta sola, al passaggio da «non ancora
+         letto» a «letto»: `render()` richiama questa funzione, e un confronto
+         meno stretto basterebbe a farla girare all'infinito. */
+      var primaVolta = _matCache === null;
+      _matCache = fuori;
+      if (primaVolta && fuori.length) render();
+    }).catch(function(){});
+  }
+
+  function getMaterials() {
+    if (_matCache && _matCache.length) return _matCache;
     /* Default demo materials if magazzino is empty */
     return [
       {id:'m-mdf3',    name:'MDF 3mm',                price:1.20, unit:'pz',  cat:'Legno',     stock:100},
@@ -195,6 +352,8 @@
           || document.getElementById('view-laser_calc');
     if (!el) return;
 
+    _aggiornaMagazzino();
+    _aggiornaParco();
     var m     = getMachine(_selId);
     var inp   = getInput();
     var favs  = getFavs();
@@ -321,7 +480,11 @@
           +field('_f_kw','⚡ Potenza (kW)',inp.kw!=null?inp.kw:m.kw,'0.001')
           +field('_f_kwh','💡 €/kWh bolletta',inp.kwh||m.defKwh||0.28,'0.01')
           +field('_f_maint','🔧 Manut. €/h',inp.maint!=null?inp.maint:m.maint,'0.01')
-          +field('_f_labor','👤 Manodopera €/h',inp.labor||18,'1')
+          +field('_f_labor','👤 Manodopera €/h',inp.labor||_tariffaProfilo(),'1')
+          +'<div style="grid-column:1/-1;font-size:9px;color:var(--text-muted,#888);margin-top:-4px">'
+            +'La tariffa e le spese generali si impostano una volta sola nei '
+            +'<a href="#" onclick="event.preventDefault();window.InglyProfiliEconomici&&InglyProfiliEconomici.apri()" style="color:var(--primary,#6366f1);text-decoration:underline;cursor:pointer">profili economici</a>.'
+          +'</div>'
           +field('_f_setup','⚙️ Setup (min)',inp.setup_min!=null?inp.setup_min:m.setup_min||5,'0.5')
           +field('_f_clean','🧹 Pulizia (min)',inp.clean_min!=null?inp.clean_min:2,'0.5')
           +field('_f_pack','📦 Imballo €/pz',inp.pack!=null?inp.pack:0.20,'0.01')
@@ -374,6 +537,16 @@
           +field('_f_mk1','× Campione',inp.mk1||3.5,'0.1')
           +field('_f_mk2','× Kit',inp.mk2||2.8,'0.1')
           +field('_f_mk3','× Stock',inp.mk3||2.2,'0.1')
+        +'</div>'
+        +'<div style="font-size:9px;color:var(--text-muted,#888);margin:-4px 0 8px">Sono ricarichi sul costo. Il margine che ne esce è scritto accanto a ogni prezzo: ×2 non è il 100% di margine, è il 50%.</div>'
+        +'<div style="margin-bottom:8px"><label style="font-size:10px;color:var(--text-muted,#888);display:block;margin-bottom:3px">🎯 Politica di prezzo</label>'
+          +'<select id="_f_pol" style="width:100%;padding:7px 10px;background:var(--bg-card2,#18181f);border:1.5px solid var(--border,#2a2a35);border-radius:7px;color:var(--text,#e8e8f0);font-size:12px">'
+          +_politiche().map(function(P){
+            return '<option value="'+P.id+'"'+((inp.pol||'standard')===P.id?' selected':'')+'>'
+              +P.label+' — margine minimo '+P.floorMargin+'%, sconto max '+P.maxDiscount+'%</option>';
+          }).join('')
+          +'</select>'
+          +'<div style="font-size:9px;color:var(--text-muted,#888);margin-top:3px">Nessun prezzo scende sotto il margine minimo, qualunque sconto.</div>'
         +'</div>'
         +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
           +field('_f_disc','💸 Sconto %',inp.disc||0,'1')
@@ -573,6 +746,13 @@
       inp.oninput = function(){ saveAllInputs(el); recalcFromDOM(el); };
     });
 
+    /* I due select restavano fuori: si poteva cambiare l'IVA e vedere i prezzi
+       di prima, perché nessuno chiedeva un ricalcolo. */
+    ['#_f_iva', '#_f_pol'].forEach(function(sel){
+      var e = el.querySelector(sel);
+      if (e) e.onchange = function(){ saveAllInputs(el); recalcFromDOM(el); };
+    });
+
     /* Extra costs */
     var addEx = el.querySelector('#_cm_add_extra');
     if (addEx) addEx.onclick = function(){
@@ -589,8 +769,9 @@
       if (!r) return;
       var job = (el.querySelector('#_f_job')||{}).value || (m.brand+' '+m.model);
       var qty = parseInt((el.querySelector('#_f_qty')||{}).value)||1;
-      var mk2 = parseFloat((el.querySelector('#_f_mk2')||{}).value)||2.8;
-      var price = +(r.unitCost*mk2).toFixed(2);
+      /* Il prezzo che va al preventivo è quello mostrato, pavimento compreso:
+         due numeri diversi per la stessa riga sarebbero un errore di fatturato. */
+      var price = r.p2;
       LS.set('lc_to_quoter', {machine:_selId,cost:r.unitCost,price,label:job,qty});
       if (typeof App!=='undefined'&&App.navigate) App.navigate('quoter');
       setTimeout(function(){
@@ -616,7 +797,7 @@
     var rst = el.querySelector('#_cm_reset');
     if (rst) rst.onclick = function(){
       if (!window.confirm('Azzerare tutti i dati di calcolo?')) return;
-      saveInput({qty:1,kwh:0.28,labor:18,markup:3.5,iva:22,disc:0});
+      saveInput({qty:1,kwh:0.28,labor:_tariffaProfilo(),markup:3.5,iva:22,disc:0});
       saveExtras(_selId,[]);
       render();
       tt('↺ Dati azzerati','info');
@@ -629,7 +810,7 @@
     saveInput({
       price:     g('_f_price',null), life_h:  g('_f_life',null),
       kw:        g('_f_kw',null),    kwh:     g('_f_kwh',0.28),
-      maint:     g('_f_maint',null), labor:   g('_f_labor',15),
+      maint:     g('_f_maint',null), labor:   g('_f_labor',_tariffaProfilo()),
       setup_min: g('_f_setup',5),    clean_min:g('_f_clean',2),
       pack:      g('_f_pack',0.20),
       job:       g('_f_job',''),     qty:     g('_f_qty',1),
@@ -638,6 +819,7 @@
       ship:      g('_f_ship',0),
       mk1:       g('_f_mk1',3.5),    mk2:     g('_f_mk2',2.8),    mk3:g('_f_mk3',2.2),
       disc:      g('_f_disc',0),     iva:     g('_f_iva',22),
+      pol:       (function(){ var e=el.querySelector('#_f_pol'); return e?e.value:'standard'; })(),
     });
   }
 
@@ -657,7 +839,7 @@
     var kw       = g('_f_kw',    m.kw||0.1);
     var kwh      = g('_f_kwh',   0.28);
     var maint    = g('_f_maint', m.maint||0.05);
-    var labor    = g('_f_labor', 15);
+    var labor    = g('_f_labor', _tariffaProfilo());
     var setupMin = g('_f_setup', m.setup_min||5);
     var cleanMin = g('_f_clean', 2);
     var pack     = g('_f_pack',  0.20);
@@ -670,6 +852,8 @@
     var mk3      = g('_f_mk3', 2.2);
     var disc     = g('_f_disc', 0);
     var iva      = g('_f_iva',  22);
+    var polEl    = el.querySelector('#_f_pol');
+    var pol      = _politica(polEl ? polEl.value : (inp.pol || 'standard'));
 
     /* Auto time from area */
     if (!jobMin) {
@@ -694,15 +878,22 @@
     var unitCost = machC + matCost + pack + ship + extraTotal;
     var totalCost= unitCost * qty;
 
-    var applyDisc = function(v){ return +(v*(1-disc/100)).toFixed(2); };
-    var applyIva  = function(v){ return +(v*(1+iva/100)).toFixed(2); };
-    var p1 = applyDisc(unitCost*mk1), p2=applyDisc(unitCost*mk2), p3=applyDisc(unitCost*mk3);
-    var m1pct = p1>0?Math.round((p1-unitCost)/p1*100):0;
-    var m2pct = p2>0?Math.round((p2-unitCost)/p2*100):0;
-    var m3pct = p3>0?Math.round((p3-unitCost)/p3*100):0;
+    /* Lo sconto non può superare quello che la politica consente: chiederne di
+       più non è un errore da correggere in silenzio, è una decisione che si
+       dichiara. Si applica il massimo e si dice che è stato ridotto. */
+    var scontoChiesto = disc;
+    if (pol && pol.maxDiscount != null && disc > pol.maxDiscount) disc = pol.maxDiscount;
+
+    var t1 = _prezzoTier(unitCost, mk1, disc, iva, pol);
+    var t2 = _prezzoTier(unitCost, mk2, disc, iva, pol);
+    var t3 = _prezzoTier(unitCost, mk3, disc, iva, pol);
 
     return {depr,energy,mainC,laborC,machC,matCost,pack,ship,extraTotal,
-            unitCost,totalCost,p1,p2,p3,m1pct,m2pct,m3pct,qty,disc,iva,
+            unitCost,totalCost,
+            p1:t1.p,p2:t2.p,p3:t3.p,
+            m1pct:t1.pct,m2pct:t2.pct,m3pct:t3.pct,
+            pav1:t1.pavimento,pav2:t2.pavimento,pav3:t3.pavimento,
+            qty,disc,scontoChiesto,iva,pol,motoreAssente:!!t2.indisponibile,
             totalMin,jobMin,setupMin,cleanMin,depr,energy,totalH,mk1,mk2,mk3};
   }
 
@@ -761,18 +952,21 @@
       /* Price tiers */
       +'<div style="margin:10px 0">'
         +'<div style="font-size:10px;color:var(--text-muted,#888);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Prezzi di vendita</div>'
+        +(r.motoreAssente?'<div style="padding:8px 10px;background:#ef444412;border:1px solid #ef444430;border-radius:8px;font-size:11px;color:#fca5a5;margin-bottom:6px">Motore dei costi non disponibile: il prezzo non viene calcolato. Il costo qui sopra resta valido. Ricarica la pagina; se il problema resta, il preventivo va fatto altrove — un prezzo di ripiego sarebbe un secondo conto.</div>':'')
         +(r.disc>0?'<div style="font-size:10px;color:#f59e0b;margin-bottom:6px">Sconto '+r.disc+'% applicato</div>':'')
+        +(r.scontoChiesto>r.disc?'<div style="font-size:10px;color:#fca5a5;margin-bottom:6px">Sconto ridotto da '+r.scontoChiesto+'% a '+r.disc+'%: la politica «'+(r.pol?r.pol.label:'')+'» non consente di più.</div>':'')
         +[
-          {l:'🧪 Campione',p:r.p1,pct:r.m1pct,mk:r.mk1,c:'#64748b'},
-          {l:'🎒 Kit',p:r.p2,pct:r.m2pct,mk:r.mk2,c:'#10b981'},
-          {l:'📦 Stock',p:r.p3,pct:r.m3pct,mk:r.mk3,c:'#6366f1'},
+          {l:'🧪 Campione',p:r.p1,pct:r.m1pct,mk:r.mk1,pav:r.pav1,c:'#64748b'},
+          {l:'🎒 Kit',p:r.p2,pct:r.m2pct,mk:r.mk2,pav:r.pav2,c:'#10b981'},
+          {l:'📦 Stock',p:r.p3,pct:r.m3pct,mk:r.mk3,pav:r.pav3,c:'#6366f1'},
         ].map(function(tier){
           return '<div style="background:'+tier.c+'12;border:1px solid '+tier.c+'30;border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between">'
-            +'<div><div style="font-size:11px;font-weight:700;color:'+tier.c+'">'+tier.l+' ×'+tier.mk+'</div>'
+            +'<div><div style="font-size:11px;font-weight:700;color:'+tier.c+'">'+tier.l+' · ricarico ×'+tier.mk+'</div>'
               +(r.iva>0?'<div style="font-size:9px;color:#555">IVA '+r.iva+'%: '+eu(+(tier.p*(1+r.iva/100)).toFixed(2))+'</div>':'')
             +'</div>'
             +'<div style="text-align:right"><div style="font-size:17px;font-weight:900;color:'+tier.c+'">'+eu(tier.p)+'</div>'
-              +'<div style="font-size:9px;color:'+tier.c+';opacity:.7">marg.'+tier.pct+'%'+(r.qty>1?' · tot '+eu(tier.p*r.qty):'')+'</div>'
+              +'<div style="font-size:9px;color:'+tier.c+';opacity:.7">margine '+tier.pct+'%'+(r.qty>1?' · tot '+eu(tier.p*r.qty):'')+'</div>'
+              +(tier.pav?'<div style="font-size:9px;color:#fbbf24">⚑ pavimento '+(r.pol?r.pol.floorMargin:'')+'%</div>':'')
             +'</div></div>';
         }).join('')
       +'</div>'
@@ -858,6 +1052,8 @@
     getMachine,
     allMachines,
     getMaterials,
+    _aggiornaMagazzino,
+    _aggiornaParco,
     _getCurrentResult: function(){
       var el = document.getElementById('view-lasercalc');
       if (!el) return null;

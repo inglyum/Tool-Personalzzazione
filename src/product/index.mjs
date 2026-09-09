@@ -79,6 +79,13 @@ export const PRODUCT_FILES = [
   /* I margini configurati: dopo il motore, di cui conserva le sole modifiche.
      È qui e non nel motore perché il motore deve restare puro. */
   'pricing-policies.js',
+  /* I profili economici del laboratorio — manodopera, spese generali,
+     imballo — nella stessa forma: la matematica pura prima, l'archivio dopo.
+     Stanno dopo il motore perché ne traducono l'ingresso, e prima dei
+     preventivatori che li interrogano. */
+  'cost-profiles.js',
+  'cost-profiles-store.js',
+  'cost-profiles-view.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i

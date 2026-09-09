@@ -117,7 +117,11 @@
       /* L'aspetto si cambia da qui e dai due pannelli di branding: tre porte,
          una stanza sola. */
       { label: 'Aspetto', hint: 'Tema, colore d\'accento, carattere', icon: 'fa-palette',
-        run: function () { if (global.InglyAspetto) global.InglyAspetto.apri(); } }
+        run: function () { if (global.InglyAspetto) global.InglyAspetto.apri(); } },
+      /* La porta ai tre costi che il laboratorio paga e che nessun preventivo
+         chiedeva: finché restano vuoti ogni prezzo esce più basso del vero. */
+      { label: 'Profili economici', hint: 'Manodopera, spese generali, imballo', icon: 'fa-coins',
+        run: function () { if (global.InglyProfiliEconomici) global.InglyProfiliEconomici.apri(); } }
     );
   }, 1500);
 })(window);

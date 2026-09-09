@@ -1528,7 +1528,13 @@ function cardLavoro(){
     }).join('')
     +'</div>'
     +'<div class="p3-fg" style="margin-top:8px"><label class="p3-fl">💶 €/H MANODOPERA</label>'
-      +'<input class="p3-fc" id="p3d-lr" type="number" step="1" value="18" oninput="Print3DQuoter.calc()"></div>'
+      +'<input class="p3-fc" id="p3d-lr" type="number" step="1" value="'+(_profili().laborPerHour||18)+'" oninput="Print3DQuoter.tariffaToccata();Print3DQuoter.calc()">'
+      /* Il campo dice quanto costa un'ora; il pannello dice da dove viene, e
+         permette di cambiarlo una volta per tutti i preventivi invece che qui
+         a ogni preventivo. */
+      +'<div class="p3-ht">'+(_profili()._predefiniti && _profili()._predefiniti.manodopera ? 'Valore predefinito' : 'Dal tuo profilo')
+      +' · <a href="#" onclick="event.preventDefault();window.InglyProfiliEconomici&&InglyProfiliEconomici.apri(\'manodopera\')" style="color:var(--primary);text-decoration:underline;cursor:pointer">profili economici</a></div>'
+      +'</div>'
     +'<div style="margin-top:8px;padding:8px 10px;background:var(--bg-card2);border-radius:8px;font-size:10px;color:var(--text-muted);line-height:1.6" id="p3d-lavoro-tot"></div>'
   +'</div>';
 }
@@ -1937,6 +1943,38 @@ function upE(i,k,v){if(EXTRAS[i])EXTRAS[i][k]=(k==='c'?parseFloat(v)||0:v);calc(
 /* Un solo ingresso, letto una volta sola. Prima gli stessi campi venivano
    letti due volte con due nomi diversi — una per il costo, una per il prezzo —
    ed è il modo in cui due sistemi finiscono per possedere lo stesso numero. */
+/* ── I profili economici del laboratorio ───────────────────────────────────
+   Manodopera, spese generali e imballo non sono parametri di **questo**
+   preventivo: sono di come lavora il laboratorio. Stanno in `cost_profiles` e
+   li legge un modulo solo.
+
+   Qui si usa la versione sincrona perche' `ingresso()` viene chiamata a ogni
+   battuta: una lettura asincrona per carattere renderebbe il campo lento e il
+   numero in ritardo. La prima chiamata risponde con i predefiniti dichiarati e
+   chiede i profili per quella dopo — mai un'attesa, mai un numero inventato
+   spacciato per dato reale. */
+/* Finche' l'utente non scrive in questo campo, il valore e' quello del
+   laboratorio e deve seguirlo: i profili arrivano dal database qualche
+   millisecondo dopo il primo disegno, e senza questo allineamento il campo
+   resterebbe sul predefinito per sempre. Appena qualcuno lo tocca, comanda
+   lui — un preventivo puo' avere una tariffa sua. */
+var TARIFFA_TOCCATA=false;
+function tariffaToccata(){ TARIFFA_TOCCATA=true; }
+function _allineaTariffa(){
+  if(TARIFFA_TOCCATA) return;
+  var e=el('p3d-lr'); if(!e) return;
+  var v=_profili().laborPerHour;
+  if(v>0 && Math.abs(parseFloat(e.value)-v)>0.005) e.value=v;
+}
+
+function _profili(opzioni){
+  try{
+    var S = (typeof window!=='undefined') && window.InglyCostProfilesStore;
+    if(S && typeof S.ingressoSincrono==='function') return S.ingressoSincrono(opzioni||{}) || {};
+  }catch(e){}
+  return {};
+}
+
 function ingresso(){
   var e=energiaScelta();
   var m=pesi();
@@ -1964,7 +2002,7 @@ function ingresso(){
     /* Il lavaggio è la fase «post» della card lavoro, non un campo a parte:
        finché ne esistevano due, chi compilava entrambi pagava il
        post-processo due volte. */
-    washCureMin:LAVORO.post, laborPerHour:gv('p3d-lr',18),
+    washCureMin:LAVORO.post, laborPerHour:gv('p3d-lr', _profili().laborPerHour || 18),
     /* L'avviamento è per **lavoro** e si divide per la quantità; tutte le
        altre fasi sono per **pezzo**. Confonderli è il modo in cui il costo di
        cento pezzi diventa cento volte l'avviamento. */
@@ -1976,13 +2014,22 @@ function ingresso(){
        traduzione sta qui, in un posto solo, dove si vede che è una
        traduzione: «per lavoro» diventa una percentuale del costo del lavoro
        intero, e resta un modo solo per volta — mai due sommati. */
-    overheadPerHour: OVERHEAD.modo==='ora' ? OVERHEAD.valore : 0,
-    overheadPct: OVERHEAD.modo==='percento' ? OVERHEAD.valore : 0,
-    overheadPerJob: OVERHEAD.modo==='lavoro' ? OVERHEAD.valore : 0,
+    /* Se questo preventivo non dichiara spese generali proprie, valgono quelle
+       del laboratorio. Restano un modo solo per volta: `_profili()` ne
+       restituisce tre campi di cui due a zero, e qui non se ne somma nessuno. */
+    overheadPerHour: OVERHEAD.valore>0 ? (OVERHEAD.modo==='ora' ? OVERHEAD.valore : 0) : _profili().overheadPerHour,
+    overheadPct: OVERHEAD.valore>0 ? (OVERHEAD.modo==='percento' ? OVERHEAD.valore : 0) : _profili().overheadPct,
+    overheadPerJob: OVERHEAD.valore>0 ? (OVERHEAD.modo==='lavoro' ? OVERHEAD.valore : 0) : _profili().overheadPerJob,
     materialWasteRate:gv('p3d-waste',0),
     failureRate:gv('p3d-fail',0),
     hardware:HARDWARE.map(function(h){ return { name:h.n, qty:h.q, unitCost:h.c }; }),
-    packagingItems:IMBALLO.map(function(x){ return { name:x.n, qty:x.q, unitCost:x.c }; }),
+    /* Stessa regola per l'imballo: quello scritto qui vince, quello del
+       laboratorio arriva quando qui non c'e' niente. Le voci per ordine il
+       profilo le ha gia' divise per la quantita' — sommarle intere darebbe una
+       scatola per ogni pezzo. */
+    packagingItems: IMBALLO.length
+      ? IMBALLO.map(function(x){ return { name:x.n, qty:x.q, unitCost:x.c }; })
+      : _profili({ quantita: Math.max(1, gv('p3d-qty',1)) }).packagingItems || [],
     extras:EXTRAS.map(function(e){ return { label:e.n, cost:parseFloat(e.c)||0 }; }),
   };
 }
@@ -2131,6 +2178,7 @@ function calc(){
      il prezzo — e il secondo non era d'accordo con lo slider che diceva di
      comandarlo. Adesso il percorso è uno. */
   var V=(typeof window!=='undefined') && window.InglyQuoter3DView;
+  _allineaTariffa();
   var ing=ingresso();
   var qty=ing.qty;
 
@@ -2518,6 +2566,7 @@ function delMat(id){
 }
 
 return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc:setDisc,
+  tariffaToccata:tariffaToccata,
   pickMach:pickMach,pickMat:pickMat,addExtra:addExtra,rmE:rmE,upE:upE,
   addLine:addLine,rmLine:rmLine,editLine:editLine,clearLines:clearLines,
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,

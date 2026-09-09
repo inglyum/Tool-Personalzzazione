@@ -2,7 +2,7 @@
 // === /src/core/idb.js ===
 const IDB = (function(){
   let db=null;
-  const DB='InglyMasterDB',VER=31; // v31: inventory_ledger — registro append-only dei movimenti di magazzino (migrazione additiva: nuovo store vuoto, nessun dato esistente toccato) // v30: v10 archive+lab+workflow // v28: laser_resources store // v26: always ≥ browser version // v23: re-added legacy stores (ai_log,kpi_snap,kpi_cache,scanner_history,versions) // v22: legacy stores removed (kpi_cache,versions,scanner_history,ai_log,kpi_snap) // v21: stores 'orders','quotes','sales' deprecated (kept read-only, pipeline is now source of truth) // v20: store pipeline unificata store
+  const DB='InglyMasterDB',VER=32; // v32: cost_profiles — manodopera, spese generali e imballo del laboratorio. Tre store nuovi e vuoti: nessun record esistente viene letto, riscritto o cancellato. Servono al motore di costo, che sapeva gia' contarli e non aveva chi glieli passasse (overhead a zero in ogni preventivo, manodopera presa dal campo del modulo). // v31: inventory_ledger — registro append-only dei movimenti di magazzino (migrazione additiva: nuovo store vuoto, nessun dato esistente toccato) // v30: v10 archive+lab+workflow // v28: laser_resources store // v26: always ≥ browser version // v23: re-added legacy stores (ai_log,kpi_snap,kpi_cache,scanner_history,versions) // v22: legacy stores removed (kpi_cache,versions,scanner_history,ai_log,kpi_snap) // v21: stores 'orders','quotes','sales' deprecated (kept read-only, pipeline is now source of truth) // v20: store pipeline unificata store
   const STORES=[
     {n:'clients',k:'id'},{n:'sales',k:'id'},{n:'quotes',k:'id'},
     {n:'inventory',k:'id'},{n:'cashflow',k:'id'},{n:'projects',k:'id'},
@@ -58,6 +58,15 @@ const IDB = (function(){
     // ── v15: OrderFlow Engine ───────────────────────────────────
     {n:'workflow_steps',k:'id'},   // Customizable pipeline stages
     {n:'order_events',k:'id'},     // Order timeline events { id, name, freq, nextDate, ... }
+    // ── v32: profili economici del laboratorio ───────────────
+    /* I tre numeri che il motore di costo sapeva gia' usare e che nessuno gli
+       passava: costo orario del lavoro, spese generali da ripartire, imballo.
+       Chiave `key` e non `id`: di ognuno esiste un profilo solo per volta —
+       'main' — e una chiave naturale evita di dover cercare quale record sia
+       quello buono. */
+    {n:'labor_profiles',k:'key'},      // { key:'main', voci:[{id,label,costoOrarioInterno,tariffaCliente}] }
+    {n:'overhead_profiles',k:'key'},   // { key:'main', modo, voci:[{id,label,mensile}], oreProduttiveAnnue }
+    {n:'packaging_items',k:'key'},     // { key:'main', voci:[{id,label,per,costo,attivo}] }
     // ── v20: pipeline unificata ──────────────────────────────
     {n:'pipeline',k:'id'},         // Pipeline unificata
     // ── v23 FIX: legacy stores still referenced by code ──────────────
