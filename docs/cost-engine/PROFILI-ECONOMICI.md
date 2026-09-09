@@ -112,3 +112,13 @@ costo di ogni stampa lunga: si tocca in `PROFILI.print3d.presidiata`.
 - `tests/economia-tecnologie.test.mjs` — 35 casi sulle quattro tecnologie
 - `tests/qa/cost-profiles-quoter.mjs` — il caso 250 g nel browser, prima e dopo
 - `tests/qa/profili-economici-pannello.mjs` — il giro completo dal pannello
+
+## Una nota sui collegamenti al pannello
+
+Nei due preventivatori il pannello si apre da un `<button>` vestito da
+collegamento, non da un `<a href="#">`. Un finto collegamento avrebbe costretto
+a scrivere `event.preventDefault()` nel gestore in linea per annullare un
+default che non serviva, e fuori dal clic `event` non esiste: la matrice dei
+pulsanti di `quoter3d-pulsanti.mjs` l'ha segnalato come «funzione che non
+esiste» e ha bocciato la regressione. Aveva ragione — un pulsante è quello che
+quel comando è.

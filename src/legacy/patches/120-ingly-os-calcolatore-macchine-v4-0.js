@@ -157,6 +157,10 @@
     return [{ id: 'standard', label: 'Standard', marginTarget: 40, maxDiscount: 15, floorMargin: 20 }];
   }
 
+  function apriProfili() {
+    if (window.InglyProfiliEconomici) window.InglyProfiliEconomici.apri();
+  }
+
   function _politica(id) {
     var l = _politiche();
     for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
@@ -483,7 +487,7 @@
           +field('_f_labor','👤 Manodopera €/h',inp.labor||_tariffaProfilo(),'1')
           +'<div style="grid-column:1/-1;font-size:9px;color:var(--text-muted,#888);margin-top:-4px">'
             +'La tariffa e le spese generali si impostano una volta sola nei '
-            +'<a href="#" onclick="event.preventDefault();window.InglyProfiliEconomici&&InglyProfiliEconomici.apri()" style="color:var(--primary,#6366f1);text-decoration:underline;cursor:pointer">profili economici</a>.'
+            +'<button type="button" onclick="CalcMacchine.apriProfili()" style="background:none;border:none;padding:0;font:inherit;color:var(--primary,#6366f1);text-decoration:underline;cursor:pointer">profili economici</button>.'
           +'</div>'
           +field('_f_setup','⚙️ Setup (min)',inp.setup_min!=null?inp.setup_min:m.setup_min||5,'0.5')
           +field('_f_clean','🧹 Pulizia (min)',inp.clean_min!=null?inp.clean_min:2,'0.5')
@@ -1052,6 +1056,7 @@
     getMachine,
     allMachines,
     getMaterials,
+    apriProfili,
     _aggiornaMagazzino,
     _aggiornaParco,
     _getCurrentResult: function(){

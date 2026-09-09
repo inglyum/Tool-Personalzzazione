@@ -1533,7 +1533,7 @@ function cardLavoro(){
          permette di cambiarlo una volta per tutti i preventivi invece che qui
          a ogni preventivo. */
       +'<div class="p3-ht">'+(_profili()._predefiniti && _profili()._predefiniti.manodopera ? 'Valore predefinito' : 'Dal tuo profilo')
-      +' · <a href="#" onclick="event.preventDefault();window.InglyProfiliEconomici&&InglyProfiliEconomici.apri(\'manodopera\')" style="color:var(--primary);text-decoration:underline;cursor:pointer">profili economici</a></div>'
+      +' · <button type="button" onclick="Print3DQuoter.apriProfili()" style="background:none;border:none;padding:0;font:inherit;color:var(--primary);text-decoration:underline;cursor:pointer">profili economici</button></div>'
       +'</div>'
     +'<div style="margin-top:8px;padding:8px 10px;background:var(--bg-card2);border-radius:8px;font-size:10px;color:var(--text-muted);line-height:1.6" id="p3d-lavoro-tot"></div>'
   +'</div>';
@@ -1960,6 +1960,9 @@ function upE(i,k,v){if(EXTRAS[i])EXTRAS[i][k]=(k==='c'?parseFloat(v)||0:v);calc(
    lui — un preventivo puo' avere una tariffa sua. */
 var TARIFFA_TOCCATA=false;
 function tariffaToccata(){ TARIFFA_TOCCATA=true; }
+function apriProfili(){
+  if(typeof window!=='undefined' && window.InglyProfiliEconomici) window.InglyProfiliEconomici.apri('manodopera');
+}
 function _allineaTariffa(){
   if(TARIFFA_TOCCATA) return;
   var e=el('p3d-lr'); if(!e) return;
@@ -2566,7 +2569,7 @@ function delMat(id){
 }
 
 return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc:setDisc,
-  tariffaToccata:tariffaToccata,
+  tariffaToccata:tariffaToccata,apriProfili:apriProfili,
   pickMach:pickMach,pickMat:pickMat,addExtra:addExtra,rmE:rmE,upE:upE,
   addLine:addLine,rmLine:rmLine,editLine:editLine,clearLines:clearLines,
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,
