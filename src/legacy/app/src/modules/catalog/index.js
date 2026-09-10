@@ -1634,6 +1634,10 @@ const Catalog={
     this.loadMachineParams();
     const _id2=id;
     const _p2=_id2?(await IDB.get('catalog',_id2).catch(()=>null)):null;
+    /* Dopo la lettura del prodotto, non prima: la politica scelta e' un suo
+       campo, e popolare la tendina su un record non ancora letto la lascerebbe
+       sempre sul generale. */
+    this.popolaPolitiche(_p2?.pricingPolicyId||_p2?.cost_profile_id||'');
     await this.populateMaterialSel(_p2?.lcMatId||'',_p2?.material||'');
     if(_p2){
       const sv=(id2,v)=>{const el=document.getElementById(id2);if(el&&v!=null&&v!=='')el.value=v;};
@@ -1773,6 +1777,36 @@ const Catalog={
       +'<button type="button" onclick="_apriProfiliEconomici()" style="margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:10px;padding:2px 8px">Profili economici</button>'
       +'</div>';
   },
+  /** Le politiche vengono dal loro proprietario: questo file non ne tiene una
+      copia, altrimenti «Premium» finirebbe per valere 60 qui e 55 altrove. */
+  popolaPolitiche(scelta){
+    const sel=document.getElementById('cat-politica');
+    if(!sel)return;
+    const P=window.InglyPricingPolicies;
+    const l=(P&&P.elenco)?P.elenco():[];
+    const _e=(t)=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    sel.innerHTML='<option value="">Margine generale del ricalcolo</option>'
+      +l.map(v=>'<option value="'+_e(v.id)+'"'+(v.id===scelta?' selected':'')+'>'
+        +_e(v.label)+' — '+Math.round(v.marginTarget)+'%'+(v.recommended?' (consigliata)':'')+'</option>').join('');
+    this.notaPolitica();
+    sel.onchange=()=>{this.notaPolitica();this.onManualEdit&&this.onManualEdit();};
+  },
+
+  notaPolitica(){
+    const sel=document.getElementById('cat-politica');
+    const nota=document.getElementById('cat-politica-nota');
+    if(!sel||!nota)return;
+    if(!sel.value){
+      nota.textContent='Senza politica il ricalcolo del listino usa il margine scritto nella sua finestra.';
+      return;
+    }
+    const P=window.InglyPricingPolicies;
+    const v=(P&&P.perId)?P.perId(sel.value):null;
+    nota.textContent=v
+      ? 'Il ricalcolo del listino userà '+Math.round(v.marginTarget)+'% su questo prodotto, non il margine generale.'
+      : 'Politica non riconosciuta: il ricalcolo userà il margine generale.';
+  },
+
   toggleMachinePanel(){
     const el=document.getElementById('cat-machine-panel');
     if(el)el.style.display=el.style.display==='none'?'block':'none';
@@ -2309,6 +2343,11 @@ Genera ESATTAMENTE in questo formato:
       category:eid('cat-cat').value,
       costPrice:+eid('cat-cost')?.value||0,
       salePrice:+eid('cat-price')?.value||0,
+      /* Quale margine vuole questo prodotto quando si ricalcola il listino.
+         Vuoto vuol dire «quello generale»: il ricalcolo applicava un margine
+         solo a tutti, e un portachiavi da tre euro usciva con la stessa
+         percentuale di un pezzo su commissione. */
+      pricingPolicyId:document.getElementById('cat-politica')?.value||'',
       desc:eid('cat-desc')?.value||'',
       tags:eid('cat-tags')?.value||'',
       emoji:eid('cat-emoji')?.value||'🎁',
@@ -2463,7 +2502,13 @@ Genera ESATTAMENTE in questo formato:
     const eu = (v) => v == null ? '—' : '€' + (Math.round(v * 100) / 100).toFixed(2);
     const pc = (v) => v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1) + '%';
 
-    const prop = R.proposta(st.prodotti, { marginePct: st.marginePct, arrotondamento: st.arrotondamento });
+    /* Le politiche di prezzo le conserva InglyPricingPolicies: qui si passano
+       al modulo di ricalcolo, che resta puro e non legge localStorage. Un
+       prodotto che dichiara la sua politica usa quel margine; gli altri usano
+       quello generale scritto in fondo alla finestra. */
+    const politiche = (window.InglyPricingPolicies && window.InglyPricingPolicies.elenco)
+      ? window.InglyPricingPolicies.elenco() : [];
+    const prop = R.proposta(st.prodotti, { marginePct: st.marginePct, arrotondamento: st.arrotondamento, politiche });
     st.proposta = prop;
     const scelte = prop.righe.filter(r => r.cambia && !st.escluse[String(r.id)]);
     const totScelte = scelte.reduce((a, r) => ({
@@ -2490,6 +2535,13 @@ Genera ESATTAMENTE in questo formato:
           + (r.deltaValore == null ? '—' : (r.deltaValore > 0 ? '+' : '') + eu(r.deltaValore)) + '</td>'
         + '<td style="padding:6px 8px;text-align:right;font-size:11px;color:' + tinta + '">'
           + (r.deltaPct == null ? '—' : (r.deltaPct > 0 ? '+' : '') + pc(r.deltaPct)) + '</td>'
+        + '<td style="padding:6px 8px;font-size:10px;color:var(--text-muted)">'
+        + (r.fontePolitica === 'prodotto'
+            ? _e(r.politica) + ' · ' + pc(r.marginePctUsata)
+            : (r.fontePolitica === 'sconosciuta'
+                ? '<span style="color:#fcd34d">politica «' + _e(r.politica) + '» sconosciuta</span>'
+                : 'generale'))
+        + '</td>'
         + '<td style="padding:6px 8px;text-align:right;font-size:11px;color:var(--text-muted)">' + pc(r.marginePctAttuale) + '</td>'
         + '<td style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700">' + pc(r.marginePctNuovo) + '</td>'
         + '</tr>';
@@ -2513,6 +2565,7 @@ Genera ESATTAMENTE in questo formato:
       + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Nuovo</th>'
       + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Delta €</th>'
       + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Delta %</th>'
+      + '<th style="padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Politica</th>'
       + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Mg attuale</th>'
       + '<th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--text-muted)">Mg nuovo</th>'
       + '</tr></thead><tbody>' + righe + '</tbody></table></div>';

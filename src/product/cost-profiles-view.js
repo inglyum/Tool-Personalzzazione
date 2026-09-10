@@ -45,6 +45,7 @@
   var eur = function (n) { return '€ ' + num(n).toFixed(2).replace('.', ','); };
 
   function P() { return global.InglyCostProfiles; }
+  function PP() { return global.InglyPricingPolicies; }
   function S() { return global.InglyCostProfilesStore; }
   function nota(m, t) { if (typeof global.toast === 'function') global.toast(m, t || 'info'); }
 
@@ -79,10 +80,21 @@
           }),
         imballo: (c.imballo && c.imballo.length ? c.imballo : p.IMBALLO_PREDEFINITO)
           .map(function (v) { return Object.assign({}, v); }),
+        /* Le sette politiche di prezzo esistono da prima di questo pannello e
+           sono sempre state configurabili — `imposta()` e `ripristina()` sono
+           li' dal primo giorno. Non le chiamava nessuno: nessuna schermata
+           dell'applicazione le raggiungeva. Un margine che il programma sa
+           usare e che l'utente non puo' cambiare vale quanto un margine che
+           non c'e'. */
+        politiche: (PP() && PP().elenco ? PP().elenco() : [])
+          .map(function (v) { return Object.assign({}, v); }),
+        politicheIniziali: (PP() && PP().elenco ? PP().elenco() : [])
+          .map(function (v) { return Object.assign({}, v); }),
         configurati: {
           manodopera: !!(c.manodopera && c.manodopera.length),
           overhead: !!(c.overhead && c.overhead.voci && c.overhead.voci.length),
           imballo: !!(c.imballo && c.imballo.length),
+          politiche: !!(PP() && PP().personalizzate && PP().personalizzate().length),
         },
       };
       disegna();
@@ -118,12 +130,15 @@
       ['manodopera', '👤 Manodopera', bozza.configurati.manodopera],
       ['overhead', '🏠 Spese generali', bozza.configurati.overhead],
       ['imballo', '📦 Imballo', bozza.configurati.imballo],
+      ['politiche', '💰 Margini', bozza.configurati.politiche],
     ];
     return '<div style="padding:18px 18px 0">'
       + '<div style="font-size:16px;font-weight:800;color:var(--text,#e8e8f0)">Profili economici</div>'
       + '<div style="font-size:11px;color:var(--text-muted,#888);margin-top:3px;line-height:1.5">'
-      + 'Quello che il laboratorio costa anche quando le macchine sono ferme. '
-      + 'Finché resta vuoto, ogni preventivo esce più basso del vero.</div>'
+      + 'Le prime tre schede sono quello che il laboratorio <b>costa</b>, anche a '
+      + 'macchine ferme: finché restano vuote ogni preventivo esce più basso del vero. '
+      + 'L\'ultima è quello che ci vuoi <b>guadagnare</b> sopra. Sono due cose diverse '
+      + 'e restano separate.</div>'
       + '<div style="display:flex;gap:6px;margin:14px 0 12px;flex-wrap:wrap">'
       + t.map(function (x) {
         var attiva = bozza.sezione === x[0];
@@ -140,6 +155,7 @@
   function corpo() {
     if (bozza.sezione === 'overhead') return sezioneOverhead();
     if (bozza.sezione === 'imballo') return sezioneImballo();
+    if (bozza.sezione === 'politiche') return sezionePolitiche();
     return sezioneManodopera();
   }
 
@@ -306,6 +322,76 @@
       + eur(perPezzo) + '</b>. Su dieci pezzi le voci «per ordine» costano un decimo.</div>';
   }
 
+  /* ── Margini ────────────────────────────────────────────────────────────
+     Qui si parla di prezzo, non di costo, ed è la prima volta in questo
+     pannello. La distinzione non è pedanteria: il costo è un fatto che si
+     misura, il margine è una decisione che si prende, e confonderli è il modo
+     in cui un laboratorio scopre a fine anno di aver lavorato in perdita
+     credendo di avere il 40%.
+
+     Le sette politiche vengono dal motore, che le dichiara ordinate per
+     margine crescente. Qui si possono cambiare; il pavimento resta al motore,
+     perché una regola che vive in due posti prima o poi vale due cose. */
+
+  function sezionePolitiche() {
+    var pp = PP();
+    if (!pp) return avviso('Il modulo delle politiche di prezzo non è disponibile.');
+
+    var righe = bozza.politiche || [];
+    if (!righe.length) return avviso('Nessuna politica dichiarata dal motore.');
+
+    return spiega('Il margine obiettivo è quanto vuoi guadagnare sul costo di produzione. '
+      + 'Lo sconto massimo è quanto sei disposto a scendere in trattativa. Il margine '
+      + 'minimo è il punto sotto il quale non si scende: serve a far vedere quando una '
+      + 'trattativa ha smesso di convenire, non a impedirla.')
+      + '<div style="display:grid;grid-template-columns:1fr 84px 84px 84px;gap:6px 8px;align-items:center">'
+      + '<div style="font-size:10px;color:var(--text-muted,#888);font-weight:700;text-transform:uppercase">Politica</div>'
+      + '<div style="font-size:10px;color:var(--text-muted,#888);font-weight:700;text-align:right">Margine %</div>'
+      + '<div style="font-size:10px;color:var(--text-muted,#888);font-weight:700;text-align:right">Sconto max %</div>'
+      + '<div style="font-size:10px;color:var(--text-muted,#888);font-weight:700;text-align:right">Minimo %</div>'
+      + righe.map(function (v, i) {
+        var sotto = num(v.floorMargin) > num(v.marginTarget);
+        var iniziale = (bozza.politicheIniziali || [])[i] || {};
+        var cambiata = num(v.marginTarget) !== num(iniziale.marginTarget)
+          || num(v.maxDiscount) !== num(iniziale.maxDiscount)
+          || num(v.floorMargin) !== num(iniziale.floorMargin);
+        return '<div style="font-size:12px;color:var(--text,#e8e8f0)">' + esc(v.label || v.id)
+          + (v.recommended ? '<span style="font-size:9px;color:var(--primary,#6366f1);margin-left:6px">consigliata</span>' : '')
+          + (v.personalizzata || cambiata ? '<div style="font-size:9px;color:var(--text-muted,#888)">modificata</div>' : '')
+          + (sotto ? '<div style="font-size:9px;color:#fca5a5">il minimo è sopra l\'obiettivo</div>' : '')
+          + '</div>'
+          + campo('politiche.' + i + '.marginTarget', v.marginTarget, '1', '80px')
+          + campo('politiche.' + i + '.maxDiscount', v.maxDiscount, '1', '80px')
+          + campo('politiche.' + i + '.floorMargin', v.floorMargin, '1', '80px');
+      }).join('')
+      + '</div>'
+      + esempioPolitica()
+      + '<div style="margin-top:12px;display:flex;justify-content:flex-end">'
+      + '<button type="button" data-azione="ripristina-politiche" style="padding:6px 12px;border-radius:8px;'
+      + 'font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;background:transparent;'
+      + 'border:1px solid var(--border,#2a2a35);color:var(--text-muted,#888)">Riporta ai valori del motore</button>'
+      + '</div>';
+  }
+
+  /** Un margine in percentuale non dice quanto si incassa finché non lo si
+      vede su una cifra. Cento euro di costo è la cifra più leggibile che
+      esista, e rende immediato il salto fra una politica e l\'altra. */
+  function esempioPolitica() {
+    var e = global.InglyCostEngine;
+    if (!e || typeof e.prezzo !== 'function') return '';
+    var righe = [];
+    (bozza.politiche || []).forEach(function (v) {
+      /* `netto`, non `lordo`: l'IVA non è un margine e mostrarla qui farebbe
+         sembrare più ricca ogni politica della stessa quota. */
+      var r = e.prezzo(100, { strategia: 'margine', marginePct: num(v.marginTarget) });
+      if (r && r.netto > 0) righe.push(esc(v.label || v.id) + ' ' + eur(r.netto));
+    });
+    if (!righe.length) return '';
+    return '<div style="margin-top:12px;font-size:11px;color:var(--text-muted,#888);line-height:1.6">'
+      + 'Su <b style="color:var(--text,#e8e8f0)">100 € di costo di produzione</b> il prezzo diventa: '
+      + righe.join(' · ') + '.</div>';
+  }
+
   /* ── Pezzi comuni ───────────────────────────────────────────────────────── */
 
   function spiega(t) {
@@ -351,13 +437,24 @@
           e.type === 'checkbox' ? e.checked : (e.tagName === 'SELECT' ? e.value : num(e.value)));
         /* Solo le spese generali si ridisegnano a ogni battuta: sono l'unica
            sezione dove il numero in fondo cambia mentre scrivi. */
-        if (bozza.sezione === 'overhead' && e.tagName !== 'SELECT') aggiornaEsito(n);
+        if ((bozza.sezione === 'overhead' || bozza.sezione === 'politiche') && e.tagName !== 'SELECT') aggiornaEsito(n);
       };
     });
     n.querySelectorAll('[data-azione]').forEach(function (b) {
       b.onclick = function () {
-        if (b.getAttribute('data-azione') === 'salva') salva();
-        else chiudi();
+        var a = b.getAttribute('data-azione');
+        if (a === 'salva') return salva();
+        if (a === 'ripristina-politiche') {
+          var pp = PP();
+          if (pp && pp.ripristina) pp.ripristina();
+          bozza.politiche = (pp && pp.elenco ? pp.elenco() : []).map(function (v) { return Object.assign({}, v); });
+          bozza.politicheIniziali = bozza.politiche.map(function (v) { return Object.assign({}, v); });
+          bozza.configurati.politiche = false;
+          disegna();
+          nota('Margini riportati ai valori del motore', 'info');
+          return;
+        }
+        chiudi();
       };
     });
   }
@@ -389,6 +486,40 @@
     t[parti[parti.length - 1]] = valore;
   }
 
+  /** Si scrivono solo le politiche che l'utente ha davvero cambiato, e quelle
+      tornate al valore del motore si cancellano invece di riscriverle uguali.
+      Conservare un valore identico al predefinito lo congelerebbe: il giorno
+      in cui il motore cambia i suoi, questo laboratorio resterebbe fermo ai
+      vecchi senza saperlo. */
+  function salvaPolitiche() {
+    var pp = PP();
+    var e = global.InglyCostEngine;
+    if (!pp || !pp.imposta) return Promise.resolve(true);
+    var predefinite = {};
+    if (e && typeof e.politiche === 'function') {
+      e.politiche({}).forEach(function (v) { predefinite[v.id] = v; });
+    }
+    try {
+      (bozza.politiche || []).forEach(function (v) {
+        var d = predefinite[v.id];
+        var uguale = d
+          && num(v.marginTarget) === num(d.marginTarget)
+          && num(v.maxDiscount) === num(d.maxDiscount)
+          && num(v.floorMargin) === num(d.floorMargin);
+        if (uguale) { if (pp.ripristina) pp.ripristina(v.id); return; }
+        pp.imposta(v.id, {
+          marginTarget: num(v.marginTarget),
+          maxDiscount: num(v.maxDiscount),
+          floorMargin: num(v.floorMargin),
+        });
+      });
+      return Promise.resolve(true);
+    } catch (err) {
+      if (global.Ingly && global.Ingly.Errors) global.Ingly.Errors.log('ProfiliEconomici.salvaPolitiche', err);
+      return Promise.resolve(false);
+    }
+  }
+
   function salva() {
     var s = S();
     if (!s) return;
@@ -403,6 +534,7 @@
         voci: bozza.overhead.voci,
       }),
       s.salvaImballo(bozza.imballo),
+      salvaPolitiche(),
     ]).then(function (esiti) {
       if (esiti.every(Boolean)) {
         nota('Profili salvati: i prossimi preventivi li useranno', 'success');

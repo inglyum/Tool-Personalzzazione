@@ -53,6 +53,45 @@
     return ((p - num(costo)) / p) * 100;
   }
 
+  /* ── La politica del singolo prodotto ────────────────────────────────────
+     Fino a qui il ricalcolo applicava **un margine solo a tutti**: un
+     portachiavi da tre euro e un pezzo su commissione uscivano con la stessa
+     percentuale, e chi voleva distinguerli doveva lanciare il ricalcolo due
+     volte filtrando a mano. Le sette politiche esistevano già nel motore;
+     mancava il modo per un prodotto di dire quale è la sua.
+
+     Il campo si chiama `pricingPolicyId`. `cost_profile_id` è accettato come
+     sinonimo perché è il nome con cui la richiesta è arrivata, e un dato già
+     scritto con quel nome non deve diventare invisibile per una questione di
+     etichetta. */
+  var CAMPI_POLITICA = ['pricingPolicyId', 'cost_profile_id', 'costProfileId', 'politicaPrezzo'];
+
+  function politicaDi(prodotto) {
+    var p = prodotto || {};
+    for (var i = 0; i < CAMPI_POLITICA.length; i++) {
+      var v = p[CAMPI_POLITICA[i]];
+      if (v != null && String(v).trim() !== '') return String(v).trim();
+    }
+    return null;
+  }
+
+  /** Il margine da applicare a una riga, e da dove viene.
+      `politiche` arriva da chi chiama: questo file non legge `localStorage`,
+      come il motore che interroga. */
+  function margineDi(prodotto, pctPredefinita, politiche) {
+    var id = politicaDi(prodotto);
+    if (!id) return { pct: pctPredefinita, politica: null, fonte: 'generale' };
+    var l = Array.isArray(politiche) ? politiche : [];
+    for (var i = 0; i < l.length; i++) {
+      if (l[i] && l[i].id === id) {
+        return { pct: num(l[i].marginTarget, pctPredefinita), politica: l[i].label || id, fonte: 'prodotto' };
+      }
+    }
+    /* Una politica dichiarata e non trovata non si sostituisce in silenzio con
+       quella generale: si applica il generale, ma la riga lo dice. */
+    return { pct: pctPredefinita, politica: id, fonte: 'sconosciuta' };
+  }
+
   /** Il prezzo consigliato per un costo. Dal motore, sempre. */
   function prezzoDaMargine(costo, pct) {
     var M = global.InglyCostEngine;
@@ -77,12 +116,16 @@
     var righe = (Array.isArray(prodotti) ? prodotti : []).map(function (p) {
       var costo = num(p.costPrice);
       var attuale = num(p.salePrice);
+      var m = margineDi(p, pct, opz.politiche);
       var base = {
         id: p.id,
         nome: p.name || p.sku || String(p.id),
         costo: costo,
         prezzoAttuale: attuale,
         marginePctAttuale: marginePct(attuale, costo),
+        marginePctUsata: m.pct,
+        politica: m.politica,
+        fontePolitica: m.fonte,
       };
 
       if (!(costo > 0)) {
@@ -93,7 +136,7 @@
         });
       }
 
-      var grezzo = prezzoDaMargine(costo, pct);
+      var grezzo = prezzoDaMargine(costo, m.pct);
       if (grezzo == null) {
         return Object.assign(base, {
           calcolabile: false, cambia: false,
@@ -174,7 +217,10 @@
     VERSIONE: '1.0.0',
     PREDEFINITI: PREDEFINITI,
     ARROTONDAMENTI: ARROTONDAMENTI,
+    CAMPI_POLITICA: CAMPI_POLITICA,
     marginePct: marginePct,
+    politicaDi: politicaDi,
+    margineDi: margineDi,
     prezzoDaMargine: prezzoDaMargine,
     proposta: proposta,
     daScrivere: daScrivere,

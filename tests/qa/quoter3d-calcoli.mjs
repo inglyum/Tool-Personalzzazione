@@ -526,11 +526,21 @@ await page.reload({ waitUntil: 'load', timeout: 120000 });
 await page.waitForTimeout(15000);
 
 const ricaricato = await page.evaluate(async () => {
+  /* L'archivio si legge **prima** di navigare, e aspettando che ci sia invece
+     che a tempo fisso. Leggerlo dopo la navigazione rendeva questa fase
+     instabile sotto carico: il disegno della sezione riscrive `p3dq_v4` con lo
+     stato corrente, e se arriva prima della lettura l'elenco risulta vuoto.
+     Che l'archivio sopravviva al ricaricamento è quello che questa fase deve
+     misurare, e si misura appena ricaricato. */
+  let saved = [];
+  for (let atteso = 0; atteso < 8000; atteso += 250) {
+    saved = (JSON.parse(localStorage.getItem('p3dq_v4') || '{}').saved) || [];
+    if (saved.length) break;
+    await new Promise((s) => setTimeout(s, 250));
+  }
+  if (!saved.length) return { salvati: 0 };
   App.navigate('print3d');
   await new Promise((s) => setTimeout(s, 3500));
-  const archivio = JSON.parse(localStorage.getItem('p3dq_v4') || '{}');
-  const saved = archivio.saved || [];
-  if (!saved.length) return { salvati: 0 };
   /* `loadSaved` prende l'id del preventivo, non la sua posizione nell'elenco. */
   Print3DQuoter.loadSaved(saved[0].id);
   await new Promise((s) => setTimeout(s, 1500));

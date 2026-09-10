@@ -51,11 +51,15 @@ const aperto = await page.evaluate((sel) => {
     visibile: n.getBoundingClientRect().width > 200,
     schede: [...n.querySelectorAll('[data-tab]')].map((b) => b.getAttribute('data-tab')),
     campi: n.querySelectorAll('[data-campo]').length,
-    testo: n.textContent.slice(0, 400),
+    /* Il testo intero, non i primi quattrocento caratteri: il troncamento ha
+       fatto fallire il controllo qui sotto il giorno in cui l'intestazione del
+       pannello si e' allungata di una riga, e quel controllo non parla
+       dell'intestazione. */
+    testo: n.textContent,
   };
 }, NODO);
 dico('si apre e si vede', aperto && aperto.visibile);
-dico('con le tre sezioni (' + (aperto ? aperto.schede.join(' · ') : '—') + ')',
+dico('con le sezioni del costo (' + (aperto ? aperto.schede.join(' · ') : '—') + ')',
   aperto && ['manodopera', 'overhead', 'imballo'].every((s) => aperto.schede.includes(s)));
 dico('e i ruoli hanno due colonne, costo interno e tariffa cliente ('
   + (aperto ? aperto.campi : 0) + ' campi)', aperto && aperto.campi >= 18);

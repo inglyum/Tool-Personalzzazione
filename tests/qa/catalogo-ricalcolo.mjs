@@ -66,24 +66,35 @@ const anteprima = await page.evaluate(async () => {
   const righe = [...ov.querySelectorAll('tbody tr')];
   const targa = righe.find((r) => r.textContent.includes('Targa piccola'));
   const celle = targa ? [...targa.querySelectorAll('td')].map((t) => t.textContent.trim()) : [];
+  /* Le celle si leggono per intestazione, non per posizione. Leggerle per
+     posizione ha fatto fallire questo controllo il giorno in cui e' stata
+     aggiunta una colonna: il difetto era nel controllo, non nella tabella. */
+  const per = {};
+  intestazioni.forEach((t, i) => { if (t) per[t] = celle[i]; });
   return {
     aperta: true,
     intestazioni,
     righe: righe.length,
     celle,
+    per,
     riepilogo: (document.getElementById('cat-ric-riepilogo') || {}).textContent || '',
     conferma: (document.getElementById('cat-ric-conferma') || {}).textContent || '',
   };
 });
 dico('CAT-002 · l anteprima si apre', anteprima.aperta);
 dico('CAT-002b · e ha le colonne richieste (' + (anteprima.intestazioni || []).join('|') + ')',
-  ['Costo', 'Attuale', 'Nuovo', 'Delta €', 'Delta %', 'Mg attuale', 'Mg nuovo']
+  ['Costo', 'Attuale', 'Nuovo', 'Delta €', 'Delta %', 'Politica', 'Mg attuale', 'Mg nuovo']
     .every((c) => (anteprima.intestazioni || []).includes(c)));
 dico('CAT-002c · elenca tutti i prodotti, anche quelli non calcolabili (' + anteprima.righe + ')', anteprima.righe === 3);
-dico('CAT-005 · attuale, nuovo e delta sono nella riga (' + (anteprima.celle || []).slice(3, 7).join(' ') + ')',
-  (anteprima.celle || [])[3] === '€12.00' && (anteprima.celle || [])[4] === '€19.00' && /\+€7\.00/.test((anteprima.celle || [])[5] || ''));
-dico('CAT-007 · margine attuale e nuovo sono nella riga (' + (anteprima.celle || []).slice(7, 9).join(' ') + ')',
-  /16\.7%/.test((anteprima.celle || [])[7] || '') && /47\.4%/.test((anteprima.celle || [])[8] || ''));
+const C = anteprima.per || {};
+dico('CAT-005 · attuale, nuovo e delta sono nella riga ('
+  + [C['Attuale'], C['Nuovo'], C['Delta €']].join(' ') + ')',
+  C['Attuale'] === '€12.00' && C['Nuovo'] === '€19.00' && /\+€7\.00/.test(C['Delta €'] || ''));
+dico('CAT-007 · margine attuale e nuovo sono nella riga ('
+  + [C['Mg attuale'], C['Mg nuovo']].join(' ') + ')',
+  /16\.7%/.test(C['Mg attuale'] || '') && /47\.4%/.test(C['Mg nuovo'] || ''));
+dico('CAT-007b · e la riga dice quale politica ha usato (' + (C['Politica'] || '—') + ')',
+  !!(C['Politica'] || '').trim());
 dico('CAT-008 · il piede riassume il listino prima e dopo', /listino/.test(anteprima.riepilogo) && /€20\.00/.test(anteprima.riepilogo));
 
 /* ── CAT-003 · annullare non scrive niente ──────────────────────────────── */
