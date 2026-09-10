@@ -935,13 +935,12 @@ function totali(){
 var PERCHE_APERTO=false;
 function togglePerche(){ PERCHE_APERTO=!PERCHE_APERTO; render(); }
 
-var CONF_ETICHETTA={
-  measured:  { lab:'misurato',  col:'var(--green,#22c55e)', spiega:'letto da uno strumento' },
-  verified:  { lab:'verificato',col:'var(--green,#22c55e)', spiega:'da una fonte identificabile' },
-  declared:  { lab:'dichiarato',col:'var(--text-muted)',    spiega:'inserito da te' },
-  estimated: { lab:'stimato',   col:'var(--orange)',        spiega:'dedotto, non verificato' },
-  missing:   { lab:'mancante',  col:'var(--red)',           spiega:'non c\'è: il costo esce più basso del vero' },
-};
+/* Le etichette della fiducia non stanno piu' qui: stanno in `cost-audit.js`,
+   insieme a quelle della provenienza. Erano tre vocabolari per la stessa cosa
+   — il motore, il Product Builder e questo file — e tre vocabolari divergono:
+   lo stesso numero era «Stimato» in una schermata e «stimato» in un'altra, su
+   una scala che non coincideva. */
+function _audit(){ return (typeof window!=='undefined') && window.InglyCostAudit; }
 
 function pannelloPerche(){
   var MOT=(typeof window!=='undefined') && window.InglyCostEngine;
@@ -970,7 +969,11 @@ function pannelloPerche(){
              detail: q>1 ? ('diviso su '+q+' pezzi') : 'un solo pezzo: lo paga tutto',
              confidence:'declared' };
   });
-  var conf=function(id){ var c=CONF_ETICHETTA[id]||CONF_ETICHETTA.declared; return c; };
+  var conf=function(id){
+    var A=_audit();
+    if(A) { var c=A.confidenza(id||'declared'); return { lab:c.etichetta, col:c.colore, spiega:c.spiega }; }
+    return { lab:id||'—', col:'var(--text-muted)', spiega:'' };
+  };
 
   /* Il conto con i numeri dentro, non la formula simbolica. «grammi ÷ 1000 ×
      €/kg» dice come si calcola; «290 g × € 15,99/kg = € 4,64» dice da dove
@@ -995,7 +998,19 @@ function pannelloPerche(){
 
   var avvisi=(x.warnings||[]).filter(function(a){ return a && a.livello!=='INFO'; });
 
+  /* La domanda vera di un audit non e' «da dove viene questo numero» ma
+     «quanti di questi numeri non li ho scelti io». Non si legge nel totale. */
+  var A=_audit();
+  var riep=A ? A.riepilogo(x) : null;
+  var rigaRiepilogo = riep
+    ? '<div style="margin-bottom:10px;padding:8px 10px;border-radius:9px;font-size:10px;line-height:1.5;'
+      + 'background:'+(riep.daVerificare>0?'#f59e0b12':'#10b98112')+';'
+      + 'border:1px solid '+(riep.daVerificare>0?'#f59e0b30':'#10b98130')+';'
+      + 'color:'+(riep.daVerificare>0?'#fcd34d':'#86efac')+'">'+esc3(riep.frase)+'</div>'
+    : '';
+
   return '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">'
+    +rigaRiepilogo
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:520px">'
       +'<thead><tr style="border-bottom:1px solid var(--border2)">'
       +['Voce','Costo','Il conto','Dato usato','Fiducia'].map(function(h,i){

@@ -1,3 +1,14 @@
+/** L'aliquota configurata, dal suo proprietario. Il 22% resta come ripiego
+    dichiarato: un PDF senza IVA sembra un totale finito e non lo e'. */
+function _aliquotaPdf() {
+  try {
+    var F = (typeof window !== 'undefined') && window.InglyFisco;
+    var a = F && F.aliquota ? F.aliquota() : null;
+    if (a != null && isFinite(a) && a >= 0) return a;
+  } catch (e) {}
+  return 22;
+}
+
 
 // ════════════════════════════════════════════════════════════════════════
 // INGLY OS v10 — PDF & TEMPLATE SYSTEM
@@ -144,13 +155,41 @@ function _buildQuoteData() {
     return null;
   }
 
-  // Calcoli
+  /* ── Il conto del PDF non e' un conto suo ──────────────────────────────
+     Ricarico, sconto e IVA erano ricalcolati qui, e una seconda volta piu'
+     sotto per ogni riga. Tre aritmetiche parallele a quella del preventivo,
+     tenute uguali a mano: la prima volta che una avesse smesso di somigliare
+     alle altre, il cliente avrebbe ricevuto un PDF con un totale diverso da
+     quello approvato. E l'IVA era il 22% scritto a mano, quindi chi vende al
+     4% mandava gia' oggi un documento sbagliato.
+
+     Adesso il conto lo fa il motore, con lo stesso ordine di operazioni che
+     faceva questo file: ricarico, poi sconto, poi IVA sul netto scontato. */
   const markup   = markupPct / 100;
   const discount = discountPct / 100;
-  const subBase  = lines.reduce((a, l) => a + (+(l.subtotal) || 0) * (1 + markup), 0);
-  const subFinal = subBase * (1 - discount);
-  const vatAmt   = withIVA ? subFinal * 0.22 : 0;
-  const grand    = subFinal + vatAmt;
+  const MOT = (typeof window !== 'undefined') && window.InglyCostEngine;
+  if (!MOT || typeof MOT.prezzo !== 'function') {
+    if (typeof toast !== 'undefined') toast('Il motore dei prezzi non è disponibile: il PDF non si genera', 'error');
+    return null;
+  }
+  /** Il prezzo di un imponibile, dal motore. Nessun pavimento di margine: qui
+      non si decide un prezzo, si mette su carta uno gia' concordato. */
+  const _conto = (imponibile) => MOT.prezzo(+imponibile || 0, {
+    strategia: 'ricarico', ricarico: 1 + markup,
+    scontoPct: discountPct, ivaPct: withIVA ? _aliquotaPdf() : 0,
+  });
+
+  /* L'imponibile prima dello sconto: serve solo a mostrare quanto il cliente
+     risparmia. Anche questo dal motore — moltiplicare qui per il ricarico
+     avrebbe lasciato in piedi l'ultima delle tre aritmetiche parallele. */
+  const _senzaSconto = (imponibile) => MOT.prezzo(+imponibile || 0, {
+    strategia: 'ricarico', ricarico: 1 + markup, ivaPct: 0,
+  }).netto;
+  const subBase  = lines.reduce((a, l) => a + _senzaSconto(+(l.subtotal) || 0), 0);
+  const totale   = _conto(lines.reduce((a, l) => a + (+(l.subtotal) || 0), 0));
+  const subFinal = totale.netto;
+  const vatAmt   = totale.iva;
+  const grand    = totale.lordo;
   const saved    = subBase - subFinal;
   const quoteNum = 'PRV-' + Date.now().toString().slice(-6);
   const dateStr  = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -230,8 +269,11 @@ function _buildQuoteHTML(data, tplId, cfg) {
   // ── Row items ─────────────────────────────────────────────────────
   const rowsHTML = lines.map((l, i) => {
     const sub = +(l.subtotal) || ((+(l.unitCost) || 0) * (+(l.qty) || 1));
-    const lineBase = sub * (1 + markup);
-    const lineNet  = lineBase * (1 - discount);
+    /* Stessa fonte del totale: una riga che si calcola da sé è il modo in cui
+       la somma delle righe smette di fare il totale. */
+    const lineBase = _senzaSconto(sub);
+    const lineNet  = MOT.prezzo(sub, { strategia: 'ricarico', ricarico: 1 + markup,
+      scontoPct: discountPct, ivaPct: 0 }).netto;
     const unitNet  = lineNet / Math.max(+(l.qty) || 1, 1);
     const bg = i % 2 === 0 ? T.bodyBg : (T.bodyBg === '#ffffff' ? '#f8fafc' : '#ffffff');
     const lineDiscBadge = discount>0 ? `<span style="font-size:9px;background:#22c55e15;color:#22c55e;padding:1px 6px;border-radius:99px;font-weight:700;margin-left:6px">-${discountPct}%</span>` : '';

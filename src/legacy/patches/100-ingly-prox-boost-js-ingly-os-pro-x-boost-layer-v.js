@@ -2,6 +2,18 @@
 // ingly-prox-boost.js — INGLY OS PRO X · Boost Layer v3
 // Unified dock bar + LaserCalc/Listino/Progetti enhancements
 (function () {
+
+  /** L'aliquota configurata. Il 22% resta come ripiego dichiarato: senza un
+      numero il totale uscirebbe senza IVA, che e' peggio di un'IVA sbagliata
+      perche' sembra un totale finito. */
+  function _aliquotaIva() {
+    try {
+      var F = (typeof window !== 'undefined') && window.InglyFisco;
+      var a = F && F.aliquota ? F.aliquota() : null;
+      if (a != null && isFinite(a) && a >= 0) return a;
+    } catch (e) {}
+    return 22;
+  }
   'use strict';
   if (window._inglyProXBoost) return;
   window._inglyProXBoost = true;
@@ -1474,7 +1486,11 @@ body             #content-inner { padding-bottom: 76px; }
                      .reduce(function (s, r) { return s + Math.abs(r.qty * r.price); }, 0);
       var pack  = parseFloat(q('ppm-pack').value) || 0;
       var net   = Math.max(0, sub - disc);
-      var grand = net * 1.22 + pack;
+      /* L'aliquota era scritta a mano qui e nel corpo della mail: chi vende
+         libri al 4% o esporta in esenzione riceveva comunque un totale
+         gonfiato del 22%, e la mail lo dichiarava pure. L'aliquota ha un
+         proprietario — InglyFisco — e questo file la chiede. */
+      var grand = net * (1 + _aliquotaIva() / 100) + pack;
       var quote = {
         id: 'Q' + Date.now(),
         date: new Date().toISOString(),
@@ -1581,10 +1597,11 @@ body             #content-inner { padding-bottom: 76px; }
         if (r.type === 'sconto') disc += Math.abs(r.qty * r.price);
         else sub += r.qty * r.price;
       });
-      var grand = Math.max(0, sub - disc) * 1.22 + (parseFloat(q('ppm-pack').value) || 0);
+      var aliq = _aliquotaIva();
+      var grand = Math.max(0, sub - disc) * (1 + aliq / 100) + (parseFloat(q('ppm-pack').value) || 0);
       var lines = rows.map(function (r) { return '• ' + r.qty + ' ' + (r.um||'pz') + ' × ' + r.name + ' = €' + (r.qty*r.price).toFixed(2); }).join('\n');
       var body = 'Gentile ' + client + ',\n\nIn allegato il preventivo richiesto.\n\nDettaglio:\n' + lines +
-        '\n\nTOTALE: €' + grand.toFixed(2) + ' (IVA 22% inclusa)\n\nCordiali saluti';
+        '\n\nTOTALE: €' + grand.toFixed(2) + ' (IVA ' + aliq + '% inclusa)\n\nCordiali saluti';
       window.location.href = 'mailto:' + encodeURIComponent(email) +
         '?subject=' + encodeURIComponent('Preventivo del ' + new Date().toLocaleDateString('it-IT')) +
         '&body=' + encodeURIComponent(body);

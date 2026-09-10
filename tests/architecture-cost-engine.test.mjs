@@ -168,13 +168,24 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
   /* Misurati oggi. Ogni riduzione va accompagnata dall'abbassamento del tetto:
      è il modo per accorgersi se un numero risale in silenzio. */
   const TETTI = {
-    /* 9 e 9. Il ×2,5 del magazzino è diventato un margine del 60% chiesto al
-       motore — stesso prezzo, ma confrontabile con il pavimento — e la banda
-       di previsione di patch 099 ha smesso di somigliare a un ricarico:
-       `base * 1.2` in un gestionale che ha avuto quattro motori di prezzo si
-       legge come tale, e il classificatore lo contava come tale. Adesso si
-       chiama `previstoOttimista`. */
-    motoriDuplicati: 9,       // categoria D — un secondo conto del prezzo
+    /* 5 e 9, da 9 e 9. Sono scesi togliendo il conto da tre documenti che il
+       cliente riceve — e che lo ricalcolavano ognuno per conto suo:
+
+         patch 100  il preventivo rapido e la sua mail: `net * 1.22`, con
+                    l'aliquota scritta a mano in due punti e dichiarata «IVA
+                    22% inclusa» nel corpo del messaggio. Chi vende al 4%
+                    mandava gia' oggi un documento sbagliato.
+         patch 050  il PDF: ricarico, sconto e IVA ricalcolati per il totale e
+                    una seconda volta per ogni riga. Tre aritmetiche parallele
+                    a quella del preventivo, tenute uguali a mano.
+         patch 157  l'anteprima fattura: lo stesso imponibile dello schermo,
+                    ottenuto per un'altra strada.
+
+       Tutte e tre adesso chiedono il conto a `InglyCostEngine.prezzo()`, con
+       lo stesso ordine di operazioni che facevano prima — ricarico, sconto,
+       IVA sul netto scontato — quindi i numeri non cambiano. Cambia che ce
+       n'e' uno solo. */
+    motoriDuplicati: 5,       // categoria D — un secondo conto del prezzo
     regoleDaEstrarre: 9,      // categoria E — politiche commerciali nel codice
   };
 
@@ -197,9 +208,9 @@ test('i motori di prezzo duplicati non crescono', async (t) => {
      prezzo è nata o morta — e con i soli tetti per categoria il test griderebbe
      a una regressione che non c'è, o coprirebbe una crescita vera dietro uno
      spostamento. La somma non si sposta per un cambio di casella. */
-  await t.test('D + E ≤ 18 — la somma non cresce, comunque si spostino', () => {
+  await t.test('D + E ≤ 14 — la somma non cresce, comunque si spostino', () => {
     const somma = dati.riassunto.motoriDuplicati + dati.riassunto.regoleDaEstrarre;
-    assert.ok(somma <= 18, 'prezzo fuori dal motore salito a ' + somma + ' (tetto 18)');
+    assert.ok(somma <= 14, 'prezzo fuori dal motore salito a ' + somma + ' (tetto 14)');
   });
 
   /* Il numero che conta davvero: quanti moduli calcolano un prezzo **senza**

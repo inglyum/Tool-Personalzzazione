@@ -386,10 +386,15 @@ const esito = await page.evaluate(async () => {
       celle.every((c) => c.length === 5 && c[1].includes('€') && c[2].length > 2 && c[4].length > 2));
     dico('le formule sono quelle vere, non etichette generiche',
       /÷ 1000 × €\/kg/.test(t) && /tasso ÷ \(1 − tasso\)/.test(t));
+    /* Senza distinzione di maiuscole: le etichette della fiducia adesso
+       vengono da `cost-audit.js`, che le scrive capitalizzate come le
+       pastiglie del Product Builder. Erano minuscole qui e maiuscole là — era
+       il sintomo dei due vocabolari, non una scelta. Il controllo guarda il
+       significato, non la forma della prima lettera. */
     dico('la fiducia distingue stimato da dichiarato',
-      /stimato/.test(t) && /dichiarato/.test(t));
+      /stimato/i.test(t) && /dichiarato/i.test(t));
     dico('l\'energia da targa è marcata stimata',
-      celle.some((c) => /Energia/.test(c[0]) && /stimato/.test(c[4])));
+      celle.some((c) => /Energia/i.test(c[0]) && /stimato/i.test(c[4])));
     dico('le tre posizioni di prezzo sono nel pannello',
       /Prezzo minimo/.test(t) && /Prezzo consigliato/.test(t) && /Prezzo premium/.test(t));
     dico('le ipotesi sono dichiarate', /Su cosa regge questo numero/.test(t));

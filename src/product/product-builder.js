@@ -393,23 +393,23 @@
   }
 
   /* La provenienza di un numero, dichiarata e non dedotta: il motore sa se un
-     campo c\'era, e chi lo chiama sa da dove l\'ha preso. */
-  const FONTI = {
-    magazzino:   { et: 'Magazzino',   cl: 'reale' },
-    reale:       { et: 'Reale',       cl: 'reale' },
-    inventory:   { et: 'Magazzino',   cl: 'reale' },
-    configurato: { et: 'Configurato', cl: 'configurato' },
-    inserito:    { et: 'Manuale',     cl: 'manuale' },
-    default:     { et: 'Default',     cl: 'default' },
-    stima:       { et: 'Stimato',     cl: 'stima' },
-    calcolato:   { et: 'Calcolato',   cl: 'calcolato' },
-    mancante:    { et: 'Mancante',    cl: 'mancante' },
-  };
+     campo c'era, e chi lo chiama sa da dove l'ha preso.
+
+     La tabella delle traduzioni non sta piu' qui: sta in `cost-audit.js`, e la
+     ragione e' che questa schermata ha smesso di essere l'unica a mostrarla.
+     Due tabelle divergono — fra sei mesi `stima` sarebbe «Stimato» qui e
+     «Approssimativo» nel Quoter 3D, e nessuna delle due sarebbe in torto. Il
+     disegno resta qui, perche' e' quello che questa schermata sa fare meglio;
+     il significato no. */
+  function A() { return global.InglyCostAudit; }
 
   function badgeFonte(fonte) {
-    const f = FONTI[fonte];
-    if (!f) return '';
-    return ' <span class="pb__source pb__source--' + f.cl + '">' + esc(f.et) + '</span>';
+    const a = A();
+    if (!a) return '';
+    const f = a.fonte(fonte);
+    if (!f || f.livello === 'mancante' && !fonte) return '';
+    return ' <span class="pb__source pb__source--' + esc(f.livello) + '" title="' + esc(f.spiega) + '">'
+      + esc(f.etichetta) + '</span>';
   }
 
   function priceTile(label, value, note, format) {

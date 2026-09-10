@@ -13,13 +13,44 @@
   function num(v){ v=parseFloat(v); return isFinite(v)?v:0; }
   function eid(id){ return document.getElementById(id); }
 
+  /* L'imponibile dell'anteprima fattura era ricalcolato qui, con ricarico e
+     sconto scritti in linea. E' lo stesso numero che il preventivo mostra
+     sullo schermo, ottenuto per un'altra strada: due strade restano uguali
+     finche' qualcuno non tocca una delle due, e chi la tocca non sa che
+     l'altra esiste. Il conto lo fa il motore, con l'ordine di operazioni che
+     faceva questo file — ricarico, poi sconto. */
+  /** L'imponibile di una riga, dalla stessa fonte del totale. Tenere qui la
+      formula significherebbe che la somma delle righe puo' smettere di fare
+      il totale senza che nessuno se ne accorga. */
+  function _netto(imponibile, st){
+    var MOT=window.InglyCostEngine;
+    if(!MOT || typeof MOT.prezzo!=='function') return 0;
+    return MOT.prezzo(num(imponibile), {
+      strategia:'ricarico', ricarico:1+num(st.markup),
+      scontoPct:num(st.discount)*100, ivaPct:0,
+    }).netto;
+  }
+
   function currentNet(){
     var lines=(window.Quoter&&Quoter.lines)||[];
     var linesCost=lines.reduce(function(a,l){ return a+(num(l.subtotal)||num(l.unitCost)*num(l.qty||1)); },0);
     var extra=(window.Quoter&&Quoter._getExtraCosts)?num(Quoter._getExtraCosts()):0;
-    var markup=num((eid('qr-markup')||{}).value||100)/100;
-    var discount=num((eid('qr-discount')||{}).value||0)/100;
-    return { net:(linesCost+extra)*(1+markup)*(1-discount), lines:lines, markup:markup, discount:discount, extra:extra };
+    var markupPct=num((eid('qr-markup')||{}).value||100);
+    var discountPct=num((eid('qr-discount')||{}).value||0);
+    var MOT=window.InglyCostEngine;
+    var netto;
+    if(MOT && typeof MOT.prezzo==='function'){
+      netto=MOT.prezzo(linesCost+extra, {
+        strategia:'ricarico', ricarico:1+markupPct/100,
+        scontoPct:discountPct, ivaPct:0,
+      }).netto;
+    }else{
+      /* Senza motore l'anteprima non inventa un totale suo: dichiara zero e
+         chi la apre vede che manca qualcosa, invece di un numero plausibile
+         e diverso da quello approvato. */
+      netto=0;
+    }
+    return { net:netto, lines:lines, markup:markupPct/100, discount:discountPct/100, extra:extra };
   }
 
   function open(){
@@ -45,10 +76,10 @@
       var seq=Math.max(1,Math.round(num(fSeq._input.value)||1));
       var st=currentNet();
       var qlines=st.lines.map(function(l){
-        var lineNet=(num(l.subtotal)||num(l.unitCost)*num(l.qty||1))*(1+st.markup)*(1-st.discount);
+        var lineNet=_netto(num(l.subtotal)||num(l.unitCost)*num(l.qty||1), st);
         return { label:l.desc||l.name||'Voce', qty:num(l.qty||1), unit:+(lineNet/(num(l.qty)||1)).toFixed(2), lineTotal:+lineNet.toFixed(2) };
       });
-      if(st.extra>0){ var en=st.extra*(1+st.markup)*(1-st.discount); qlines.push({label:'Costi aggiuntivi',qty:1,unit:+en.toFixed(2),lineTotal:+en.toFixed(2)}); }
+      if(st.extra>0){ var en=_netto(st.extra, st); qlines.push({label:'Costi aggiuntivi',qty:1,unit:+en.toFixed(2),lineTotal:+en.toFixed(2)}); }
       var vat=fiscal.addVat(st.net, rate);
       var inv=fiscal.buildInvoiceFromQuote({ lines:qlines, subtotal:vat.totale, deposit:0 }, { seq:seq, year:new Date().getFullYear(), rate:rate });
 
