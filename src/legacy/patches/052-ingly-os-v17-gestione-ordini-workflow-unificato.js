@@ -116,6 +116,7 @@ const GestioneOrdini = {
       /* La distinta economica e le sue tre copie: senza queste l'ordine torna
          a essere un totale, ed è il difetto che il preventivo strutturato
          esiste per chiudere. */
+      'economic',
       'costBreakdown','pricingSnapshot','currentPricing','pricingHistory',
       'pricingEngineVersion','pricingProfile','items']
       .forEach(function(k){ if(d[k]!==undefined) order[k]=d[k]; });

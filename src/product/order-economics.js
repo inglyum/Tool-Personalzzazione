@@ -330,20 +330,79 @@
    * @param {Object} reale   l'esito di `InglyActualCost.perOrdine()`
    * @param {Object} spese   le voci già registrate, indicizzate per tipo
    */
+  /* ── I due lettori canonici ─────────────────────────────────────────────
+     Il ricavo di un ordine viveva in quattro campi — `economic.revenueGross`,
+     `grossPrice`, `total`, `value` — e ogni funzione ne leggeva uno diverso.
+     `Orders.toSale` leggeva `value`, che gli ordini nati dal preventivatore
+     non scrivono: la vendita nasceva a zero euro. Il costo aveva lo stesso
+     problema con `cost` contro `totalCost`, ed è il motivo per cui la card
+     mostrava «Costo € 0,00» su ordini che un costo ce l'avevano.
+
+     Da qui in avanti si legge da una funzione sola, con una precedenza
+     dichiarata. Nessun campo viene rimosso: i vecchi restano come ripiego,
+     perché gli ordini di ieri devono continuare ad aprirsi. */
+
+  function ricavoOrdine(ordine) {
+    var o = ordine || {};
+    var e = o.economic || {};
+    var v = [e.revenueGross, e.revenueNet, o.grossPrice, o.totalGross, o.total, o.totalNet, o.value];
+    for (var i = 0; i < v.length; i++) if (num(v[i]) > 0) return num(v[i]);
+    return 0;
+  }
+
+  function ricavoNettoOrdine(ordine) {
+    var o = ordine || {};
+    var e = o.economic || {};
+    var v = [e.revenueNet, o.totalNet, o.netPrice, o.total, o.value];
+    for (var i = 0; i < v.length; i++) if (num(v[i]) > 0) return num(v[i]);
+    return 0;
+  }
+
+  /** Il costo di produzione preventivato. Zero e «non dichiarato» sono due
+      cose diverse: `costoNoto` distingue un lavoro che costa poco da uno di
+      cui non si è mai scritto il costo, e la card ha bisogno di saperlo per
+      non mostrare uno scostamento che non significa niente. */
+  function costoOrdine(ordine) {
+    var o = ordine || {};
+    var e = o.economic || {};
+    var v = [e.costTotal, o.totalCost, o.cost, o.costTotal];
+    for (var i = 0; i < v.length; i++) if (v[i] != null && num(v[i]) > 0) {
+      return { valore: num(v[i]), noto: true };
+    }
+    return { valore: 0, noto: false };
+  }
+
   function pannelloConsuntivo(ordine, reale, spese) {
     var S = global.InglyOrderSnapshot;
     var SC = global.InglyScostamento;
     var o = ordine || {};
     var registrate = spese || {};
 
-    /* Il preventivato viene dallo snapshot se c'è: è quello congelato, il solo
-       che rappresenti la promessa fatta al cliente. Se manca si ripiega sui
-       campi dell'ordine, dichiarandolo. */
+    /* ── Da dove viene il preventivato ────────────────────────────────────
+       Prima veniva dallo snapshot, e dai campi dell'ordine solo se lo
+       snapshot mancava. È il motivo per cui la card diceva «Costo € 0,00»:
+       senza snapshot ripiegava su `o.cost`, un campo che gli ordini nati dal
+       preventivatore non scrivono — loro scrivono `totalCost`.
+
+       Ora la fonte primaria è l'ordine: `economic` se c'è, altrimenti i suoi
+       campi economici letti dai lettori canonici. Lo snapshot resta, ma come
+       storico immutabile e come ripiego per gli ordini vecchi che non hanno
+       né l'uno né gli altri — non più come sorgente della card. */
+    var e = o.economic;
     var letto = S ? S.leggi(o) : { disponibile: false };
-    var daSnapshot = letto.disponibile;
-    var t = daSnapshot ? letto.snapshot.totals : null;
-    var costoPrev = daSnapshot ? num(t.totalCost) : num(o.cost);
-    var ricavo = daSnapshot ? num(t.totalNet) : num(o.total || o.value);
+    var costo = costoOrdine(o);
+    var costoPrev = costo.valore;
+    var costoNoto = costo.noto;
+    var ricavo = ricavoNettoOrdine(o);
+    var fonte = e ? 'economic' : (costoNoto || ricavo > 0 ? 'ordine' : null);
+
+    if (!fonte && letto.disponibile) {
+      var t = letto.snapshot.totals;
+      costoPrev = num(t.totalCost);
+      costoNoto = costoPrev > 0;
+      ricavo = num(t.totalNet);
+      fonte = 'snapshot';
+    }
 
     var costoReale = (reale && reale.registrato) ? num(reale.costo) : null;
 
@@ -379,7 +438,7 @@
       + '<th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--text-dim);text-transform:uppercase">Reale</th>'
       + '<th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--text-dim);text-transform:uppercase">Scostamento</th>'
       + '</tr>'
-      + rigaTre('Costo', costoPrev, costoReale)
+      + rigaTre('Costo', costoNoto ? costoPrev : null, costoReale)
       + rigaTre('Ricavo', ricavo, confronto.disponibile ? confronto.reale.ricavo : ricavo)
       + rigaTre('Profitto',
           confronto.preventivato ? confronto.preventivato.profitto : null,
@@ -402,9 +461,15 @@
         + '</div>';
     }
 
+    /* Una nota si scrive solo quando c'è qualcosa da dire. Un ordine con il
+       suo modello economico non ha bisogno di spiegazioni; uno senza costo
+       dichiarato sì, perché altrimenti quel trattino sembra un guasto. */
+    var nota = null;
+    if (fonte === 'snapshot') nota = 'preventivato dallo storico congelato del preventivo';
+    else if (!costoNoto) nota = 'costo di produzione non dichiarato in questo ordine: il confronto è possibile solo sul ricavo';
+
     return '<div style="display:flex;flex-direction:column;gap:12px">'
-      + intestazione('Preventivato · Reale · Scostamento',
-          daSnapshot ? null : 'preventivato dai campi dell\'ordine, non da uno storico congelato')
+      + intestazione('Preventivato · Reale · Scostamento', nota)
       + tabella + esito
       + '<div style="border-top:1px solid var(--border);padding-top:10px">'
       + intestazione('Registra com\'è andata')
@@ -461,6 +526,9 @@
   }
 
   global.InglyOrderEconomics = {
+    ricavoOrdine: ricavoOrdine,
+    ricavoNettoOrdine: ricavoNettoOrdine,
+    costoOrdine: costoOrdine,
     pannello: pannello,
     pannelloConsuntivo: pannelloConsuntivo,
     registraVoce: registraVoce,

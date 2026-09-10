@@ -75,7 +75,8 @@
 
     if (corrente.vuota) {
       nodo.innerHTML = card(
-        '<div style="font-size:12px;color:var(--text-muted,#888);line-height:1.6">'
+        economiaPreventivata(ordine)
+        + '<div style="font-size:12px;color:var(--text-muted,#888);line-height:1.6">'
         + esc(corrente.motivo || 'Questo ordine non porta una distinta economica.')
         + (corrente.legacy
           ? '<br>I totali che aveva si conservano: costo ' + eur(corrente.totals.costoTotale)
@@ -86,8 +87,74 @@
     }
 
     var s = b.scostamento(originale, corrente);
-    nodo.innerHTML = card(riepilogo(corrente, s) + tabella(corrente) + piede());
+    nodo.innerHTML = card(riepilogo(corrente, s) + tabella(corrente) + piede()
+      + economiaPreventivata(ordine));
     lega(nodo);
+  }
+
+  /* ── ECONOMIA PREVENTIVATA ──────────────────────────────────────────────
+     Le voci di costo come le ha calcolate il preventivo, senza accorpare:
+     ammortamento e manutenzione restano due righe, perché sono due decisioni
+     diverse — la prima dipende da quanto è costata la macchina, la seconda da
+     quanto la si usa.
+
+     Questa sezione è **interna**. Costo di produzione, profitto, margine e
+     markup non escono da qui: il cliente vede descrizione, quantità, prezzo,
+     sconto, imponibile, IVA e totale, e nient'altro. */
+  var ETICHETTE = {
+    materiale: 'Materiale', energia: 'Energia', macchina: 'Macchina',
+    manutenzione: 'Manutenzione', manodopera: 'Manodopera', setup: 'Setup',
+    postProcesso: 'Post-processo', scarto: 'Scarto', overhead: 'Spese generali',
+    packaging: 'Imballo', accessori: 'Accessori', commissioni: 'Commissioni',
+    spedizione: 'Spedizione', altro: 'Altri costi',
+  };
+
+  function economiaPreventivata(ordine) {
+    var e = ordine && ordine.economic;
+    if (!e) return '';
+    var b = B();
+    var ordine_voci = (b && b.VOCI_COSTO) || Object.keys(ETICHETTE);
+
+    var righe = ordine_voci.map(function (k) {
+      var v = num((e.costs || {})[k]);
+      if (!(v > 0)) return '';   /* niente righe a zero: sono rumore */
+      return '<tr><td style="padding:5px 6px;color:var(--text-muted,#888)">'
+        + esc(ETICHETTE[k] || k) + '</td>'
+        + '<td style="padding:5px 6px;text-align:right;color:var(--text,#e8e8f0)">'
+        + eur(v) + '</td></tr>';
+    }).join('');
+
+    var riga = function (etichetta, valore, forte, colore) {
+      return '<tr><td style="padding:6px;' + (forte ? 'font-weight:800;' : '')
+        + 'color:' + (colore || 'var(--text,#e8e8f0)') + '">' + esc(etichetta) + '</td>'
+        + '<td style="padding:6px;text-align:right;' + (forte ? 'font-weight:800;' : '')
+        + 'color:' + (colore || 'var(--text,#e8e8f0)') + '">' + esc(valore) + '</td></tr>';
+    };
+
+    return '<details style="margin-top:12px;border-top:1px solid var(--border,#2a2a35);padding-top:10px">'
+      + '<summary style="cursor:pointer;font-size:11px;font-weight:800;color:var(--text-muted,#888);'
+      + 'text-transform:uppercase;letter-spacing:.05em">🔒 Economia preventivata — solo interna</summary>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">'
+      + righe
+      + '<tr><td colspan="2" style="border-top:1px solid var(--border,#2a2a35)"></td></tr>'
+      + riga('Costo di produzione', eur(e.costTotal), true)
+      + '<tr><td colspan="2" style="height:8px"></td></tr>'
+      + riga('Ricavo netto', eur(e.revenueNet))
+      + riga('IVA', eur((e.pricing || {}).iva))
+      + riga('Ricavo lordo', eur(e.revenueGross), true)
+      + '<tr><td colspan="2" style="height:8px"></td></tr>'
+      + riga('Profitto previsto', eur(e.profit), true,
+          num(e.profit) >= 0 ? '#22c55e' : '#ef4444')
+      + riga('Margine previsto', pct(e.marginPct), false,
+          num(e.marginPct) >= 20 ? '#22c55e' : '#f59e0b')
+      + '</table>'
+      + '<div style="font-size:9px;color:var(--text-muted,#888);margin-top:6px;line-height:1.5">'
+      + 'Questi numeri non compaiono in nessun documento per il cliente. '
+      + (e.source === 'legacy'
+        ? 'Ordine precedente al modello economico: ricostruito dai campi che aveva.'
+        : 'Congelati al momento del preventivo'
+          + (e.calculationVersion ? ' · motore ' + esc(e.calculationVersion) : '') + '.')
+      + '</div></details>';
   }
 
   function card(dentro) {
@@ -312,6 +379,7 @@
   global.InglyOrderBreakdown = {
     VERSIONE: VERSIONE,
     render: render,
+    economiaPreventivata: economiaPreventivata,
     fonte: fonte,
     _stato: function () { return stato; },
   };

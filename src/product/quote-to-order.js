@@ -288,6 +288,18 @@
       dati.currentPricing = clona(quote.pricingSnapshot || distinta);
       dati.pricingHistory = [];
     }
+    /* Il modello economico canonico viaggia per primo: è quello che rende
+       l'ordine leggibile da solo. Se il preventivo non ce l'ha — perché è
+       stato salvato prima che esistesse — se ne costruisce uno dai campi che
+       ha, marcato `legacy`, invece di lasciare l'ordine muto. */
+    if (quote.economic) {
+      dati.economic = clona(quote.economic);
+    } else {
+      var B = global.InglyCostBreakdown;
+      if (B && typeof B.economicoLegacy === 'function') {
+        dati.economic = B.economicoLegacy(quote);
+      }
+    }
     if (quote.pricingEngineVersion) dati.pricingEngineVersion = quote.pricingEngineVersion;
     if (quote.pricingProfile) dati.pricingProfile = quote.pricingProfile;
 

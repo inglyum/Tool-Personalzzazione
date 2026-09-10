@@ -1102,6 +1102,11 @@ const Quoter={
       q.costBreakdown = distinta;
       q.pricingSnapshot = JSON.parse(JSON.stringify(distinta));
       q.pricingEngineVersion = (window.InglyCostEngine && window.InglyCostEngine.version) || null;
+      /* Il modello economico canonico: costo, ricavo, profitto, margine e le
+         voci che li compongono. È quello che l'ordine leggerà fra sei mesi
+         senza dover ricostruire niente — e si costruisce **qui**, dove il
+         calcolo esiste ancora, non dopo dalle impostazioni correnti. */
+      q.economic = _bd.economico(_r, distinta, { quantita: 1, righe: this.lines });
     }
 
     const _snap = typeof window !== 'undefined' && window.InglyOrderSnapshot;

@@ -473,7 +473,178 @@
     return v;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     IL MODELLO ECONOMICO DELL'ORDINE
+     ═══════════════════════════════════════════════════════════════════════
+
+     Un ordine che porta solo `value: 150` non sa niente di se stesso. Aperto
+     fra sei mesi non può dire quanto era costato produrlo, che margine ci si
+     era messi, né quali voci componessero quel costo — e senza quei numeri la
+     domanda «su questo lavoro ci ho guadagnato?» non ha risposta.
+
+     `economic` è quella risposta, congelata al momento del preventivo.
+
+     ── Perché `costs` non usa le categorie della distinta ─────────────────
+
+     La distinta raggruppa manutenzione dentro «macchina», perché in tabella
+     leggerle separate non aiuta nessuno. Qui invece si conservano distinte:
+     ammortamento e manutenzione sono due decisioni diverse — la prima
+     dipende da quanto è costata la macchina, la seconda da quanto la si usa —
+     e chi rilegge il costo deve poterle separare. Le voci portano il loro
+     `id` originale, e da lì si costruisce `costs` senza accorpare niente.
+
+     ── Che cosa NON entra qui ────────────────────────────────────────────
+
+     Nulla di questo va mostrato al cliente. Il cliente vede descrizione,
+     quantità, prezzo unitario, sconto, imponibile, IVA e totale. Costo di
+     produzione, margine, markup e profitto restano dentro INGLY OS. */
+
+  /* La mappa fra l'id della voce e il nome del costo. Un id che non è qui
+     finisce in `altro`: perderlo sarebbe peggio che classificarlo male. */
+  var COSTI = {
+    materiale: 'materiale', material: 'materiale', resina: 'materiale',
+    inchiostro: 'materiale', film: 'materiale', supporto: 'materiale', blank: 'materiale',
+    energia: 'energia',
+    macchina: 'macchina', ammortamento: 'macchina',
+    manutenzione: 'manutenzione',
+    manodopera: 'manodopera', finitura: 'manodopera', lavoro: 'manodopera',
+    setup: 'setup', avviamento: 'setup', primaStampa: 'setup', profilo: 'setup',
+    scarto: 'scarto', scarti: 'scarto',
+    overhead: 'overhead', spese: 'overhead',
+    packaging: 'packaging', imballo: 'packaging',
+    commissioni: 'commissioni',
+    spedizione: 'spedizione',
+    hardware: 'accessori', accessori: 'accessori', primer: 'accessori',
+    post: 'postProcesso', postprocesso: 'postProcesso', lavaggio: 'postProcesso',
+  };
+  var VOCI_COSTO = ['materiale', 'energia', 'macchina', 'manutenzione', 'manodopera',
+    'setup', 'postProcesso', 'scarto', 'overhead', 'packaging', 'accessori',
+    'commissioni', 'spedizione', 'altro'];
+
+  function costoDi(id) {
+    var k = String(id || '').toLowerCase().replace(/[^a-z]/g, '');
+    return COSTI[k] || 'altro';
+  }
+
+  /**
+   * @param calcolo  il risultato del motore (o dell'adapter del preventivo)
+   * @param distinta la distinta già costruita, per non rifarla
+   * @param opzioni  { quantita, righe, versione }
+   */
+  function economico(calcolo, distinta, opzioni) {
+    var o = opzioni || {};
+    var k = calcolo || {};
+    var d = distinta || vuota('nessuna distinta');
+    var qty = Math.max(1, pos(o.quantita != null ? o.quantita : (d.quantita || k.qty), 1));
+
+    /* I costi per nome, senza accorpare. */
+    var costs = {};
+    VOCI_COSTO.forEach(function (c) { costs[c] = 0; });
+    (d.voci || []).forEach(function (v) {
+      var c = costoDi(v.id);
+      costs[c] = arr(num(costs[c]) + num(v.totalCost));
+    });
+    /* Le voci che il motore tiene fuori dalla distinta ma dentro il conto. */
+    if (pos(k.commissionsTotal) > 0) costs.commissioni = arr(pos(k.commissionsTotal));
+    if (k.shipping && pos(k.shipping.cost) > 0) costs.spedizione = arr(pos(k.shipping.cost));
+
+    var costTotal = arr(k.totalCost != null ? k.totalCost
+      : (k.costoTotale != null ? k.costoTotale : (d.totals || {}).costoTotale));
+    var revenueNet = arr(k.subtotalNet != null ? k.subtotalNet : (d.totals || {}).netto);
+    var revenueGross = arr(k.totalGross != null ? k.totalGross : (d.totals || {}).lordo);
+    var iva = arr(k.vat != null ? k.vat : (d.totals || {}).iva);
+
+    /* Il profitto è ricavo netto meno costo di produzione, e basta. Non si
+       somma voce per voce: il prezzo lo decide il pricing sull'insieme, e
+       ricavarlo dalle righe darebbe un numero diverso da quello che il motore
+       ha calcolato. */
+    var profit = arr(revenueNet - costTotal);
+    var marginPct = revenueNet > 0 ? arr((profit / revenueNet) * 100) : 0;
+    var markupPct = costTotal > 0 ? arr((profit / costTotal) * 100) : 0;
+
+    /* Le linee: quello che si vende, con accanto quello che costa. Le due
+       cose non vanno confuse — è la classe di errore che questo modello esiste
+       per rendere impossibile — quindi hanno nomi diversi e stanno in campi
+       diversi. */
+    var righe = (o.righe && o.righe.length ? o.righe : (k.lines || [])).map(function (l) {
+      var q = num(l.qty != null ? l.qty : l.quantity, 1) || 1;
+      var costoRiga = arr(num(l.unitCost != null ? l.unitCost * q : l.subtotal));
+      var prezzoRiga = arr(num(l.lineNet != null ? l.lineNet
+        : (l.price != null ? l.price * q : l.subtotal)));
+      return {
+        id: String(l.id || l.name || ''),
+        name: l.name || l.desc || 'Voce',
+        category: l.category || l.catLabel || '',
+        detail: l.detail || '',
+        quantity: q,
+        productionCostUnit: arr(costoRiga / q),
+        productionCostTotal: costoRiga,
+        salePriceUnit: arr(prezzoRiga / q),
+        salePriceTotal: prezzoRiga,
+        profitUnit: arr((prezzoRiga - costoRiga) / q),
+        profitTotal: arr(prezzoRiga - costoRiga),
+        marginPct: prezzoRiga > 0 ? arr(((prezzoRiga - costoRiga) / prezzoRiga) * 100) : 0,
+        source: l.itemKey ? 'magazzino' : 'preventivo',
+      };
+    });
+
+    return {
+      currency: 'EUR',
+      costTotal: costTotal,
+      revenueNet: revenueNet,
+      revenueGross: revenueGross,
+      profit: profit,
+      marginPct: marginPct,
+      markupPct: markupPct,
+      quantity: qty,
+      lines: righe,
+      costs: costs,
+      pricing: {
+        markupPct: arr(k.markupPct),
+        discountPct: arr(k.discountAppliedPct != null ? k.discountAppliedPct : k.discountRequestedPct),
+        ivaPct: arr(k.vatPct),
+        net: revenueNet,
+        iva: iva,
+        gross: revenueGross,
+      },
+      calculationVersion: o.versione
+        || (global.InglyCostEngine && global.InglyCostEngine.version) || null,
+      calculatedAt: o.quando || new Date().toISOString(),
+    };
+  }
+
+  /** Da un ordine vecchio, senza `economic`, si ricostruisce quello che i suoi
+      campi permettono — e si marca da dove viene. Non si inventa un costo che
+      non è mai stato scritto: resta zero, e chi legge lo vede. */
+  function economicoLegacy(ordine) {
+    var o = ordine || {};
+    var costTotal = arr(o.totalCost != null ? o.totalCost : (o.cost != null ? o.cost : 0));
+    var revenueNet = arr(o.totalNet != null ? o.totalNet
+      : (o.netPrice != null ? o.netPrice : (o.total != null ? o.total : o.value)));
+    var revenueGross = arr(o.grossPrice != null ? o.grossPrice : revenueNet);
+    var profit = arr(revenueNet - costTotal);
+    var costs = {};
+    VOCI_COSTO.forEach(function (c) { costs[c] = 0; });
+    return {
+      currency: 'EUR',
+      costTotal: costTotal, revenueNet: revenueNet, revenueGross: revenueGross,
+      profit: profit,
+      marginPct: revenueNet > 0 ? arr((profit / revenueNet) * 100) : 0,
+      markupPct: costTotal > 0 ? arr((profit / costTotal) * 100) : 0,
+      quantity: 1, lines: [], costs: costs,
+      pricing: { markupPct: 0, discountPct: arr(o.discount), ivaPct: 0,
+        net: revenueNet, iva: arr(revenueGross - revenueNet), gross: revenueGross },
+      calculationVersion: null, calculatedAt: o.createdAt || null,
+      source: 'legacy',
+      costoAttendibile: costTotal > 0,
+    };
+  }
+
   global.InglyCostBreakdown = {
+    VOCI_COSTO: VOCI_COSTO,
+    costoDi: costoDi,
+    economico: economico,
+    economicoLegacy: economicoLegacy,
     VERSIONE: VERSIONE,
     CATEGORIE: CATEGORIE,
     ORDINE: ORDINE,
