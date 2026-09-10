@@ -1,5 +1,48 @@
 
 // === /src/core/app.js ===
+
+/* Tre voci del menu — Revenue Simulator, Business Unit, Team — annunciano un
+   modulo che non e' mai stato scritto. Fino a ieri la rotta faceva
+   `if(typeof RevSim!=='undefined')`, non trovava niente e non faceva niente,
+   in silenzio: la sezione restava bianca e il pulsante dentro si premeva
+   senza effetto.
+
+   `_sezione` prova prima il modulo vero — se un giorno verra' scritto, vince
+   lui — e solo se non c'e' lascia parlare `InglySezioneIncompleta`, che dice
+   cosa manca e dove andare adesso. */
+/* `requestIdleCallback(fn)` senza scadenza vuol dire «quando capita», e in una
+   pagina che carica centoquarantotto script puo' voler dire mai: sei sezioni
+   restavano bianche perche' il loro disegno aspettava un momento di quiete che
+   non arrivava. Misurato su weeklyreport: il modulo funziona e produce 1617
+   caratteri se lo si chiama a mano, zero passando dalla rotta.
+
+   Qui la scadenza c'e': si aspetta la quiete, ma non oltre. */
+function _appenaPossibile(fn, scadenzaMs){
+  var ms = scadenzaMs || 600;
+  var fatto = false;
+  var una = function(){ if(fatto) return; fatto = true; try { fn(); } catch(e){
+    if(window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('App.appenaPossibile', e);
+  } };
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(una, { timeout: ms });
+    /* La scadenza di requestIdleCallback non e' garantita ovunque: la rete di
+       sicurezza costa un timer e toglie una sezione bianca. */
+    setTimeout(una, ms + 100);
+  } else {
+    setTimeout(una, 100);
+  }
+}
+
+function _sezione(nome, disegna){
+  try { disegna(); } catch(e){
+    if(window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('App.sezione', e, {sezione:nome});
+  }
+  try {
+    var S = window.InglySezioneIncompleta;
+    if (S && S.mostra) S.mostra(nome);
+  } catch(e){}
+}
+
 const App={
   sidebarOpen:true,
   currentSection:'dashboard',
@@ -280,8 +323,8 @@ const App={
       booking:()=>{ if(typeof Booking!=='undefined') Booking.render(); },
       scanner:()=>{ if(typeof BarcodeScanner!=='undefined') (typeof BarcodeScanner!=='undefined'&&BarcodeScanner.render()); else { const el=document.getElementById('view-scanner'); if(el&&!el.querySelector('.page-title')) App._renderScannerPlaceholder(); } },
       reports:()=>{ setTimeout(async()=>{ try{ const el=document.getElementById('reports-kpis'); if(!el||el.innerHTML.trim()) return; await BDW.init(); const m=BDW.metrics; el.innerHTML=[{l:'Revenue MTD',v:fmtCur(m.revenue.mtd),i:'fa-euro-sign',c:'#22c55e'},{l:'Ordini Attivi',v:m.ops.ordersActive,i:'fa-box-open',c:'#3b82f6'},{l:'Clienti',v:m.clients.total,i:'fa-users',c:'#a855f7'},{l:'Margine',v:m.finance.netMarginPct.toFixed(1)+'%',i:'fa-chart-pie',c:'#f59e0b'}].map(k=>`<div class="kpi-card"><i class="fas ${k.i} kpi-icon" style="color:${k.c}"></i><div class="kpi-value">${k.v}</div><div class="kpi-label">${k.l}</div></div>`).join(''); }catch(e){} },150); },
-      forecasting:()=>{ if(typeof Forecasting!=='undefined'){ (window.requestIdleCallback||setTimeout)(function(){(typeof Forecasting!=='undefined'&&Forecasting.render());}); } },
-      contentcalendar:()=>{ if(typeof ContentCalendar!=='undefined'){ (window.requestIdleCallback||setTimeout)(function(){(typeof ContentCalendar!=='undefined'&&ContentCalendar.render());}); } },
+      forecasting:()=>{ if(typeof Forecasting!=='undefined') _appenaPossibile(function(){Forecasting.render();}); },
+      contentcalendar:()=>{ if(typeof ContentCalendar!=='undefined') _appenaPossibile(function(){ContentCalendar.render();}); },
       trendscanner:()=>{if(typeof TrendHunterPro!=='undefined')TrendHunterPro.render();else if(typeof TrendScanner!=='undefined')TrendScanner.render();},
       laserresources:()=>{if(typeof LaserResources!=='undefined')(typeof LaserResources!=='undefined'&&LaserResources.render());},
       risorse:()=>{
@@ -301,14 +344,14 @@ const App={
       etsy_analytics:()=>{ if(typeof EtsyAnalytics!=='undefined') EtsyAnalytics.render(); },
       bizai:()=>{if(typeof BizAI!=='undefined')(typeof BizAI!=='undefined'&&BizAI.render());},
       photostudio:()=>{if(typeof PhotoStudio!=='undefined')(typeof PhotoStudio!=='undefined'&&PhotoStudio.render());},
-      revsim:()=>{if(typeof RevSim!==typeof undefined)(typeof RevSim!=='undefined'&&RevSim.render());},
+      revsim:()=>_sezione('revsim',()=>{if(typeof RevSim!=='undefined')RevSim.render();}),
       replyai:()=>{if(typeof ReplyAI!==typeof undefined)(typeof ReplyAI!=='undefined'&&ReplyAI.render());},
       comptrack:()=>{if(typeof CompetitorPrices!=='undefined')(typeof CompetitorPrices!=='undefined'&&CompetitorPrices.render());},
       fiera:()=>{if(typeof FieraAI!=='undefined')(typeof FieraAI!=='undefined'&&FieraAI.render());},
       briefing:()=>MorningBriefing.openManual(),
       clv:()=>{if(typeof CLVDash!==typeof undefined)(typeof CLVDash!=='undefined'&&CLVDash.render());},
       goals:()=>{if(typeof InvestPlanner!=='undefined'&&typeof InvestPlanner.render==='function'){InvestPlanner.render();}else if(typeof GoalTracker!=='undefined'){GoalTracker.render();}},
-      weeklyreport:()=>{if(typeof WeeklyReport!==typeof undefined)(window.requestIdleCallback||setTimeout)(()=>(typeof WeeklyReport!=='undefined'&&WeeklyReport.render()),100);},
+      weeklyreport:()=>{ if(typeof WeeklyReport!=='undefined') _appenaPossibile(function(){WeeklyReport.render();}); },
       profitleak:()=>{if(typeof ProfitLeakDetector!==typeof undefined)ProfitLeakDetector.renderPage();},
       stockalert:()=>{if(typeof StockAlert!==typeof undefined)StockAlert.render?.();},
       profitscope:()=>{if(typeof ProfitLeakDetector!==typeof undefined)ProfitLeakDetector.renderPage?.();},
@@ -322,13 +365,13 @@ const App={
       contentperf:()=>{ if(typeof ContentPerf!=='undefined')(typeof ContentPerf!=='undefined'&&ContentPerf.render()); else setTimeout(()=>ContentPerf?.render(),800); },
       competitormon:()=>{ if(typeof CompetitorMon!=='undefined')(typeof CompetitorMon!=='undefined'&&CompetitorMon.render()); else setTimeout(()=>CompetitorMon?.render(),800); },
       smartnotif:()=>{if(typeof SmartNotif!=='undefined')(typeof SmartNotif!=='undefined'&&SmartNotif.render());},
-      pdfmonth:()=>{ if(typeof MonthlyReport!=='undefined'){ (window.requestIdleCallback||setTimeout)(function(){(typeof MonthlyReport!=='undefined'&&MonthlyReport.render());}); } },
+      pdfmonth:()=>{ if(typeof MonthlyReport!=='undefined') _appenaPossibile(function(){MonthlyReport.render();}); },
       recurring:()=>RecurringInvoices.renderView(),
       competitor:()=>{if(typeof CompetitorAI!=='undefined')(typeof CompetitorAI!=='undefined'&&CompetitorAI.render());},
       socialproof:()=>{if(typeof SocialProofAI!=='undefined')(typeof SocialProofAI!=='undefined'&&SocialProofAI.render());},
       dashboard:()=>{if(typeof Dashboard!=='undefined'){(typeof Dashboard!=='undefined'&&Dashboard.render());Dashboard._startAutoRefresh?.();}},
       ai:()=>{if(typeof AILayer!=='undefined')(typeof AILayer!=='undefined'&&AILayer.render());},
-      kpi:()=>{ if(typeof KPIEngine!=='undefined'){ requestIdleCallback ? requestIdleCallback(()=>KPIEngine.renderPage()) : setTimeout(()=>KPIEngine.renderPage(),100); } },
+      kpi:()=>{ if(typeof KPIEngine!=='undefined') _appenaPossibile(function(){KPIEngine.renderPage();}); },
       quoter:()=>Quoter.init(),
       template_docs:()=>{ if(typeof TemplateDocsModule!=='undefined') (typeof TemplateDocsModule!=='undefined'&&TemplateDocsModule.render()); },
       lasercalc:()=>LaserCalcPage.init(),
@@ -386,9 +429,9 @@ const App={
       decision:()=>{ if(typeof DecisionEngine!=='undefined') (typeof DecisionEngine!=='undefined'&&DecisionEngine.render()); },
       growthengine:()=>{ if(typeof GrowthEngine!=='undefined') (typeof GrowthEngine!=='undefined'&&GrowthEngine.render()); },
       brand_identity:()=>{if(typeof BrandIdentity!=='undefined')(typeof BrandIdentity!=='undefined'&&BrandIdentity.render());},
-      team:()=>{if(typeof Team!=='undefined')(typeof Team!=='undefined'&&Team.render());},
+      team:()=>{if(typeof Team!=='undefined')Team.render();},
       analytics:()=>{if(typeof Analytics!=='undefined')(typeof Analytics!=='undefined'&&Analytics.render());},
-      bu:()=>{if(typeof BU!=='undefined')(typeof BU!=='undefined'&&BU.render());},
+      bu:()=>{if(typeof BU!=='undefined')BU.render();},
       legal:()=>{if(typeof Legal!=='undefined')(typeof Legal!=='undefined'&&Legal.render());},
       projects:()=>{if(typeof Projects!=='undefined')(typeof Projects!=='undefined'&&Projects.render());},
       backup:()=>{if(typeof Backup!=='undefined')(typeof Backup!=='undefined'&&Backup.render());},
@@ -401,7 +444,7 @@ const App={
       // ── v64 Intelligence Suite ──────────────────────────────
       clientintel:()=>{if(typeof ClientIntelligenceEngine!=='undefined')(typeof ClientIntelligenceEngine!=='undefined'&&ClientIntelligenceEngine.render());},
       forecaster:()=>{if(typeof FinancialForecaster!=='undefined')(typeof FinancialForecaster!=='undefined'&&FinancialForecaster.render());},
-      intel:()=>{ if(typeof IntelHub!=='undefined'){ requestIdleCallback ? requestIdleCallback(()=>(typeof IntelHub!=='undefined'&&IntelHub.render())) : setTimeout(()=>(typeof IntelHub!=='undefined'&&IntelHub.render()),100); } },
+      intel:()=>{ if(typeof IntelHub!=='undefined') _appenaPossibile(function(){IntelHub.render();}); },
       workspace:    ()=>{ setTimeout(()=>{ if(typeof WorkspaceManager!=='undefined') WorkspaceManager.render(); },80); },
       bank_funds:   ()=>{ setTimeout(()=>{ if(typeof BankFunds!=='undefined') BankFunds.render(); },100); },
       laser_b2b:    ()=>{ setTimeout(()=>{ if(typeof LaserB2B!=='undefined') LaserB2B.render(); },100); },

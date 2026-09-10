@@ -1123,9 +1123,25 @@ const Calendar={
 // ===== STRATEGY =====
 const Team={
   editId:null,
+  /* Una griglia vuota non dice se non c'e' niente da mostrare o se qualcosa
+     si e' rotto. Chi apre la sezione la prima volta vede lo stesso schermo di
+     chi ha un guasto. */
+  _vuoto(titolo, spiega, azione, etichetta){
+    return '<div class="card" style="grid-column:1/-1;text-align:center;padding:30px 22px">'
+      +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+titolo+'</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.6;max-width:400px;margin-left:auto;margin-right:auto">'+spiega+'</div>'
+      +'<button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="'+azione+'">'+etichetta+'</button>'
+      +'</div>';
+  },
   async render(){
     const el=eid('team-grid');if(!el)return;
     const members=await IDB.getAll('team');
+    if(!members.length){
+      el.innerHTML=this._vuoto('Nessuna persona registrata',
+        'Qui stanno le persone che lavorano in laboratorio, con la loro tariffa oraria e le loro competenze. Il costo orario che entra nei preventivi invece si dichiara nei Profili economici: sono due cose diverse e restano separate.',
+        'Team.openModal()','+ Aggiungi la prima');
+      return;
+    }
     el.innerHTML=members.map(m=>`<div class="card" style="position:relative">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
         <div style="width:48px;height:48px;background:linear-gradient(135deg,var(--primary-dim),var(--bg-card2));border:2px solid var(--primary-border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:var(--primary);flex-shrink:0">${m.name.charAt(0).toUpperCase()}</div>
@@ -1531,9 +1547,26 @@ const Analytics={
 // ===== BUSINESS UNIT =====
 const BU={
   editId:null,
+  /* Una griglia vuota non dice se non c'e' niente da mostrare o se qualcosa
+     si e' rotto. Chi apre la sezione la prima volta vede lo stesso schermo di
+     chi ha un guasto. */
+  _vuoto(titolo, spiega, azione, etichetta){
+    return '<div class="card" style="grid-column:1/-1;text-align:center;padding:30px 22px">'
+      +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+titolo+'</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.6;max-width:400px;margin-left:auto;margin-right:auto">'+spiega+'</div>'
+      +'<button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="'+azione+'">'+etichetta+'</button>'
+      +'</div>';
+  },
   async render(){
     const units=await IDB.getAll('bu');
     const el=eid('bu-cards');if(!el)return;
+    if(!units.length){
+      el.innerHTML=this._vuoto('Nessuna business unit registrata',
+        'Una business unit separa ricavi, costi e margini di una linea di attivit&agrave; — laser, stampa 3D, tessile — da quelli delle altre. Finch&eacute; non ne registri una, questa sezione resta vuota e il conto economico resta unico, in Finanze.',
+        'BU.openModal()','+ Aggiungi la prima');
+      this.renderCharts(units);
+      return;
+    }
     el.innerHTML=units.map(u=>{
       const profit=u.revenue-u.costs;
       const margin=u.revenue>0?Math.round(profit/u.revenue*100):0;
@@ -9213,4 +9246,11 @@ const CmdPalette = {
   init(){ this._buildIndex(); }
 };
 window.CmdPalette = CmdPalette;
+
+/* WeeklyReport era scritto, funzionante, e irraggiungibile: un `const` in
+   questo file, che la navigazione cerca da un altro blocco di script. La
+   rotta faceva `if(typeof WeeklyReport!=='undefined')`, trovava «undefined» e
+   non faceva niente — in silenzio. Il risultato era una sezione bianca per un
+   modulo completo. */
+window.WeeklyReport = WeeklyReport;
 

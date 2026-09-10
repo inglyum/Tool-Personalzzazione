@@ -91,6 +91,10 @@ export const PRODUCT_FILES = [
   'cost-breakdown.js',
   'quote-to-order.js',
   'order-economics-view.js',
+  /* Le tre sezioni annunciate nel menu e mai costruite. Sta qui, e non fra i
+     preventivatori, perche' non calcola niente: dice la verita' al posto di
+     una pagina bianca. */
+  'sezione-incompleta.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i
