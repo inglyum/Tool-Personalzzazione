@@ -147,6 +147,19 @@
     return 18;
   }
 
+  /** Il prezzo dell'energia, dalla stessa fonte della tariffa. Era scritto a
+      mano in cinque punti di questo file: nel valore iniziale, nel ripiego del
+      campo, in quello del reset, in quello della lettura e in quello del
+      calcolo. Cinque punti da cui poteva divergere. */
+  function _energiaProfilo() {
+    try {
+      var S = window.InglyCostProfilesStore;
+      var v = S && S.ingressoSincrono ? S.ingressoSincrono({ ruolo: 'laser' }).kwhPrice : 0;
+      if (v > 0) return v;
+    } catch (e) {}
+    return 0.28;
+  }
+
   /** L'elenco delle politiche, dalla stessa fonte che usa il resto dell'app. */
   function _politiche() {
     try {
@@ -199,7 +212,7 @@
   function toggleFav(id)     { var f=getFavs(); var i=f.indexOf(id); i>-1?f.splice(i,1):f.unshift(id); LS.set(K.favs,f); }
   function getHistory()      { return LS.get(K.history, []); }
   function pushHistory(id)   { var h=getHistory().filter(function(x){return x!==id;}); h.unshift(id); LS.set(K.history,h.slice(0,8)); }
-  function getInput()        { return LS.get(K.input, {qty:1,kwh:0.28,labor:_tariffaProfilo(),markup:3.5,iva:22,disc:0}); }
+  function getInput()        { return LS.get(K.input, {qty:1,kwh:_energiaProfilo(),labor:_tariffaProfilo(),markup:3.5,iva:22,disc:0}); }
   function saveInput(d)      { LS.set(K.input, d); }
   function getExtras(id)     { var e=LS.get(K.extras,{}); return e[id]||[]; }
   function saveExtras(id,arr){ var e=LS.get(K.extras,{}); e[id]=arr; LS.set(K.extras,e); }
@@ -482,7 +495,7 @@
           +field('_f_price','💰 Prezzo acquisto €',inp.price!=null?inp.price:m.price,'1')
           +field('_f_life','⏱ Vita utile (ore)',inp.life_h!=null?inp.life_h:m.life_h,'100')
           +field('_f_kw','⚡ Potenza (kW)',inp.kw!=null?inp.kw:m.kw,'0.001')
-          +field('_f_kwh','💡 €/kWh bolletta',inp.kwh||m.defKwh||0.28,'0.01')
+          +field('_f_kwh','💡 €/kWh bolletta',inp.kwh||m.defKwh||_energiaProfilo(),'0.01')
           +field('_f_maint','🔧 Manut. €/h',inp.maint!=null?inp.maint:m.maint,'0.01')
           +field('_f_labor','👤 Manodopera €/h',inp.labor||_tariffaProfilo(),'1')
           +'<div style="grid-column:1/-1;font-size:9px;color:var(--text-muted,#888);margin-top:-4px">'
@@ -801,7 +814,7 @@
     var rst = el.querySelector('#_cm_reset');
     if (rst) rst.onclick = function(){
       if (!window.confirm('Azzerare tutti i dati di calcolo?')) return;
-      saveInput({qty:1,kwh:0.28,labor:_tariffaProfilo(),markup:3.5,iva:22,disc:0});
+      saveInput({qty:1,kwh:_energiaProfilo(),labor:_tariffaProfilo(),markup:3.5,iva:22,disc:0});
       saveExtras(_selId,[]);
       render();
       tt('↺ Dati azzerati','info');
@@ -813,7 +826,7 @@
     var g = function(id,def){ var e=el.querySelector('#'+id); return e?(isNaN(parseFloat(e.value))?(e.value||def):parseFloat(e.value)):def; };
     saveInput({
       price:     g('_f_price',null), life_h:  g('_f_life',null),
-      kw:        g('_f_kw',null),    kwh:     g('_f_kwh',0.28),
+      kw:        g('_f_kw',null),    kwh:     g('_f_kwh',_energiaProfilo()),
       maint:     g('_f_maint',null), labor:   g('_f_labor',_tariffaProfilo()),
       setup_min: g('_f_setup',5),    clean_min:g('_f_clean',2),
       pack:      g('_f_pack',0.20),
@@ -841,7 +854,7 @@
     var price    = g('_f_price', m.price||1000);
     var lifeH    = g('_f_life',  m.life_h||3000)||1;
     var kw       = g('_f_kw',    m.kw||0.1);
-    var kwh      = g('_f_kwh',   0.28);
+    var kwh      = g('_f_kwh',   _energiaProfilo());
     var maint    = g('_f_maint', m.maint||0.05);
     var labor    = g('_f_labor', _tariffaProfilo());
     var setupMin = g('_f_setup', m.setup_min||5);

@@ -112,7 +112,30 @@
   }
 
   function salvaManodopera(voci) { return scrivi('labor_profiles', { voci: voci || [] }); }
-  function salvaOverhead(profilo) { return scrivi('overhead_profiles', profilo || {}); }
+
+  /** Il prezzo dell'energia vive nel record delle spese generali: e' un costo
+      del laboratorio, non della singola macchina, e sta accanto alle ore
+      produttive annue per la stessa ragione. Si legge prima di scrivere,
+      altrimenti salvare la corrente cancellerebbe l'affitto. */
+  function salvaEnergia(kwhPrice) {
+    return leggi('overhead_profiles').then(function (rec) {
+      var base = rec || {};
+      return scrivi('overhead_profiles', Object.assign({}, base, { kwhPrice: Math.max(0, parseFloat(kwhPrice) || 0) }));
+    });
+  }
+
+  /** Le spese generali e il prezzo dell'energia condividono un record. Chi
+      salva le prime non deve poter cancellare il secondo per distrazione:
+      se il profilo in arrivo non nomina `kwhPrice`, si conserva quello gia'
+      in archivio. */
+  function salvaOverhead(profilo) {
+    var pro = profilo || {};
+    if (pro.kwhPrice != null) return scrivi('overhead_profiles', pro);
+    return leggi('overhead_profiles').then(function (rec) {
+      var precedente = (rec && rec.kwhPrice != null) ? { kwhPrice: rec.kwhPrice } : {};
+      return scrivi('overhead_profiles', Object.assign({}, pro, precedente));
+    });
+  }
   function salvaImballo(voci) { return scrivi('packaging_items', { voci: voci || [] }); }
 
   /** I profili con i predefiniti già applicati: è quello che una schermata di
@@ -125,10 +148,12 @@
         manodopera: p.manodopera(c.manodopera),
         overhead: p.overhead(c.overhead),
         imballo: (c.imballo && c.imballo.length) ? c.imballo : p.IMBALLO_PREDEFINITO,
+        energia: p.energia(c.overhead),
         configurati: {
           manodopera: !!(c.manodopera && c.manodopera.length),
           overhead: !!(c.overhead && c.overhead.voci && c.overhead.voci.length),
           imballo: !!(c.imballo && c.imballo.length),
+          energia: !!(c.overhead && c.overhead.kwhPrice > 0),
         },
       };
     });
@@ -146,6 +171,7 @@
     salvaManodopera: salvaManodopera,
     salvaOverhead: salvaOverhead,
     salvaImballo: salvaImballo,
+    salvaEnergia: salvaEnergia,
     invalida: invalida,
     _cache: function () { return cache; },
   };

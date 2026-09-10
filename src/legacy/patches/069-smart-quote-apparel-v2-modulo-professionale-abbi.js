@@ -73,7 +73,7 @@ var ApparelQuoter = (function () {
 
 
   var DEF_SETTINGS = {
-    energyKwh:    0.28,   // €/kWh
+    energyKwh:    0,      // €/kWh — lo mette loadS() dai profili economici
     energyWatts:  80,     // watt default = xTool F2
     laborHourly:  18.00,  // €/ora manodopera (KB PRICING.md)
     machineHourly:0.16,   // €/ora ammortamento macchina (xTool F2)
@@ -96,12 +96,31 @@ var ApparelQuoter = (function () {
   function loadQ()  { return load(SK,[]); }
   function loadP()  { return load(PRODS_SK,[]); }
   function loadSt() { return load(STOCK_SK,{}); }  // { prodId: {qty, minStock} }
+  /* Il prezzo dell'energia ha una fonte sola — i profili economici del
+     laboratorio — e questo file la legge invece di tenersene una copia.
+     Il ripiego resta dichiarato: senza un numero, l'energia uscirebbe dai
+     preventivi in silenzio. */
+  function _energiaProfilo() {
+    try {
+      var S = window.InglyCostProfilesStore;
+      var v = S && S.ingressoSincrono ? S.ingressoSincrono({ ruolo: 'dtf' }).kwhPrice : 0;
+      if (v > 0) return v;
+    } catch (e) {}
+    return 0.28;
+  }
+
   function loadS()  {
     var s = load(SETT_SK,{});
-    return Object.assign({},DEF_SETTINGS,s,{
+    var out = Object.assign({},DEF_SETTINGS,s,{
       techCosts:    Object.assign({},DEF_SETTINGS.techCosts,s.techCosts||{}),
       qtyDiscounts: Object.assign({},DEF_SETTINGS.qtyDiscounts,s.qtyDiscounts||{}),
     });
+    /* Si risolve qui e non nei predefiniti perche' i predefiniti si valutano
+       al caricamento del file, quando il database non ha ancora risposto:
+       il numero resterebbe congelato a quello di partenza per sempre.
+       Quello che l'utente ha scritto nelle impostazioni resta suo. */
+    if (!(parseFloat(s.energyKwh) > 0)) out.energyKwh = _energiaProfilo();
+    return out;
   }
 
   // ── Calculations ─────────────────────────────────────────────────────────
@@ -927,7 +946,7 @@ var ApparelQuoter = (function () {
     H+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">';
     H+='<div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:12px;padding:14px">';
     H+='<div style="font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">💡 Costi operativi azienda</div>';
-    H+=_sf('Energia €/kWh (tariffa)','aq-s-ekwh',s.energyKwh,'0.28');
+    H+=_sf('Energia €/kWh (tariffa)','aq-s-ekwh',s.energyKwh,String(_energiaProfilo()));
     H+=_sf('Watt macchina (media)','aq-s-ewatts',s.energyWatts,'1500');
     H+=_sf('Manodopera €/ora','aq-s-labor',s.laborHourly,'18.00');
     H+=_sf('Ammort. macchina €/ora','aq-s-mach',s.machineHourly,'3.00');

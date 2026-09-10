@@ -1,6 +1,47 @@
 
 // === /src/modules/catalog/index.js ===
 // Catalog Module - INGLY OS v88
+
+/* ── Il laboratorio, non il markup ──────────────────────────────────────
+   Due schermate di questo file — il Calcolatore Laser e i parametri macchina
+   del Catalogo — tenevano una copia propria di due numeri che hanno gia' un
+   padrone: la tariffa oraria (profili economici) e il prezzo dell'energia.
+   Erano scritti nel markup, ripetuti nei predefiniti di `loadSettings` con un
+   valore diverso (18 nel campo, 15 nel codice) e ripetuti una terza volta nei
+   ripieghi di `recalc`. Cambiare la tariffa in Impostazioni non cambiava
+   niente qui.
+
+   Da qui in avanti si leggono. Il valore resta modificabile a mano — chi
+   calcola un preventivo deve poter provare un'ipotesi — ma il punto di
+   partenza e' quello dichiarato dal laboratorio, e la schermata dice da dove
+   viene. */
+function _labProfilo(ruolo){
+  const vuoto={labor:0,kwh:0,fonteLabor:'missing',fonteKwh:'missing'};
+  try{
+    const S=window.InglyCostProfilesStore;
+    if(!S||!S.ingressoSincrono) return vuoto;
+    const i=S.ingressoSincrono({ruolo:ruolo||'laser'})||{};
+    return {
+      labor:+i.laborPerHour>0?+i.laborPerHour:0,
+      kwh:+i.kwhPrice>0?+i.kwhPrice:0,
+      fonteLabor:(i._fonti&&i._fonti.manodopera)||'missing',
+      fonteKwh:(i._fonti&&i._fonti.energia)||'missing',
+    };
+  }catch(_){ return vuoto; }
+}
+
+/** La frase che dice da dove viene un numero. `declared` = l'ha scritto
+    l'utente nei profili; `estimated` = e' il valore di partenza dichiarato. */
+function _labFonteTesto(fonte){
+  if(fonte==='declared') return 'dai profili economici';
+  if(fonte==='estimated') return 'valore di partenza — dichiaralo nei profili';
+  return 'non dichiarato';
+}
+
+function _apriProfiliEconomici(){
+  if(window.InglyProfiliEconomici&&window.InglyProfiliEconomici.apri) window.InglyProfiliEconomici.apri();
+  else if(typeof toast!=='undefined') toast('Pannello dei profili economici non disponibile','warning');
+}
 const CatalogPDF={
   _color:'#6366f1',
   _palette:['#6366f1','#dc2626','#10b981','#f59e0b','#3b82f6','#ec4899','#8b5cf6','#14b8a6','#0f172a'],
@@ -1699,13 +1740,38 @@ const Catalog={
   getMachP(){try{return JSON.parse(localStorage.getItem(this._MKEY)||'{}');}catch(_){return {};}},
   saveMachineParams(){
     const g=id=>+(document.getElementById(id)?.value||0);
-    localStorage.setItem(this._MKEY,JSON.stringify({kwh:g('cm-kwh'),kw:g('cm-kw'),depr:g('cm-depr'),labor:g('cm-labor'),mk1:g('cm-mk1'),mkit:g('cm-mkit'),mstock:g('cm-mstock')}));
+    const lab=_labProfilo('laser');
+    const rec={kwh:g('cm-kwh'),kw:g('cm-kw'),depr:g('cm-depr'),labor:g('cm-labor'),mk1:g('cm-mk1'),mkit:g('cm-mkit'),mstock:g('cm-mstock')};
+    /* Stessa regola del Calcolatore Laser: quello che coincide col profilo non
+       si salva, cosi' il profilo resta la fonte finche' non lo si contraddice
+       davvero. */
+    if(Math.abs(rec.kwh-lab.kwh)<0.005) delete rec.kwh;
+    if(Math.abs(rec.labor-lab.labor)<0.005) delete rec.labor;
+    localStorage.setItem(this._MKEY,JSON.stringify(rec));
   },
   loadMachineParams(){
     const p=this.getMachP();
+    const lab=_labProfilo('laser');
     const s=(id,k,d)=>{const el=document.getElementById(id);if(el)el.value=(p[k]!=null?p[k]:d);};
-    s('cm-kwh','kwh',0.28);s('cm-kw','kw',1.2);s('cm-depr','depr',0.80);s('cm-labor','labor',15);
+    s('cm-kwh','kwh',lab.kwh);s('cm-kw','kw',1.2);s('cm-depr','depr',0.80);s('cm-labor','labor',lab.labor);
     s('cm-mk1','mk1',3.5);s('cm-mkit','mkit',2.8);s('cm-mstock','mstock',2.2);
+    this.renderMachineProfileNote(lab);
+  },
+
+  /** Stessa nota del Calcolatore Laser, stessa fonte: le due schermate non
+      devono poter dire due cose diverse sullo stesso numero. */
+  renderMachineProfileNote(lab){
+    const box=document.getElementById('cm-profilo-nota');
+    if(!box)return;
+    const l=lab||_labProfilo('laser');
+    const e=(typeof esc==='function')?esc:(t=>String(t));
+    box.innerHTML=
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:10px;color:var(--text-muted)">'
+      +'<span>Manodopera € '+l.labor.toFixed(2)+'/h · '+e(_labFonteTesto(l.fonteLabor))+'</span>'
+      +'<span>·</span>'
+      +'<span>Energia € '+l.kwh.toFixed(2)+'/kWh · '+e(_labFonteTesto(l.fonteKwh))+'</span>'
+      +'<button type="button" onclick="_apriProfiliEconomici()" style="margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:10px;padding:2px 8px">Profili economici</button>'
+      +'</div>';
   },
   toggleMachinePanel(){
     const el=document.getElementById('cat-machine-panel');
@@ -1911,10 +1977,11 @@ const Catalog={
     });
     const el=document.getElementById('cat-calc-result');if(!el)return;
     const p=this.getMachP();
-    const kwh=+document.getElementById('cm-kwh')?.value||p.kwh||0.28;
+    const _lab=_labProfilo('laser');
+    const kwh=+document.getElementById('cm-kwh')?.value||p.kwh||_lab.kwh;
     const kw=+document.getElementById('cm-kw')?.value||p.kw||1.2;
     const depr=+document.getElementById('cm-depr')?.value||p.depr||0.80;
-    const laborRate=+document.getElementById('cat-labor-rate')?.value||+document.getElementById('cm-labor')?.value||p.labor||18;
+    const laborRate=+document.getElementById('cat-labor-rate')?.value||+document.getElementById('cm-labor')?.value||p.labor||_lab.labor;
     const mk1=+document.getElementById('cm-mk1')?.value||p.mk1||3.5;
     const mkit=+document.getElementById('cm-mkit')?.value||p.mkit||2.8;
     const mstock=+document.getElementById('cm-mstock')?.value||p.mstock||2.2;
@@ -3243,18 +3310,52 @@ const LaserCalcPage = {
 
   loadSettings() {
     const s = JSON.parse(localStorage.getItem('lcp_settings') || '{}');
+    const lab = _labProfilo('laser');
     const fields = ['lcp-kwh','lcp-kw','lcp-depr','lcp-labor','lcp-mk1','lcp-mkit','lcp-mstock'];
-    const defaults = { 'lcp-kwh':0.28,'lcp-kw':1.2,'lcp-depr':0.80,'lcp-labor':15,'lcp-mk1':3.5,'lcp-mkit':2.8,'lcp-mstock':2.2 };
+    /* Tariffa oraria ed energia arrivano dai profili; gli altri quattro sono
+       parametri di questa schermata e restano suoi. */
+    const defaults = { 'lcp-kwh':lab.kwh,'lcp-kw':1.2,'lcp-depr':0.80,'lcp-labor':lab.labor,'lcp-mk1':3.5,'lcp-mkit':2.8,'lcp-mstock':2.2 };
     fields.forEach(id => {
       const el = eid(id);
       if (el) el.value = s[id] !== undefined ? s[id] : defaults[id];
     });
+    this.renderProfileNote(lab);
+  },
+
+  /** Dice sotto ai due campi da dove esce il numero, e offre la strada per
+      cambiarlo alla fonte invece che qui. */
+  renderProfileNote(lab) {
+    const box = eid('lcp-profilo-nota');
+    if (!box) return;
+    const l = lab || _labProfilo('laser');
+    const e = (typeof esc === 'function') ? esc : (t => String(t));
+    box.innerHTML =
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:10px;color:var(--text-muted)">'
+      + '<span>Manodopera € ' + l.labor.toFixed(2) + '/h · ' + e(_labFonteTesto(l.fonteLabor)) + '</span>'
+      + '<span>·</span>'
+      + '<span>Energia € ' + l.kwh.toFixed(2) + '/kWh · ' + e(_labFonteTesto(l.fonteKwh)) + '</span>'
+      + '<button type="button" onclick="_apriProfiliEconomici()" style="margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:10px;padding:2px 8px">Profili economici</button>'
+      + '</div>';
   },
 
   saveSettings() {
     const fields = ['lcp-kwh','lcp-kw','lcp-depr','lcp-labor','lcp-mk1','lcp-mkit','lcp-mstock'];
+    const lab = _labProfilo('laser');
+    /* Tariffa ed energia si salvano solo se l'utente le ha davvero cambiate.
+       Salvarle sempre congelerebbe qui il valore del profilo al primo
+       ricalcolo, e da quel momento cambiare i profili non cambierebbe piu'
+       niente: il collegamento esisterebbe solo il giorno in cui e' stato
+       scritto. Uno scostamento sotto il mezzo centesimo e' arrotondamento del
+       campo, non una scelta. */
+    const daProfilo = { 'lcp-kwh': lab.kwh, 'lcp-labor': lab.labor };
     const s = {};
-    fields.forEach(id => { const el = eid(id); if (el) s[id] = +el.value; });
+    fields.forEach(id => {
+      const el = eid(id);
+      if (!el) return;
+      const v = +el.value;
+      if (daProfilo[id] !== undefined && Math.abs(v - daProfilo[id]) < 0.005) return;
+      s[id] = v;
+    });
     localStorage.setItem('lcp_settings', JSON.stringify(s));
   },
 
@@ -3279,10 +3380,11 @@ const LaserCalcPage = {
 
   recalc() {
     this.saveSettings();
-    const kwh    = +eid('lcp-kwh')?.value  || 0.28;
+    const _lab   = _labProfilo('laser');
+    const kwh    = +eid('lcp-kwh')?.value  || _lab.kwh;
     const kw     = +eid('lcp-kw')?.value   || 1.2;
     const depr   = +eid('lcp-depr')?.value || 0.80;
-    const labor  = +eid('lcp-labor')?.value|| 15;
+    const labor  = +eid('lcp-labor')?.value|| _lab.labor;
     const mk1    = +eid('lcp-mk1')?.value  || 3.5;
     const mkit   = +eid('lcp-mkit')?.value || 2.8;
     const mstock = +eid('lcp-mstock')?.value || 2.2;
@@ -4120,6 +4222,9 @@ window.CatalogQR = typeof CatalogQR !== 'undefined' ? CatalogQR : {};
 window.CatalogView = typeof CatalogView !== 'undefined' ? CatalogView : {};
 window.Anchoring = Anchoring;
 window.LaserCalcPage = LaserCalcPage;
+/* Serve a un onclick nel markup dei due calcolatori: gli handler in linea si
+   risolvono su window, non sullo scope del file. */
+window._apriProfiliEconomici = _apriProfiliEconomici;
 window.AnchorAI = AnchorAI;
 window.PaintCalc = PaintCalc;
 window.ListinoTabs = ListinoTabs;

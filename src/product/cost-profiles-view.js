@@ -72,7 +72,7 @@
         sezione: sezione || 'manodopera',
         manodopera: (c.manodopera && c.manodopera.length ? c.manodopera : p.MANODOPERA_PREDEFINITA)
           .map(function (v) { return Object.assign({}, v); }),
-        overhead: Object.assign({ modo: 'ora', oreProduttiveAnnue: 0, lavoriAnnui: 0, percentuale: 0 },
+        overhead: Object.assign({ modo: 'ora', oreProduttiveAnnue: 0, lavoriAnnui: 0, percentuale: 0, kwhPrice: 0 },
           c.overhead || {}, {
             voci: ((c.overhead && c.overhead.voci && c.overhead.voci.length)
               ? c.overhead.voci : p.SPESE_PREDEFINITE).map(function (v) { return Object.assign({}, v); }),
@@ -240,7 +240,31 @@
       + (modo === 'percento' ? riga('Percentuale sul costo',
         'overhead.percentuale', bozza.overhead.percentuale, '1',
         'La meno precisa delle tre: usala se non sai contare ore o lavori.') : '')
-      + esito;
+      + esito
+      + sezioneEnergia();
+  }
+
+  /* ── L'energia ───────────────────────────────────────────────────────────
+     Sta nella scheda delle spese generali e non in quella delle macchine
+     perche' e' il laboratorio a pagare la bolletta: la macchina dichiara
+     quanti watt assorbe, non quanto costa il kilowattora. Prima di questo
+     campo il prezzo era scritto a mano in tredici file. */
+  function sezioneEnergia() {
+    var p = P();
+    var dichiarato = num(bozza.overhead.kwhPrice);
+    var partenza = (p && p.ENERGIA_PREDEFINITA) || 0;
+    var esito = dichiarato > 0
+      ? bene('Ogni preventivo conta l\'energia a ' + eur(dichiarato) + ' al kWh.')
+      : avviso('Non dichiarato: i preventivi usano il valore di partenza di ' + eur(partenza)
+        + ' al kWh. Il numero esatto e\' sulla bolletta, alla voce del prezzo unitario.');
+
+    return '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border,#2a2a35)">'
+      + '<div style="font-size:10px;color:var(--text-muted,#888);font-weight:700;text-transform:uppercase;'
+      + 'letter-spacing:.05em;margin-bottom:6px">Energia</div>'
+      + riga('Prezzo dell\'energia (€/kWh)', 'overhead.kwhPrice', bozza.overhead.kwhPrice, '0.01',
+        'Lo usano il preventivatore 3D, il calcolatore laser e il catalogo macchine.')
+      + esito
+      + '</div>';
   }
 
   function riga(etichetta, chiave, valore, passo, aiuto) {
@@ -375,6 +399,7 @@
         oreProduttiveAnnue: num(bozza.overhead.oreProduttiveAnnue),
         lavoriAnnui: num(bozza.overhead.lavoriAnnui),
         percentuale: num(bozza.overhead.percentuale),
+        kwhPrice: num(bozza.overhead.kwhPrice),
         voci: bozza.overhead.voci,
       }),
       s.salvaImballo(bozza.imballo),
@@ -387,6 +412,10 @@
         try {
           if (global.Print3DQuoter && global.Print3DQuoter.calc) global.Print3DQuoter.calc();
           if (global.CalcMacchine && global.CalcMacchine.render) global.CalcMacchine.render();
+          if (global.LaserCalcPage && global.LaserCalcPage.loadSettings) {
+            global.LaserCalcPage.loadSettings(); global.LaserCalcPage.recalc();
+          }
+          if (global.Catalog && global.Catalog.renderMachineProfileNote) global.Catalog.renderMachineProfileNote();
         } catch (e) {}
       } else {
         nota('Qualcosa non è stato salvato: riprova', 'error');

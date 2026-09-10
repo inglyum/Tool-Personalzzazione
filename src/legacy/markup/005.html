@@ -841,13 +841,13 @@
             <div style="font-size:11px;font-weight:700;color:#a5b4fc;margin-bottom:10px;text-transform:uppercase">⚙️ Parametri Macchina — salvati automaticamente</div>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
               <div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:3px">€/kWh bolletta</label>
-                <input class="form-control" id="cm-kwh" type="number" step="0.01" value="0.28" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
+                <input class="form-control" id="cm-kwh" type="number" step="0.01" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
               <div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:3px">kW consumo totale</label>
                 <input class="form-control" id="cm-kw" type="number" step="0.1" value="1.2" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
               <div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:3px">€/h ammortamento</label>
                 <input class="form-control" id="cm-depr" type="number" step="0.01" value="0.80" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
               <div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:3px">€/h tuo lavoro</label>
-                <input class="form-control" id="cm-labor" type="number" step="0.5" value="18" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
+                <input class="form-control" id="cm-labor" type="number" step="0.5" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
               <div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:3px">× Campione singolo</label>
@@ -857,6 +857,7 @@
               <div><label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:3px">× Stock 100+</label>
                 <input class="form-control" id="cm-mstock" type="number" step="0.1" value="2.2" style="font-size:12px;padding:6px" oninput="Catalog.saveMachineParams();Catalog.smartRecalc()"></div>
             </div>
+            <div id="cm-profilo-nota" style="margin-top:8px"></div>
           </div>
 
           <!-- Row 1: Materiale dropdown + costo foglio -->

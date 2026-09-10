@@ -467,7 +467,7 @@ function render(){
         +'<div class="p3-ht" id="p3d-mach-hint"></div></div>'
       +'<div class="p3-g2">'
         +'<div class="p3-fg"><label class="p3-fl">⚡ CONSUMO (W)</label><input class="p3-fc" id="p3d-watt" type="number" step="10" value="'+(isFdm?'150':'40')+'" oninput="Print3DQuoter.calc()"><div class="p3-ht">'+(isFdm?'FDM: 120–350W':'Resina: 25–60W')+'</div></div>'
-        +'<div class="p3-fg"><label class="p3-fl">💡 €/kWh</label><input class="p3-fc" id="p3d-kwh" type="number" step="0.01" value="0.28" oninput="Print3DQuoter.calc()"><div class="p3-ht">Dalla tua bolletta, non dalla media</div></div>'
+        +'<div class="p3-fg"><label class="p3-fl">💡 €/kWh</label><input class="p3-fc" id="p3d-kwh" type="number" step="0.01" value="'+prezzoEnergia()+'" oninput="Print3DQuoter.energiaToccata();Print3DQuoter.calc()"><div class="p3-ht">Dai profili economici — scrivilo qui per questo preventivo</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">📊 W MEDI (misurati)</label><input class="p3-fc" id="p3d-avgw" type="number" step="5" value="" placeholder="—" oninput="Print3DQuoter.calc()"><div class="p3-ht">Se li conosci, battono la targa</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🔋 kWh MISURATI</label><input class="p3-fc" id="p3d-kwhm" type="number" step="0.01" value="" placeholder="—" oninput="Print3DQuoter.calc()"><div class="p3-ht">Da presa intelligente o contatore</div></div>'
         +'<div class="p3-fg"><label class="p3-fl">🏭 COSTO MACCHINA €</label><input class="p3-fc" id="p3d-mc" type="number" step="50" value="'+(isFdm?'420':'250')+'" oninput="Print3DQuoter.calc()"></div>'
@@ -1822,7 +1822,7 @@ function pickMach(id){
     if(MK){
       var c=MK.daCatalogo({ id:m.id, name:m.n, price:m.c, life_h:m.l, w:m.w,
                             dutyCycle:gv('p3d-duty',1), maint:gv('p3d-mnt',0) },
-                          { kwhPrice:gv('p3d-kwh',0.28) });
+                          { kwhPrice:prezzoEnergia() });
       h.innerHTML=m.n+' — <b style="color:#22d3ee">'+eur(c.machineCostPerHour)+'/h</b>'
         +' <span style="opacity:.7">(corrente '+eur(c.energyCostPerHour)
         +' · usura '+eur(c.depreciationCostPerHour)
@@ -1970,6 +1970,30 @@ function _allineaTariffa(){
   if(v>0 && Math.abs(parseFloat(e.value)-v)>0.005) e.value=v;
 }
 
+/* Il prezzo dell'energia segue la stessa regola della tariffa oraria, e per la
+   stessa ragione: e' un numero del laboratorio, non del preventivo. Chi lo
+   scrive a mano comanda su questo preventivo; chi non lo tocca segue la
+   bolletta dichiarata nei profili. */
+var ENERGIA_TOCCATA=false;
+function energiaToccata(){ ENERGIA_TOCCATA=true; }
+function _allineaEnergia(){
+  if(ENERGIA_TOCCATA) return;
+  var e=el('p3d-kwh'); if(!e) return;
+  var v=prezzoEnergia();
+  if(v>0 && Math.abs(parseFloat(e.value)-v)>0.0005) e.value=v;
+}
+function prezzoEnergia(){
+  if(ENERGIA_TOCCATA){
+    var scritto=gv('p3d-kwh',0);
+    if(scritto>0) return scritto;
+  }
+  var p=_profili().kwhPrice;
+  if(p>0) return p;
+  var e=el('p3d-kwh');
+  var attuale=e?parseFloat(e.value):0;
+  return attuale>0?attuale:0;
+}
+
 /* ── Quanto costa un'ora, e chi l'ha deciso ────────────────────────────────
    Il 18 stava scritto in quattro punti di questo file: nel markup del campo,
    nel ripiego di `aggiornaLavoro`, in quello di `ingresso()` e nel
@@ -2046,7 +2070,7 @@ function ingresso(){
        ultima risorsa, e la scelta dell'utente verrebbe scavalcata in
        silenzio. */
     watt: (ENE==='auto'||ENE==='targa') ? gv('p3d-watt',150) : undefined,
-    kwhPrice:gv('p3d-kwh',.28), dutyCycle:gv('p3d-duty',1),
+    kwhPrice:prezzoEnergia(), dutyCycle:gv('p3d-duty',1),
     machinePrice:gv('p3d-mc',420), machineLifeHours:gv('p3d-lh',3000),
     maintenancePerHour:gv('p3d-mnt',0),
     /* Il lavaggio è la fase «post» della card lavoro, non un campo a parte:
@@ -2237,6 +2261,7 @@ function calc(){
      comandarlo. Adesso il percorso è uno. */
   var V=(typeof window!=='undefined') && window.InglyQuoter3DView;
   _allineaTariffa();
+  _allineaEnergia();
   var ing=ingresso();
   var qty=ing.qty;
 
@@ -2555,6 +2580,7 @@ function reset(){
   /* Il reset riporta anche la tariffa a seguire il laboratorio: un valore
      scritto per il preventivo precedente non deve sopravvivergli. */
   TARIFFA_TOCCATA=false;
+  ENERGIA_TOCCATA=false;
   SALTA_RIPRISTINO=true;
   _dimenticaCampi();
   try{ render(); } finally { SALTA_RIPRISTINO=false; }
@@ -2628,6 +2654,7 @@ function delMat(id){
 
 return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc:setDisc,
   tariffaToccata:tariffaToccata,apriProfili:apriProfili,tariffaOraria:tariffaOraria,fonteTariffa:fonteTariffa,
+  energiaToccata:energiaToccata,prezzoEnergia:prezzoEnergia,
   pickMach:pickMach,pickMat:pickMat,addExtra:addExtra,rmE:rmE,upE:upE,
   addLine:addLine,rmLine:rmLine,editLine:editLine,clearLines:clearLines,
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,

@@ -975,8 +975,8 @@
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
             <div>
               <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px">💡 €/kWh bolletta</label>
-              <input class="form-control" id="lcp-kwh" type="number" step="0.01" value="0.28" oninput="LaserCalcPage.recalc()">
-              <div style="font-size:9px;color:#64748b;margin-top:2px">Media IT: 0.24–0.32</div>
+              <input class="form-control" id="lcp-kwh" type="number" step="0.01" oninput="LaserCalcPage.recalc()">
+              <div style="font-size:9px;color:#64748b;margin-top:2px">Dai profili economici</div>
             </div>
             <div>
               <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px">⚡ kW consumo totale</label>
@@ -993,10 +993,11 @@
             </div>
             <div>
               <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px">👤 €/h tuo lavoro</label>
-              <input class="form-control" id="lcp-labor" type="number" step="1" value="18" oninput="LaserCalcPage.recalc()">
-              <div style="font-size:9px;color:#64748b;margin-top:2px">Freelance IT: 15–25€/h</div>
+              <input class="form-control" id="lcp-labor" type="number" step="1" oninput="LaserCalcPage.recalc()">
+              <div style="font-size:9px;color:#64748b;margin-top:2px">Dai profili economici</div>
             </div>
           </div>
+          <div id="lcp-profilo-nota" style="margin:-4px 0 12px"></div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px">
             <div>
               <label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px">× Moltiplicatore Campione</label>

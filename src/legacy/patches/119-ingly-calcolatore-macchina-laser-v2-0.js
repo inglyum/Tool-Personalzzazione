@@ -327,7 +327,7 @@
         </div>
         <div class="lcv2-param-row three">
           <div class="lcv2-field"><div class="lcv2-label">⚡ Potenza kW</div><input class="lcv2-input" id="lc-kw" type="number" step="0.01" value="${val('kw',+(m.power_w/1000).toFixed(2)||1.2)}" oninput="_lcv2Save();_lcv2Recalc()"></div>
-          <div class="lcv2-field"><div class="lcv2-label">💡 €/kWh</div><input class="lcv2-input" id="lc-kwh" type="number" step="0.01" value="${val('kwh',0.28)}" oninput="_lcv2Save();_lcv2Recalc()"></div>
+          <div class="lcv2-field"><div class="lcv2-label">💡 €/kWh</div><input class="lcv2-input" id="lc-kwh" type="number" step="0.01" value="${val('kwh',_energiaProfilo())}" oninput="_lcv2Save();_lcv2Recalc()"></div>
           <div class="lcv2-field"><div class="lcv2-label">🔧 Manut. €/h</div><input class="lcv2-input" id="lc-maint" type="number" step="0.01" value="${val('maint',0.50)}" oninput="_lcv2Save();_lcv2Recalc()"></div>
         </div>
         <div class="lcv2-param-row three">
@@ -445,6 +445,20 @@
   }
 
   /* ── Core calculation ─────────────────────────────────────── */
+
+  /* Il prezzo dell'energia ha una fonte sola — i profili economici del
+     laboratorio — e questo file la legge invece di tenersene una copia.
+     Il ripiego resta dichiarato: senza un numero, l'energia uscirebbe dai
+     preventivi in silenzio. */
+  function _energiaProfilo() {
+    try {
+      var S = window.InglyCostProfilesStore;
+      var v = S && S.ingressoSincrono ? S.ingressoSincrono({ ruolo: 'laser' }).kwhPrice : 0;
+      if (v > 0) return v;
+    } catch (e) {}
+    return 0.28;
+  }
+
   function eid(id) { return document.getElementById(id); }
   function gv(id, def) { const el = eid(id); return el ? (parseFloat(el.value)||def||0) : (def||0); }
   function gs(id, def) { const el = eid(id); return el ? (el.value||def||'') : (def||''); }
@@ -456,7 +470,7 @@
     const price    = gv('lc-price', _selectedMachine.price || 1000);
     const lifeH    = gv('lc-life', _selectedMachine.depr_h || 3000);
     const kw       = gv('lc-kw', _selectedMachine.power_w/1000 || 1.2);
-    const kwh      = gv('lc-kwh', 0.28);
+    const kwh      = gv('lc-kwh', _energiaProfilo());
     const maint    = gv('lc-maint', 0.50);   /* €/h */
     const cons     = gv('lc-cons', 0.30);    /* €/h */
     const labor    = gv('lc-labor', 15);     /* €/h */
@@ -657,7 +671,7 @@
   window._lcv2Save = function() {
     const st = {
       price:         gv('lc-price',0),    life:          gv('lc-life',0),
-      kw:            gv('lc-kw',0),       kwh:           gv('lc-kwh',0.28),
+      kw:            gv('lc-kw',0),       kwh:           gv('lc-kwh',_energiaProfilo()),
       maint:         gv('lc-maint',0),    cons:          gv('lc-cons',0),
       labor:         gv('lc-labor',15),   pack:          gv('lc-pack',0.20),
       name:          gs('lc-name',''),    qty:           gv('lc-qty',1),

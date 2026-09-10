@@ -99,6 +99,33 @@
 
   var MODI_OVERHEAD = ['ora', 'lavoro', 'percento', 'nessuno'];
 
+  /* ── ENERGIA ────────────────────────────────────────────────────────────
+     Il prezzo del kilowattora era scritto a mano in tredici file: il
+     preventivatore 3D, il calcolatore laser, il catalogo macchine e dieci
+     patch che se lo ricopiavano a vicenda. Cambiarlo significava trovarli
+     tutti, e nessuno li trovava tutti.
+
+     Sta qui perché è un costo del laboratorio, non della macchina: la
+     macchina dichiara quanti watt assorbe, il laboratorio dichiara quanto
+     paga la corrente. 0,28 €/kWh è il valore di partenza — non un dato di
+     INGLY, e infatti esce con `confidence: 'estimated'` finché non è la
+     bolletta a dirlo. */
+  var ENERGIA_PREDEFINITA = 0.28;   // €/kWh
+
+  function energia(profilo) {
+    var dichiarato = pos((profilo || {}).kwhPrice);
+    if (dichiarato > 0) {
+      return { kwhPrice: dichiarato, predefinito: false, confidence: 'declared', avvisi: [] };
+    }
+    return {
+      kwhPrice: ENERGIA_PREDEFINITA,
+      predefinito: true,
+      confidence: 'estimated',
+      avvisi: ['Prezzo dell\'energia non dichiarato: si usa il valore di partenza di '
+             + ENERGIA_PREDEFINITA.toFixed(2).replace('.', ',') + ' €/kWh'],
+    };
+  }
+
   /* ── IMBALLO ────────────────────────────────────────────────────────────
      Prezzi di partenza volutamente bassi e tondi: sono ordini di grandezza da
      sostituire con il prezzo pagato, non stime da difendere. `per` distingue
@@ -261,9 +288,11 @@
     var lav = manodopera(p.manodopera, o.ruolo || 'operatore');
     var ov = overhead(p.overhead);
     var im = imballo(p.imballo, { quantita: o.quantita });
+    var en = energia(p.overhead);
 
     return {
       laborPerHour: lav ? lav.costoOrarioInterno : 0,
+      kwhPrice: en.kwhPrice,
       overheadPerHour: ov.overheadPerHour,
       overheadPerJob: ov.overheadPerJob,
       overheadPct: ov.overheadPct,
@@ -272,11 +301,13 @@
         manodopera: lav ? lav.confidence : 'missing',
         overhead: ov.confidence,
         imballo: im.confidence,
+        energia: en.confidence,
       },
-      _avvisi: ov.avvisi.concat(im.avvisi),
+      _avvisi: ov.avvisi.concat(im.avvisi).concat(en.avvisi),
       _predefiniti: {
         manodopera: lav ? !!lav.predefinito : true,
         overhead: !!ov.predefinito,
+        energia: !!en.predefinito,
       },
     };
   }
@@ -287,9 +318,11 @@
     SPESE_PREDEFINITE: SPESE_PREDEFINITE,
     IMBALLO_PREDEFINITO: IMBALLO_PREDEFINITO,
     MODI_OVERHEAD: MODI_OVERHEAD,
+    ENERGIA_PREDEFINITA: ENERGIA_PREDEFINITA,
     manodopera: manodopera,
     overhead: overhead,
     imballo: imballo,
+    energia: energia,
     ingresso: ingresso,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

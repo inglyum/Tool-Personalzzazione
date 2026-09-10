@@ -61,7 +61,21 @@
     var kw     = m.kw||0.1;
     var maint  = m.maint||0.05;
     var labor  = extra_labor||0;
-    return (price/lifeH) + kw*(kwh||0.28) + maint + labor/60;
+    return (price/lifeH) + kw*(kwh||_energiaProfilo()) + maint + labor/60;
+  }
+
+
+  /* Il prezzo dell'energia ha una fonte sola — i profili economici del
+     laboratorio — e questo file la legge invece di tenersene una copia.
+     Il ripiego resta dichiarato: senza un numero, l'energia uscirebbe dai
+     preventivi in silenzio. */
+  function _energiaProfilo() {
+    try {
+      var S = window.InglyCostProfilesStore;
+      var v = S && S.ingressoSincrono ? S.ingressoSincrono({ ruolo: 'laser' }).kwhPrice : 0;
+      if (v > 0) return v;
+    } catch (e) {}
+    return 0.28;
   }
 
   /* ── Added machines persistence ───────────────────────── */
@@ -107,7 +121,7 @@
       if(ci) ci.appendChild(el);
     }
 
-    var inp   = LS.get(KB.input,{kwh:0.28,labor:18,pack:0.30,markup_b2b:2.0,markup_etsy:3.5,markup_retail:3.0,qty:10});
+    var inp   = LS.get(KB.input,{kwh:_energiaProfilo(),labor:18,pack:0.30,markup_b2b:2.0,markup_etsy:3.5,markup_retail:3.0,qty:10});
     var mats  = getMaterials();
     var allM  = getAllMachines();
     var favs  = LS.get(KB.favs,[]);
@@ -203,7 +217,7 @@
         +'<div style="font-size:12px;font-weight:700;color:var(--text,#e8e8f0);margin-bottom:10px">⚙️ Parametri</div>'
         +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'
           +'<div><label style="font-size:10px;color:var(--text-muted,#888);display:block;margin-bottom:3px">💡 €/kWh</label>'
-            +'<input id="_b2_kwh" type="number" step="0.01" value="'+(inp.kwh||0.28)+'" class="_b2_inp" style="width:100%;box-sizing:border-box;padding:7px 8px;background:var(--bg-card2,#18181f);border:1.5px solid var(--border,#2a2a35);border-radius:7px;color:var(--text,#e8e8f0);font-size:12px"></div>'
+            +'<input id="_b2_kwh" type="number" step="0.01" value="'+(inp.kwh||_energiaProfilo())+'" class="_b2_inp" style="width:100%;box-sizing:border-box;padding:7px 8px;background:var(--bg-card2,#18181f);border:1.5px solid var(--border,#2a2a35);border-radius:7px;color:var(--text,#e8e8f0);font-size:12px"></div>'
           +'<div><label style="font-size:10px;color:var(--text-muted,#888);display:block;margin-bottom:3px">👤 Manodopera €/h</label>'
             +'<input id="_b2_labor" type="number" value="'+(inp.labor||18)+'" class="_b2_inp" style="width:100%;box-sizing:border-box;padding:7px 8px;background:var(--bg-card2,#18181f);border:1.5px solid var(--border,#2a2a35);border-radius:7px;color:var(--text,#e8e8f0);font-size:12px"></div>'
           +'<div><label style="font-size:10px;color:var(--text-muted,#888);display:block;margin-bottom:3px">📦 Imballo €/pz</label>'
@@ -336,7 +350,7 @@
   function saveB2BInput(el){
     var g=function(id,def){var e=el.querySelector('#'+id);return e?(isNaN(parseFloat(e.value))?(e.value||def):parseFloat(e.value)):def;};
     LS.set(KB.input,{
-      kwh:g('_b2_kwh',0.28), labor:g('_b2_labor',18), pack:g('_b2_pack',0.30), qty:g('_b2_qty',10),
+      kwh:g('_b2_kwh',_energiaProfilo()), labor:g('_b2_labor',18), pack:g('_b2_pack',0.30), qty:g('_b2_qty',10),
       job:g('_b2_job',''), min:g('_b2_min',2), mat_cost:g('_b2_mat_cost',0),
       markup_b2b:g('_b2_mk_b2b',2.0), markup_etsy:g('_b2_mk_etsy',3.5), markup_retail:g('_b2_mk_ret',3.0),
     });
@@ -345,7 +359,7 @@
   function computeB2B(el,m){
     if(!m) return null;
     var g=function(id,def){var e=el.querySelector('#'+id);return e?parseFloat(e.value)||def:def;};
-    var kwh     = g('_b2_kwh',0.28);
+    var kwh     = g('_b2_kwh',_energiaProfilo());
     var labor   = g('_b2_labor',18)/60; /* per minute */
     var pack    = g('_b2_pack',0.30);
     var qty     = Math.max(1,g('_b2_qty',10));
