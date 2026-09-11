@@ -112,3 +112,73 @@ Calcolatore Laser.
 - `tests/qa/cost-audit.mjs` — 15 controlli in un browser vero: apre entrambe le
   schermate e confronta le parole che mostrano.
 - `tests/architecture-cost-engine.test.mjs` — il cricchetto, ai nuovi tetti.
+
+---
+
+# Appendice — chi disegna davvero il Laser Quoter B2B
+
+Cinque patch scrivono in `#view-laser_b2b`. Misurato aprendo la sezione e
+aspettando nove secondi — abbastanza perché anche i moduli che si annunciano in
+ritardo abbiano finito:
+
+| Patch | Firma nell'intestazione | Esito |
+| ----- | ----------------------- | ----- |
+| **078** — Laser B2B Pro | «Calcolo costi + margini in tempo reale» | **disegna la schermata** |
+| 086 — LaserB2B Pro Ultimate | «Calcolo costi professionale» | mai visibile |
+| 096 — v37c Master consolidato | «v37c Consolidato» | mai visibile |
+| 094 — task force | *(ids diversi)* | non disegna questa rotta |
+| 121 — Laser Quoter B2B v2 | *(ids diversi)* | non disegna questa rotta |
+
+**Una preoccupazione che si è rivelata infondata, e va detto.** Vedendo che
+vince 078 e non 096 — il file chiamato «master consolidato», quello che il
+cricchetto sorveglia come consumatore del motore — ho temuto che la migrazione
+al motore unico fosse finita in un file che nessuno vede. Non è così: **078 usa
+già il motore**, con `InglyCostEngine.prezzo()` e una politica dichiarata. Il
+lavoro era arrivato anche lì.
+
+## Il difetto che la misura ha fatto emergere
+
+Nella schermata viva, la **scheda riepilogo** e la **tabella degli scaglioni**
+— che stanno una sopra l'altra nella stessa pagina — applicavano due scale di
+sconto sul materiale diverse:
+
+| quantità | scheda | tabella |
+| -------: | -----: | ------: |
+| 10 | 10% | 0% |
+| 20 | 10% | 4% |
+| 50 | **20%** | **7%** |
+| 100 | 20% | 10% |
+| 200 | 20% | 15% |
+
+Cinque quantità su sei. A cinquanta pezzi la scheda scontava il materiale quasi
+tre volte più della tabella: **stesso prodotto, stessa quantità, due costi e due
+prezzi a due centimetri di distanza.**
+
+Il motivo per cui è durato è istruttivo: la tabella aveva già la sua scala
+*dichiarata* come politica, con un commento che spiegava perché le politiche
+vanno dichiarate. La scheda aveva la vecchia scritta nella formula. Nessuno dei
+due punti nominava l'altro, quindi chi aveva sistemato la tabella non aveva modo
+di sapere che la scheda esisteva.
+
+Adesso `POLITICHE_B2B` è dichiarata una volta in cima al modulo, e le due viste
+la leggono. Anche la resa del lotto — che non è una politica commerciale ma
+conoscenza di mestiere — sta in una funzione sola, perché due copie divergono
+comunque.
+
+**I prezzi della scheda cambiano.** Applicava uno sconto materiale più alto di
+quello dichiarato, quindi mostrava costi più bassi del vero: a cinquanta pezzi
+il costo del materiale sale del 13% rispetto a prima. Il numero giusto è quello
+nuovo — è la politica scritta — ma è un cambiamento visibile e va saputo.
+
+## Cosa resta, e perché non l'ho fatto adesso
+
+Ritirare 086, 094 e 096 sembra il passo ovvio. Non lo è: **094 esporta cinque
+moduli veri** — `LaserCalcHistory`, `LaserTemplates`, `MachineCompare`,
+`OrderChecklist`, `PreventivToOrder` — che non c'entrano con la rotta B2B e
+possono essere usati altrove. 086 esporta gestori di finestra dai nomi generici
+(`closeModal`, `saveMachine`) che potrebbero servire ad altro.
+
+Ritirarli richiede di misurare, per ognuno di quei nomi, se qualcuno lo chiama:
+è un passaggio suo, con la sua verifica, e va fatto all'inizio di una sessione
+e non alla fine. La misura di chi disegna cosa — che è la parte difficile — è
+fatta e sta qui sopra.

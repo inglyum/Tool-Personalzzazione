@@ -8,6 +8,35 @@
 // {id, tech, cat, img, name, costSup, timeMin, sup, url, notes}
 // tech: 'laser' | 'sublimazione' | 'dtf' | 'laser+sub'
 
+/* ── Le politiche commerciali di questa schermata ──────────────────────
+   Erano dichiarate dentro la funzione che disegna la tabella, e la scheda
+   riepilogo — che sta sopra, nella stessa schermata — ne aveva una propria,
+   diversa. Misurato: su sei quantita' ne divergevano cinque. A cinquanta
+   pezzi la scheda applicava il 20% di sconto sul materiale e la tabella il
+   7%, quindi lo stesso prodotto nella stessa quantita' mostrava due costi e
+   due prezzi a due centimetri di distanza.
+
+   Adesso la scala e' una, dichiarata qui, e le due viste la leggono. Chi
+   vuole cambiarla cambia questi numeri, non due formule in due punti. */
+var POLITICHE_B2B = {
+  prezzoMinimo: 15,
+  marginePavimento: 15,
+  /* Sconto sull'acquisto del materiale al crescere del lotto: e' quello che
+     il fornitore fa a noi, non quello che noi facciamo al cliente. */
+  scontoMateriale: [{qty:200,sconto:.15},{qty:100,sconto:.10},{qty:50,sconto:.07},{qty:20,sconto:.04}],
+};
+
+/** Lo sconto materiale per una quantita', dalla scala dichiarata. */
+function _scontoMateriale(qty, politiche){
+  var scala = ((politiche||POLITICHE_B2B).scontoMateriale)||[];
+  for (var i=0;i<scala.length;i++) if (qty>=scala[i].qty) return scala[i].sconto;
+  return 0;
+}
+
+/** Il tempo macchina cala con il lotto: e' conoscenza di mestiere, non una
+    decisione commerciale, ma sta comunque in un posto solo. */
+function _resaLotto(qty){ return qty>=50?0.85:qty>=20?0.92:1; }
+
 var CATALOG_SK  = 'lb2b_catalog_v23';
 var STOCK_SK    = 'lb2b_stock_v1';
 var QUOTES_SK   = 'lb2b_quotes_v1';
@@ -418,11 +447,12 @@ function calcData(){
   var ck=document.getElementById('lb2b-channel')?.value||'b2b';
   var mu=(LaserB2B._markup&&LaserB2B._markup[ck])||2.0;
   var qty=LaserB2B._selQty||100;
-  var sd=qty>=50?0.20:qty>=25?0.15:qty>=10?0.10:0;
+  var POLc=Object.assign({}, POLITICHE_B2B, (LaserB2B._politiche||{}));
+  var sd=_scontoMateriale(qty, POLc);
   var stock=LaserB2B._loadStock&&LaserB2B._loadStock()||{};
   var realCost=(stock[p.id]&&stock[p.id].cost)||p.costSup||p.cost||0;
   var mc=realCost*(1-sd);
-  var tm=p.timeMin*(qty>=50?0.85:qty>=20?0.92:1);
+  var tm=p.timeMin*_resaLotto(qty);
   var mhc=(m.hourly+(m.energyH||m.energyHourly||0))/60*tm;
   var lc=lH/60*tm;
   var cp=mc+mhc+lc+pk;
@@ -431,7 +461,7 @@ function calcData(){
      usavano due regole diverse — qui nessun minimo, là un minimo per pezzo —
      mostravano due prezzi diversi per la stessa quantità sulla stessa
      schermata. */
-  var POLd=Object.assign({prezzoMinimo:15, marginePavimento:15}, (LaserB2B._politiche||{}));
+  var POLd=POLc;
   var motored=(typeof window!=='undefined')&&window.InglyCostEngine;
   var bp=motored
     ? motored.prezzo(cp,{strategia:'ricarico', ricarico:mu, marginePavimentoPct:POLd.marginePavimento, ivaPct:0}).netto
@@ -459,20 +489,13 @@ LaserB2B.calc=function(){
      scaglioni di sconto sul materiale, il tempo macchina che cala con il
      lotto. I primi due sono decisioni commerciali e ora hanno un nome;
      l'ultimo è conoscenza di mestiere e resta qui, dov'è di casa. */
-  var POL = Object.assign({
-    prezzoMinimo: 15,
-    scontoMateriale: [{qty:200,sconto:.15},{qty:100,sconto:.10},{qty:50,sconto:.07},{qty:20,sconto:.04}],
-    marginePavimento: 15,
-  }, (LaserB2B._politiche||{}));
-  var scontoDi=function(qty){
-    for(var i=0;i<POL.scontoMateriale.length;i++) if(qty>=POL.scontoMateriale[i].qty) return POL.scontoMateriale[i].sconto;
-    return 0;
-  };
+  var POL = Object.assign({}, POLITICHE_B2B, (LaserB2B._politiche||{}));
+  var scontoDi=function(qty){ return _scontoMateriale(qty, POL); };
 
   var rows=(LaserB2B._QTYS||[5,10,20,50,100,200]).map(function(qty){
     var sd2=scontoDi(qty);
     var mc2=((LaserB2B._loadStock&&LaserB2B._loadStock()||{})[p.id]?.cost||p.costSup||p.cost||0)*(1-sd2);
-    var tm2=p.timeMin*(qty>=50?0.85:qty>=20?0.92:1);
+    var tm2=p.timeMin*_resaLotto(qty);
     var mk=document.getElementById('lb2b-machine')?.value||'xtool_f2';
     var m2=LaserB2B._MACHINES&&LaserB2B._MACHINES[mk]; if(!m2) return '';
     var lH2=parseFloat(document.getElementById('lb2b-labor')?.value)||18;
