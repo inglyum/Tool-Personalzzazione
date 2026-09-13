@@ -183,7 +183,11 @@ const ProductIntelligence = {
 // Renders into view-clientintel
 // ══════════════════════════════════════════════════════════════════════
 const CLVDash = {
-  _sort: 'revenue',
+  /* L'ordinamento predefinito e' il valore del cliente, non il suo fatturato.
+     Era 'revenue', e con quello in cima finiva chi incassa di piu' anche
+     quando rende meno — cioe' esattamente il contrario di quello che questa
+     schermata serve a far vedere. Il fatturato resta selezionabile. */
+  _sort: 'clv',
 
   async render() {
     const el = eid('view-clv'); if (!el) return;
@@ -192,7 +196,7 @@ const CLVDash = {
         <h2 style="color:#ec4899;margin:0;font-size:22px">👑 CLV Dashboard</h2>
         <span style="font-size:11px;background:#ec489915;color:#ec4899;padding:3px 10px;border-radius:99px;border:1px solid #ec489930;font-weight:700">LIFETIME VALUE</span>
       </div>
-      <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">Scopri chi sono davvero i tuoi clienti migliori. Modifica o elimina direttamente da qui.</p>
+      <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">Chi sono davvero i tuoi clienti migliori — <strong>a margine</strong>, non a fatturato: chi ordina lavori complessi puo' incassare di piu' e rendere di meno. La proiezione a dodici mesi usa la frequenza con cui ognuno ha comprato finora.</p>
       <div id="clv-content"><div style="text-align:center;padding:40px"><div style="width:40px;height:40px;border:3px solid var(--border);border-top-color:#ec4899;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px"></div></div></div>
     </div>`;
     await this._load();
@@ -225,16 +229,49 @@ const CLVDash = {
         if (map[k]) { map[k].email = c.email; map[k].phone = c.phone; map[k].city = c.city; map[k].clientDbId = c.id; }
       });
 
+      /* ── Il conto non lo fa più questa schermata ───────────────────────
+         Faceva `avgTicket * ordPerYear * 3`, e c'erano tre cose storte:
+
+         · il valore era sul **fatturato**, non sul margine. Un cliente da
+           8 000 € di lavori complessi può rendere meno di uno da 3 000 € di
+           pezzi ripetuti, e la classifica per fatturato fa coltivare il primo.
+         · `ordPerYear = ordini / giorniDalPrimo` conta gli **acquisti** invece
+           degli **intervalli**: su due acquisti gonfia la frequenza del doppio.
+         · quel `* 3` è un orizzonte di tre anni che nessuno aveva dichiarato,
+           e moltiplicava per tre un errore già presente.
+
+         Adesso il conto sta in `InglyCLV`, è puro, ed è lo stesso che useranno
+         le altre schermate del valore cliente. */
+      const CLV = window.InglyCLV;
+      if (!CLV) {
+        el.innerHTML = '<div style="background:var(--bg-card);border-radius:12px;padding:32px;text-align:center;border:1px solid var(--border);color:var(--text-muted)">Il modulo del valore cliente non è disponibile.</div>';
+        return;
+      }
       const now = new Date();
+      const _calcolati = CLV.calcola(paid, clients, { adesso: now.getTime() });
+      this._totali = CLV.totali(_calcolati);
+      const _perChiave = {};
+      _calcolati.forEach(c => { _perChiave[String(c.id != null ? c.id : c.nome.toLowerCase())] = c; });
+
       const clvList = Object.values(map).map(c => {
-        const avgTicket    = c.revenue / c.orders;
-        const daysSince1st = Math.max(1, (now - new Date(c.first)) / 86400000);
-        const daysSinceLst = Math.max(0, (now - new Date(c.last))  / 86400000);
-        const ordPerYear   = (c.orders / daysSince1st) * 365;
-        const clv          = avgTicket * ordPerYear * 3;
-        const churnRisk    = daysSinceLst > 180 ? 'alto' : daysSinceLst > 90 ? 'medio' : 'basso';
-        const tier         = c.revenue > 1000 ? 'gold' : c.revenue > 300 ? 'silver' : 'bronze';
-        return { ...c, avgTicket, daysSinceLst: Math.round(daysSinceLst), clv, churnRisk, tier };
+        const k = String(c.clientDbId != null ? c.clientDbId : (c.name || '').toLowerCase());
+        const q = _perChiave[k] || _calcolati.find(x => x.nome === c.name);
+        if (!q) return { ...c, avgTicket: c.revenue / Math.max(1, c.orders), daysSinceLst: 0,
+          clv: 0, clvSuMargine: false, clvMotivo: 'cliente non trovato nel calcolo', churnRisk: 'basso', tier: 'bronze' };
+        /* Se il costo non è dichiarato la proiezione esiste lo stesso, ma è sul
+           fatturato — e la colonna deve dirlo, altrimenti due righe con la
+           stessa cifra vorrebbero dire due cose diverse. */
+        const suMargine = q.previsto.margine != null;
+        const clv = suMargine ? q.previsto.margine : (q.previsto.ricavo || 0);
+        const daysSinceLst = q.storico.giorniDaUltimo != null ? q.storico.giorniDaUltimo : 0;
+        const churnRisk = daysSinceLst > 180 ? 'alto' : daysSinceLst > 90 ? 'medio' : 'basso';
+        const tier = c.revenue > 1000 ? 'gold' : c.revenue > 300 ? 'silver' : 'bronze';
+        return { ...c, avgTicket: q.medie.ricavoPerOrdine, daysSinceLst,
+          clv, clvSuMargine: suMargine, clvMotivo: q.previsto.motivo,
+          margineStorico: q.storico.margineNoto ? q.storico.margine : null,
+          marginePct: q.storico.marginePct,
+          ordiniAnno: q.medie.ordiniAnno,
+          churnRisk, tier };
       });
 
       if (!clvList.length) {
@@ -251,7 +288,16 @@ const CLVDash = {
       const churnBadge = r => ({alto:'<span style="background:#ef444420;color:#ef4444;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">⚠️ ALTO</span>',medio:'<span style="background:#f59e0b20;color:#f59e0b;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">~ MEDIO</span>',basso:'<span style="background:#22c55e20;color:#22c55e;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700">✓ BASSO</span>'}[r]||'');
 
       const sorted = [...clvList].sort((a,b)=>{
-        if(this._sort==='clv')    return b.clv-a.clv;
+        if(this._sort==='clv'){
+          /* Due gruppi, non una classifica sola. Un valore sul margine e uno
+             sul fatturato non sono confrontabili — il fatturato e' sempre piu'
+             grande — e mescolarli mette in cima chi ha il costo **non
+             dichiarato**, cioe' premia la mancanza di dati. Prima chi ha un
+             margine noto, ordinato per margine; poi gli altri, ordinati per
+             fatturato proiettato e marcati come tali nella colonna. */
+          if(a.clvSuMargine!==b.clvSuMargine) return (b.clvSuMargine?1:0)-(a.clvSuMargine?1:0);
+          return b.clv-a.clv;
+        }
         if(this._sort==='orders') return b.orders-a.orders;
         if(this._sort==='ticket') return b.avgTicket-a.avgTicket;
         if(this._sort==='last')   return (b.last||'').localeCompare(a.last||'');
@@ -260,7 +306,7 @@ const CLVDash = {
 
       el.innerHTML = `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
-          ${[['👑','Clienti',clvList.length,'#ec4899'],['💰','Revenue',fmt(clvList.reduce((a,c)=>a+c.revenue,0)),'#22c55e'],['📈','CLV 3yr',fmt(totalCLV),'#a855f7'],['⚠️','A rischio churn',atRisk.length,atRisk.length>0?'#ef4444':'#22c55e'],['🏆','Top 20% genera',topCliPct.toFixed(0)+'%','#f59e0b']].map(([ic,lb,v,c])=>'<div style="background:var(--bg-card);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center"><div style="font-size:18px;margin-bottom:4px">'+ic+'</div><div style="font-size:20px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+lb+'</div></div>').join('')}
+          ${[['👑','Clienti',clvList.length,'#ec4899'],['💰','Revenue',fmt(clvList.reduce((a,c)=>a+c.revenue,0)),'#22c55e'],['📈','Margine previsto 12 mesi',fmt(this._totali.previstoMargine||0),'#a855f7'],['🔎','Costo noto su',(this._totali.coperturaPct||0).toFixed(0)+'% dei clienti',(this._totali.coperturaPct>=80?'#22c55e':'#f59e0b')],['⚠️','A rischio churn',atRisk.length,atRisk.length>0?'#ef4444':'#22c55e'],['🏆','Top 20% genera',topCliPct.toFixed(0)+'%','#f59e0b']].map(([ic,lb,v,c])=>'<div style="background:var(--bg-card);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center"><div style="font-size:18px;margin-bottom:4px">'+ic+'</div><div style="font-size:20px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+lb+'</div></div>').join('')}
         </div>
 
         ${atRisk.length ? '<div style="background:#ef444415;border:1.5px solid #ef444440;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;gap:12px;align-items:center"><span style="font-size:22px">⚠️</span><div style="flex:1"><div style="color:#ef4444;font-weight:700;font-size:13px">'+atRisk.length+' clienti non comprano da oltre 90 giorni</div><div style="color:#fca5a5;font-size:12px;margin-top:2px">'+atRisk.slice(0,3).map(c=>c.name).join(', ')+(atRisk.length>3?' e altri…':'')+'</div></div><button onclick="App.navigate(\'replyai\')" style="padding:8px 14px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">Genera Messaggio →</button></div>' : ''}
@@ -269,8 +315,8 @@ const CLVDash = {
           <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div style="font-weight:700;color:var(--text);font-size:14px">👑 Classifica per Valore</div>
             <select onchange="if(typeof CLVDash!==typeof undefined){CLVDash._sort=this.value;CLVDash._load();}" style="padding:5px 10px;background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
-              <option value="revenue" ${this._sort==='revenue'?'selected':''}>Revenue totale</option>
-              <option value="clv"     ${this._sort==='clv'    ?'selected':''}>CLV proiettato</option>
+              <option value="revenue" ${this._sort==='revenue'?'selected':''}>Fatturato totale</option>
+              <option value="clv"     ${this._sort==='clv'    ?'selected':''}>Valore a 12 mesi</option>
               <option value="orders"  ${this._sort==='orders' ?'selected':''}>Ordini totali</option>
               <option value="ticket"  ${this._sort==='ticket' ?'selected':''}>Ticket medio</option>
               <option value="last"    ${this._sort==='last'   ?'selected':''}>Ultima data</option>
@@ -279,7 +325,7 @@ const CLVDash = {
           <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse">
             <thead><tr style="background:var(--bg-card2)">
-              ${['#','Cliente','Tier','Revenue','Ordini','Ticket','CLV 3yr','Ultimo acq.','Churn','Azioni'].map(h=>'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;white-space:nowrap">'+h+'</th>').join('')}
+              ${['#','Cliente','Tier','Fatturato','Ordini','Ticket','Valore 12 mesi','Ultimo acq.','Churn','Azioni'].map(h=>'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;white-space:nowrap">'+h+'</th>').join('')}
             </tr></thead>
             <tbody>
               ${sorted.map((c,i)=>{
@@ -298,7 +344,14 @@ const CLVDash = {
                   +'<td style="padding:9px 12px;font-weight:700;color:#22c55e">'+fmt(c.revenue)+'</td>'
                   +'<td style="padding:9px 12px;text-align:center">'+c.orders+'</td>'
                   +'<td style="padding:9px 12px">'+fmt(c.avgTicket)+'</td>'
-                  +'<td style="padding:9px 12px;font-weight:600;color:#a855f7">'+fmt(c.clv)+'</td>'
+                  /* La cifra e la sua natura insieme: due righe con lo stesso
+                     numero ma una sul margine e una sul fatturato direbbero
+                     due cose diverse, e senza etichetta non si distinguono. */
+                  +'<td style="padding:9px 12px;font-weight:600;color:'+(c.clvSuMargine?'#a855f7':'var(--text-muted)')+'">'
+                    +(c.clv>0?fmt(c.clv):'—')
+                    +'<div style="font-size:9px;font-weight:600;color:var(--text-muted)">'
+                      +(c.clv>0?(c.clvSuMargine?'margine':'fatturato — costo non noto'):(c.clvMotivo||'—'))
+                    +'</div></td>'
                   +'<td style="padding:9px 12px;font-size:12px;color:var(--text-muted)">'+(c.last?new Date(c.last).toLocaleDateString('it-IT'):'—')+'<br><span style="font-size:10px">'+c.daysSinceLst+'g fa</span></td>'
                   +'<td style="padding:9px 12px">'+churnBadge(c.churnRisk)+'</td>'
                   +'<td style="padding:9px 12px"><div style="display:flex;gap:4px">'+actEdit+actDel+actMsg+'</div></td>'

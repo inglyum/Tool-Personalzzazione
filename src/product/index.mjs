@@ -98,6 +98,9 @@ export const PRODUCT_FILES = [
   /* La provenienza dei numeri, tradotta in un posto solo. Dopo il motore,
      perche' ne legge l'uscita, e prima delle viste che la mostrano. */
   'cost-audit.js',
+  /* Quanto vale un cliente, in margine. Dopo order-economics, di cui usa le
+     letture canoniche di ricavo e costo. */
+  'clv.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i
