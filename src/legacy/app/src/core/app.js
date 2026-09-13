@@ -212,14 +212,29 @@ const App={
       }
     }
     
+    /* ── Alcune voci del menu sono comandi, non sezioni ────────────────────
+       «Export Commercialista» scarica un file, «Morning Briefing» apre un
+       pannello: non hanno una vista e non devono averla. Ma la navigazione
+       spegneva comunque la vista corrente, e non trovandone una nuova da
+       accendere lasciava l'area contenuti **bianca**. Misurato: dopo il clic
+       su Export Commercialista nessuna `.section-view` restava attiva, e chi
+       guardava lo schermo vedeva il programma rotto subito dopo un'operazione
+       riuscita.
+
+       La regola e' generale e non ha bisogno di un elenco: se la rotta non ha
+       una vista, la vista corrente resta dov'e'. Vale per i comandi di oggi e
+       per quelli di domani, e su una rotta davvero rotta mostrare la schermata
+       precedente e' comunque meglio di mostrare il vuoto. */
+    const _haVista = !!eid('view-' + section);
+
     // 🛡️ v4.6 FIX CRITICAL: Nascondi TUTTE le view attive (non solo previous)
     // Risolve bug overlay persistente quando navigazione rapida o stati inconsistenti
-    document.querySelectorAll('.section-view.active').forEach(v => {
+    if(_haVista) document.querySelectorAll('.section-view.active').forEach(v => {
       v.classList.remove('active');
     });
     
     // 🎯 Reset TUTTI i nav-item attivi
-    document.querySelectorAll('.nav-item.active').forEach(n => {
+    if(_haVista) document.querySelectorAll('.nav-item.active').forEach(n => {
       n.classList.remove('active');
     });
     
@@ -228,10 +243,15 @@ const App={
       ModalManager.closeAll();
     }
     
-    // ✅ Imposta nuova sezione
-    this.currentSection=section;
-    this.curr=section;
-    this._prevSection=section;
+    // ✅ Imposta nuova sezione — ma non per un comando: spostare `currentSection`
+    //    su una rotta senza vista farebbe credere all'applicazione di essere
+    //    altrove, e il prossimo clic sulla sezione di prima non farebbe niente
+    //    per via della guardia anti-doppio-clic in testa a questa funzione.
+    if(_haVista){
+      this.currentSection=section;
+      this.curr=section;
+      this._prevSection=section;
+    }
     
     // ✅ Mostra view richiesta con animazione
     const view=eid('view-'+section);

@@ -54,6 +54,27 @@ const ClientIntelligenceEngine = {
       { key: 'new', label: 'Nuovi', icon: '🌱', color: '#3b82f6', desc: 'Primo/pochi acquisti', action: 'Onboarding — mostra gamma completa' },
     ];
 
+    /* Senza vendite pagate la segmentazione non ha niente da segmentare, e
+       cinque riquadri con «0» accanto non lo spiegano: chi apre la sezione la
+       prima volta vede lo stesso schermo di chi ha un guasto. La RFM ha
+       bisogno di incassi, non di clienti in anagrafica, e va detto quale dei
+       due manca. */
+    if (!paid.length) {
+      el.innerHTML = `<div style="padding:20px;max-width:680px">
+        <div class="page-title"><i class="fas fa-users" style="color:#8b5cf6"></i> Client Intelligence</div>
+        <div class="card" style="margin-top:16px;text-align:center;padding:30px 22px">
+          <div style="font-size:14px;font-weight:700;color:var(--text)">Nessuna vendita pagata da segmentare</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.6">
+            La segmentazione RFM guarda <strong>quando</strong>, <strong>quanto spesso</strong> e
+            <strong>per quanto</strong> ogni cliente ha comprato: servono vendite con stato
+            «pagato», non solo clienti in anagrafica.
+            ${clients.length ? `In anagrafica ci sono ${clients.length} clienti: appena una loro vendita risulta pagata, compaiono qui.` : 'Registra il primo cliente e la prima vendita per vedere questa sezione al lavoro.'}
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="App.navigate('sales')">Vai alle Vendite</button>
+        </div></div>`;
+      return;
+    }
+
     el.innerHTML = `<div style="padding:20px;max-width:1100px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
         <div>

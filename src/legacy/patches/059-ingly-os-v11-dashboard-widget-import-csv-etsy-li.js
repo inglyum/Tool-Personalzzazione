@@ -739,6 +739,14 @@ const PrimaNota = {
             </tr>
           </thead>
           <tbody>
+            ${!entries.length ? `<tr><td colspan="5" style="padding:28px 16px;text-align:center">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">Nessun movimento registrato</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.6;max-width:420px;margin-left:auto;margin-right:auto">
+                La Prima Nota si compila da sola dalle vendite incassate: non si scrive a mano.
+                Appena una vendita risulta pagata compare qui, con la sua data e il suo canale.
+              </div>
+              <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="App.navigate('sales')">Vai alle Vendite</button>
+            </td></tr>` : ''}
             ${entries.map(e=>`<tr style="border-bottom:1px solid var(--border);border-left:3px solid #22c55e;transition:.12s" onmouseover="this.style.background='var(--bg-card2)'" onmouseout="this.style.background=''">
               <td style="padding:8px 12px;font-size:11px;white-space:nowrap">${e.date?new Date(e.date).toLocaleDateString('it-IT'):'—'}</td>
               <td style="padding:8px 12px;font-weight:600">${e.desc}</td>

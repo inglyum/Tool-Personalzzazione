@@ -16,11 +16,35 @@
     return '<div style="margin-bottom:18px"><div style="font-size:22px;font-weight:900;color:var(--text,#e5e5e5)">'+icon+' '+title+'</div>'
       +'<div style="font-size:12px;color:var(--text-muted,#888);margin-top:2px">'+sub+'</div></div>';
   }
+  /* ── I numeri di questi tredici moduli sono esempi, e devono dirlo ──────
+     Misurato aprendo le sezioni: «68% margine medio», «2.4M ricerche
+     personalized», «€24 prezzo medio», «Lombardia regione top». Sono scritti
+     nel codice, non misurati da nessuna parte, e comparivano in riquadri
+     grandi come quelli che altrove mostrano il fatturato reale. Chi li legge
+     non ha modo di sapere che non sono i suoi.
+
+     Il §2 del progetto dice che un numero senza fonte reale non si mostra come
+     dato. Qui non si possono cancellare — una sezione di analisi vuota non
+     aiuta nessuno, e le tabelle sotto sono modificabili proprio perche' l'idea
+     e' partire da un esempio e sostituirlo — ma si possono dichiarare per
+     quello che sono. Chi sostituisce il valore vede la dicitura sparire.
+
+     `k.reale: true` e' la via d'uscita: un modulo che un giorno calcolera'
+     davvero il suo numero lo passa cosi' e il riquadro non porta la dicitura. */
   function kpiGrid(kpis){
-    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px">'
+    var daSostituire = kpis.filter(function(k){ return !k.reale; }).length;
+    return (daSostituire
+      ? '<div style="margin-bottom:10px;padding:8px 11px;border-radius:9px;font-size:10px;line-height:1.5;'
+        + 'background:#f59e0b12;border:1px solid #f59e0b30;color:#fcd34d">'
+        + 'I numeri di questa sezione sono <b>valori di esempio</b>, non misure del tuo mercato: '
+        + 'servono a far vedere come si legge la schermata. Sostituiscili con i tuoi nella tabella qui sotto.'
+        + '</div>'
+      : '')
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px">'
       +kpis.map(function(k){return '<div style="background:var(--bg-card,#0f0f11);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px">'
         +'<div style="font-size:25px;font-weight:900;color:'+(k.color||'var(--text,#e5e5e5)')+';letter-spacing:-1px">'+k.val+'</div>'
         +'<div style="font-size:11px;color:var(--text-muted,#888);margin-top:2px">'+k.label+'</div>'
+        +(k.reale?'':'<div style="font-size:9px;color:#fcd34d;margin-top:3px">esempio da sostituire</div>')
         +(k.trend?'<div style="font-size:11px;color:'+(k.trendColor||'#22c55e')+';margin-top:3px">'+k.trend+'</div>':'')
         +'</div>';}).join('')+'</div>';
   }
@@ -216,7 +240,7 @@
   ═══════════════════════════════════════════════════════════ */
   var RENDERERS={
     trendscanner:function(){ return header('🔥','Trend Hunter Pro','Prodotti in crescita — dati editabili')
-      +kpiGrid([{val:'+350%',label:'Top crescita',color:'#22c55e'},{val:(window._aiData_trends||D_TRENDS).length,label:'Trend monitorati',color:'#3b82f6'},{val:'🔥',label:'Mercato caldo',color:'#ef4444'}])
+      +kpiGrid([{val:'+350%',label:'Top crescita',color:'#22c55e'},{val:(window._aiData_trends||D_TRENDS).length,label:'Trend in elenco',color:'#3b82f6',reale:true},{val:'🔥',label:'Mercato caldo',color:'#ef4444'}])
       +editableTable(TABLES.trends?Object.assign({id:'trends'},TABLES.trends):{}); },
 
     etsy_pulse:function(){ return header('🛍️','Etsy Pulse — Live','Mercato Etsy — keyword editabili')
@@ -234,7 +258,7 @@
       +noteCard('📅 Calendario Stagionale','<div style="font-size:12px;color:var(--text-muted,#888);line-height:1.7"><b style="color:#ef4444">Nov-Dic:</b> Natale (picco)<br><b style="color:#ec4899">Apr-Giu:</b> Matrimoni<br><b style="color:#22c55e">Set:</b> Rientro<br><b style="color:#fbbf24">Feb:</b> San Valentino</div>'); },
 
     product_hunter:function(){ return header('🚀','Product Hunter AI','Idee prodotto ad alto margine — editabili')
-      +kpiGrid([{val:(window._aiData_products||D_PRODUCTS).length,label:'Idee validate',color:'#22c55e'},{val:'€35',label:'Margine medio',color:'#fbbf24'}])
+      +kpiGrid([{val:(window._aiData_products||D_PRODUCTS).length,label:'Idee in elenco',color:'#22c55e',reale:true},{val:'€35',label:'Margine medio',color:'#fbbf24'}])
       +editableTable(Object.assign({id:'products'},TABLES.products)); },
 
     market_agent:function(){ return header('🤖','Market AI Agent','Analisi strategica')
