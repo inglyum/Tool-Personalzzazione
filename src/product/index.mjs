@@ -106,6 +106,7 @@ export const PRODUCT_FILES = [
   'previsioni.js',
   'production-model.js',
   'order-sales-service.js',
+  'order-payments.js',
   'redditivita-tecnologia.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',

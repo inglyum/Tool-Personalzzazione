@@ -473,55 +473,15 @@ Grazie per aver scelto ${company}! 🙏`;
   },
 
   async markPaid(id){
-    const s=await IDB.get('sales',id);if(!s)return;
-    await snapshotRecord('sales',id);
-    s.status='pagato';
-    s.paidAt=new Date().toISOString();
-    await IDB.put('sales',s);
-    await logAction('sale',id,'marked_paid');
-    Bus.emit('sale:paid',{id});
-    AppStore.invalidate('sales');
+    /* Snapshot, stato, data, registro, evento, cashflow e ordine collegato
+       stanno tutti in un posto solo: erano le cose che gli altri due percorsi
+       di «segna pagato» saltavano. */
+    const _e = await window.InglyPagamenti.registra(id);
+    if(!_e.ok){ toast('Incasso non registrato: '+(_e.motivo||'motivo ignoto'),'error'); return; }
+    const s = _e.vendita;
+    if(_e.giaPagata){ toast('Vendita gia\u0300 incassata','warning'); return; }
     if(typeof BDW!=='undefined') BDW.touch('sales');
-    // ── S5B: Auto-cashflow entry on sale paid (toggle OFF by default) ──
-    try {
-      const s5bEnabled = localStorage.getItem('s5b_auto_cashflow')==='1';
-      if(s5bEnabled && s.amount>0){
-        const cfEntry={
-          id: Date.now(),
-          type:'entrata',
-          date: (s.paidAt||new Date().toISOString()).split('T')[0],
-          desc: '💰 Vendita pagata: '+(s.product||s.desc||s.name||'#'+id),
-          amount: +s.amount,
-          cat: 'vendita',
-          _fromSaleId: id,
-          _auto: true
-        };
-        await IDB.put('cashflow', cfEntry);
-        AppStore.invalidate('cashflow');
-        toast('💰 Vendita pagata + entrata cashflow registrata ✓','success');
-      } else {
-        toast('💰 Vendita pagata! ✓','success');
-      }
-    } catch(ex){ console.warn('[S5B cashflow auto]',ex); toast('💰 Vendita pagata! ✓','success'); }
-    // ── v10 REVERSE SYNC: update linked Order to 'sold' ──────────────
-    try {
-      const orderId = s.fromOrderId||s.originOrder||s.orderId;
-      if(orderId){
-        const ord = await IDB.get('orders', +orderId||orderId).catch(()=>null);
-        if(ord && !['sold','invoiced'].includes(ord.stage)){
-          ord.stage = 'sold';
-          ord.updatedAt = new Date().toISOString();
-          ord.soldAt = s.paidAt;
-          await IDB.put('orders', ord);
-          AppStore.invalidate('orders');
-          AppStore.invalidate('pipeline');
-          // Also update pipeline entry if exists
-          const pl = await IDB.getAll('pipeline').catch(()=>[]);
-          const plEntry = pl.find(r=>r._sourceId===+orderId||r.id===+orderId||String(r._sourceId)===String(orderId));
-          if(plEntry){ plEntry.stage='paid'; await IDB.put('pipeline',plEntry); AppStore.invalidate('pipeline'); }
-        }
-      }
-    } catch(ex){ console.warn('[markPaid reverse-sync]',ex); }
+    toast(_e.effetti.indexOf('cashflow')>=0 ? '\ud83d\udcb0 Vendita pagata + entrata cashflow registrata \u2713' : '\ud83d\udcb0 Vendita pagata! \u2713','success');
     await this.render();
     if(typeof KPIEngine!=='undefined'&&typeof App!=='undefined'&&App.currentSection==='dashboard') KPIEngine.run().catch(()=>{});
     if(typeof Orders!=='undefined'&&typeof App!=='undefined'&&App.currentSection==='orders') (async()=>{try{if(typeof Orders!=='undefined')await Orders.render();}catch(e){}}) ();
@@ -848,12 +808,10 @@ ${photoBlock ? '<div class="section">'+photoBlock+'</div>' : ''}
     let done = 0;
     for (const id of ids) {
       try {
-        const s = await IDB.get('sales', +id||id).catch(()=>null);
-        if (!s) continue;
-        s.status = 'pagato';
-        s.paidAt = new Date().toISOString();
-        await IDB.put('sales', s);
-        done++;
+        /* Stesso percorso del pulsante singolo: in blocco non si perdeva la
+           data, ma si perdevano registro, cashflow e l'ordine collegato. */
+        const _e = await window.InglyPagamenti.registra(+id||id);
+        if (_e.ok && !_e.giaPagata) done++;
       } catch(e) { console.warn('[bulkMarkPaid]', e); }
     }
     this._selected.clear();
@@ -2087,14 +2045,13 @@ const Solleciti = {
   },
 
   async markPaid(saleId){
-    const sales = await AppStore.get('sales').catch(()=>[]);
-    const s = sales.find(x=>x.id===saleId);
-    if(!s) return;
-    s.status = 'pagato';
-    await IDB.put('sales', s);
-    toast(`✅ ${s.clientName||'Cliente'} — €${(+s.amount).toFixed(2)} segnato come pagato`, '💰');
+    /* Qui mancava perfino `paidAt`: la vendita risultava pagata senza sapere
+       quando, e l'ordine collegato restava in produzione. */
+    const _e = await window.InglyPagamenti.registra(saleId);
+    if(!_e.ok){ toast('Incasso non registrato: '+(_e.motivo||'motivo ignoto'),'error'); return; }
+    const s = _e.vendita || {};
+    toast(`✅ ${s.clientName||'Cliente'} — €${(+s.amount||0).toFixed(2)} segnato come pagato`, '💰');
     await this.showPanel();
-    Bus.emit('sale:created');
   },
 };
 
