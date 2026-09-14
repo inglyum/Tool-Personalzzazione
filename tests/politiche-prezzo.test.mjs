@@ -30,6 +30,11 @@ const E = sandbox.window.InglyCostEngine;
 const R = sandbox.window.InglyCatalogRicalcolo;
 const POLITICHE = E.politiche({});
 
+/* Le politiche configurate vivono in un modulo a parte: si carica anche
+   quello, perché la scala degli scaglioni sta lì. */
+vm.runInContext(fs.readFileSync('src/product/pricing-policies.js', 'utf8'), sandbox);
+const P = sandbox.window.InglyPricingPolicies;
+
 /* ── La politica del singolo prodotto ────────────────────────────────────── */
 
 test('il modulo espone la lettura della politica', () => {
@@ -190,4 +195,51 @@ test('e la tabella mostra quale politica ha usato ogni riga', () => {
   assert.ok(/fontePolitica === 'prodotto'/.test(catalogo));
   assert.ok(/sconosciuta/.test(catalogo), 'una politica non riconosciuta non viene segnalata');
   assert.ok(/>Politica<\/th>/.test(catalogo), 'manca la colonna');
+});
+
+
+/* ── Gli scaglioni per quantità ──────────────────────────────────────────
+   Il setup si paga una volta e si spalma sui pezzi: trenta pezzi non costano
+   trenta volte un pezzo. La scala stava dentro una vista del catalogo, in una
+   riga in mezzo a un calcolo — una politica commerciale che nessuno poteva
+   trovare per cambiarla, e che nessun'altra schermata poteva riusare. */
+
+test('la scala degli scaglioni è dichiarata e ordinata dal più grande', () => {
+  const s = P.SETUP_PER_QUANTITA;
+  assert.ok(Array.isArray(s) && s.length >= 3);
+  for (let i = 1; i < s.length; i++) {
+    assert.ok(s[i].da < s[i - 1].da, 'scaglioni non ordinati');
+    assert.ok(s[i].quota > s[i - 1].quota, 'la quota di setup deve crescere al calare della quantità');
+  }
+});
+
+test('cento pezzi pagano meno setup di uno', () => {
+  assert.ok(P.setupPerQuantita(100).quota < P.setupPerQuantita(1).quota);
+});
+
+test('i valori sono quelli che c erano: è un estrazione, non una ritaratura', () => {
+  assert.equal(P.setupPerQuantita(100).quota, 0.35);
+  assert.equal(P.setupPerQuantita(30).quota, 0.55);
+  assert.equal(P.setupPerQuantita(10).quota, 0.75);
+  assert.equal(P.setupPerQuantita(1).quota, 1);
+});
+
+test('gli scaglioni si applicano dal loro estremo in su', () => {
+  assert.equal(P.setupPerQuantita(150).quota, 0.35);
+  assert.equal(P.setupPerQuantita(99).quota, 0.55);
+  assert.equal(P.setupPerQuantita(29).quota, 0.75);
+  assert.equal(P.setupPerQuantita(9).quota, 1);
+});
+
+test('una quantità assurda non rompe la scala', () => {
+  assert.equal(P.setupPerQuantita(0).quota, 1);
+  assert.equal(P.setupPerQuantita(-5).quota, 1);
+  assert.equal(P.setupPerQuantita(null).quota, 1);
+  assert.equal(P.setupPerQuantita('molti').quota, 1);
+});
+
+test('ogni scaglione dice a voce cosa significa', () => {
+  P.SETUP_PER_QUANTITA.forEach((s) => {
+    assert.ok(s.nota && s.nota.length > 5, 'scaglione senza spiegazione: ' + s.da);
+  });
 });

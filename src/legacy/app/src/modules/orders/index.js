@@ -1262,7 +1262,14 @@ const Pipeline = {
     // data: { name, client, cost, markup, dueDate, desc, priority }
     const markup = parseFloat(data.markup) || 0;
     const cost = parseFloat(data.cost) || 0;
-    const salePrice = cost * (1 + markup / 100);
+    /* Il prezzo lo fa il motore, non questa riga. `cost * (1 + markup/100)`
+       sembra innocuo finché non si ricorda che il motore applica anche il
+       pavimento di prezzo e gli arrotondamenti configurati: un ordine nato qui
+       usciva con un prezzo che nessun'altra schermata avrebbe prodotto per gli
+       stessi numeri. */
+    const salePrice = (typeof window !== 'undefined' && window.InglyCostEngine)
+      ? window.InglyCostEngine.prezzo(cost, { strategia: 'ricarico', ricarico: 1 + markup / 100 }).netto
+      : cost * (1 + markup / 100);
     const orderId = Date.now();
     await IDB.put('orders', {
       id: orderId,

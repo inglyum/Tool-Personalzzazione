@@ -50,10 +50,32 @@
     giorniMinimi: 14,
   };
 
+  /* `timestamp` viene per primo perché è il campo che il registro scrive
+     davvero (`InglyInventory` → `InglyLedger.crea`). Prima non era nemmeno
+     nell'elenco: si leggeva `at`, `date`, `createdAt`, nessuno dei quali
+     esiste su un movimento vero, quindi ogni movimento valeva tempo zero e
+     veniva scartato dalla finestra. Gli altri nomi restano per i movimenti
+     importati da fuori. */
   function quando(m) {
-    var d = new Date((m && (m.at || m.date || m.createdAt)) || 0);
+    var d = new Date((m && (m.timestamp || m.at || m.date || m.createdAt)) || 0);
     var t = d.getTime();
     return isFinite(t) ? t : 0;
+  }
+
+  /* ── Come si riconosce l'articolo di un movimento ──────────────────────
+     Il registro identifica l'articolo con una chiave composta, `store:id`,
+     perché lo stesso numero 5 può essere un materiale e un articolo di
+     magazzino, e sono due cose diverse. Chi chiama, però, ha in mano il
+     record e quindi l'id nudo.
+
+     Si accettano tutte e due le forme, ma la composta solo quando chi chiama
+     dichiara da quale archivio viene: senza quello, accettare qualunque
+     `qualcosa:5` confonderebbe `materials:5` con `inventory:5`. */
+  function chiaviDi(itemId, store) {
+    var k = {};
+    k[String(itemId)] = true;
+    if (store) k[String(store) + ':' + String(itemId)] = true;
+    return k;
   }
 
   /**
@@ -61,7 +83,7 @@
    *
    * @param {Array}  movimenti  il registro
    * @param {*}      itemId
-   * @param {Object} opzioni    { finestraGiorni, ora, warehouseId }
+   * @param {Object} opzioni    { finestraGiorni, ora, warehouseId, store }
    */
   function consumo(movimenti, itemId, opzioni) {
     var o = opzioni || {};
@@ -69,9 +91,10 @@
     var adesso = o.ora != null ? new Date(o.ora).getTime() : Date.now();
     var da = adesso - finestra * GIORNO;
 
+    var chiavi = chiaviDi(itemId, o.store);
     var uscite = (movimenti || []).filter(function (m) {
       if (!m || !USCITE[m.type]) return false;
-      if (String(m.itemId) !== String(itemId)) return false;
+      if (!chiavi[String(m.itemId)]) return false;
       if (o.warehouseId != null && String(m.warehouseId) !== String(o.warehouseId)) return false;
       var t = quando(m);
       return t > 0 && t >= da && t <= adesso;

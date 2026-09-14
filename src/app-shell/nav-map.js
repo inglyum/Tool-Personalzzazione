@@ -217,6 +217,13 @@ export const NAV_ALIASES = {
      annunciava «Scenario planning · Break-even · Cash runway», e `revsim`
      con un modulo — `RevSim` — mai definito in nessun file. I nomi restano
      cercabili e aprono la sezione vera. */
+  /* «Riordino Intelligente» diceva di guardare i consumi e guardava solo una
+     soglia inventata, su un archivio per giunta vuoto. `stockalert` la stessa
+     domanda la calcola sui movimenti registrati. */
+  /* Calcolava il valore cliente sul fatturato invece che sul margine: la
+     stessa domanda, con la risposta che fa coltivare il cliente sbagliato. */
+  'ai-clv': 'clv',
+  'ai-reorder': 'stockalert',
   forecasting: 'forecaster',
   revsim: 'forecaster',
   clients: 'clienti',

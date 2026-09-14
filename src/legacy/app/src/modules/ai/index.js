@@ -3146,102 +3146,53 @@ const AIPredictor = {
 };
 
 // ── AI Reorder: Riordino Intelligente ────────────────────────────────
+/* ═══════════════════════════════════════════════════════════════════════════
+   AI REORDER — ritirato, non cancellato
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Il sottotitolo diceva «Materiali da riordinare in base allo stock **e ai
+   consumi**». I consumi non li guardava mai: era `stock <= minStock`, e dove
+   `minStock` mancava ne inventava uno — tre — con una banda «in esaurimento»
+   larga il doppio, decisa lì. Non diceva quanto ordinare né fra quanto
+   saresti rimasto senza, che sono le due domande vere. Il pulsante «Ordina»,
+   senza un fornitore salvato, portava a una ricerca su Google.
+
+   E leggeva lo store `items`, che su un'installazione nuova è vuoto: mostrava
+   «aggiungi materiali nel Magazzino» con 172 materiali in archivio.
+
+   `stockalert` risponde alla stessa domanda calcolando sui movimenti veri.
+   Il nome resta e porta lì. */
 const AIReorder = {
-  async render(){
-    const el=document.getElementById('view-ai-reorder');
-    if(!el)return;
-    el.innerHTML='<div style="padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"><div style="width:42px;height:42px;background:linear-gradient(135deg,#f97316,#ea580c);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">📦</div><div><h2 style="margin:0;font-size:20px;font-weight:900">Riordino Intelligente</h2><p style="margin:3px 0 0;font-size:12px;color:var(--text-muted)">Materiali da riordinare in base allo stock e ai consumi</p></div></div><div id="ai-reorder-list" style="text-align:center;padding:20px;color:var(--text-muted)">⏳ Analisi stock...</div></div>';
-    try{
-      const items = await AppStore.get('items').catch(()=>[]);
-      const critical = items.filter(i=>(+i.qty||+i.quantity||+i.stock||0)<=(+i.minStock||+i.minQty||3));
-      const warning  = items.filter(i=>{const q=+i.qty||+i.quantity||0; const min=+i.minStock||+i.minQty||3; return q>min && q<=min*2;});
-      const el2=document.getElementById('ai-reorder-list');
-      if(!el2)return;
-      if(!items.length){el2.innerHTML='<div style="background:var(--bg-card2);border-radius:10px;padding:20px;text-align:center;color:var(--text-muted)">Aggiungi materiali nel Magazzino per il riordino automatico</div>';return;}
-      el2.innerHTML=`
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-        ${[
-          {l:'Esauriti/Critici',v:critical.length,c:'#ef4444',ico:'🔴'},
-          {l:'In esaurimento',  v:warning.length,  c:'#f59e0b',ico:'🟡'},
-          {l:'In ordine',       v:items.length-critical.length-warning.length,c:'#22c55e',ico:'✅'},
-        ].map(k=>`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:11px;text-align:center">
-          <div style="font-size:20px">${k.ico}</div>
-          <div style="font-size:18px;font-weight:900;color:${k.c}">${k.v}</div>
-          <div style="font-size:10px;color:var(--text-muted)">${k.l}</div>
-        </div>`).join('')}
-      </div>
-      ${critical.length?`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px">
-        <div style="padding:10px 14px;background:rgba(239,68,68,.08);border-bottom:1px solid var(--border);font-size:12px;font-weight:800;color:#ef4444">🔴 Da riordinare subito (${critical.length})</div>
-        ${critical.map(i=>`<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <div style="flex:1;font-size:12px;font-weight:700">${i.name||'—'}</div>
-          <div style="font-size:11px;color:#ef4444;font-weight:700">Stock: ${+i.qty||+i.quantity||0} ${i.unit||'pz'}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Min: ${+i.minStock||3}</div>
-          <a href="${i.supplierUrl||'https://www.google.com/search?q='+encodeURIComponent(i.name+' acquisto')}" target="_blank" style="padding:4px 10px;background:var(--primary);color:#000;border-radius:6px;font-size:10px;font-weight:800;text-decoration:none">🛒 Ordina</a>
-        </div>`).join('')}
-      </div>`:``}
-      ${warning.length?`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-        <div style="padding:10px 14px;background:rgba(245,158,11,.08);border-bottom:1px solid var(--border);font-size:12px;font-weight:800;color:#f59e0b">🟡 In esaurimento presto (${warning.length})</div>
-        ${warning.map(i=>`<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <div style="flex:1;font-size:12px">${i.name||'—'}</div>
-          <div style="font-size:11px;color:#f59e0b;font-weight:700">Stock: ${+i.qty||+i.quantity||0} ${i.unit||'pz'}</div>
-        </div>`).join('')}
-      </div>`:``}`;
-    }catch(e){const el2=document.getElementById('ai-reorder-list');if(el2)el2.innerHTML=`<div style="color:#ef4444;padding:10px">${e.message}</div>`;}
-  }
+  async render() {
+    if (typeof App !== 'undefined' && typeof App.navigate === 'function') App.navigate('stockalert');
+  },
 };
 
 // ── AI CLV: CLV & Segmentazione ──────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════════════════════
+   AI CLV — ritirato, non cancellato
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Era la seconda schermata che rispondeva a «quanto vale un cliente», e dava
+   la risposta sbagliata: `_clv = revenue`. Il fatturato dice quanto un cliente
+   ti ha fatto incassare, non quanto ti ha fatto guadagnare, e nel lavoro su
+   commissione i due si scollano parecchio — un cliente che fattura il doppio
+   può lasciarti metà.
+
+   È lo stesso difetto che la CLV Dashboard aveva e che è stato corretto: lì
+   il valore si misura sul **margine**, e i clienti di cui il costo non si
+   conosce stanno sotto invece che sopra. Tenere accanto una seconda schermata
+   che classifica per fatturato vuol dire far coltivare al laboratorio il
+   cliente sbagliato, con l'autorevolezza di una voce di menù.
+
+   Le soglie erano inventate anche loro: «VIP» sopra 500 € di fatturato,
+   «a rischio» fra 90 e 365 giorni. Numeri decisi qui dentro, non dai dati.
+
+   Il nome resta e porta alla sezione che il conto lo fa giusto. */
 const AICLV = {
-  async render(){
-    const el=document.getElementById('view-ai-clv');
-    if(!el)return;
-    el.innerHTML='<div style="padding:20px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"><div style="width:42px;height:42px;background:linear-gradient(135deg,#a855f7,#7c3aed);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">👥</div><div><h2 style="margin:0;font-size:20px;font-weight:900">CLV & Segmentazione Clienti</h2><p style="margin:3px 0 0;font-size:12px;color:var(--text-muted)">Valore lifetime cliente, segmenti RFM, clienti VIP</p></div></div><div id="ai-clv-content" style="text-align:center;padding:20px;color:var(--text-muted)">⏳ Calcolo CLV...</div></div>';
-    try{
-      const [clients,sales]=await Promise.all([AppStore.get('clients').catch(()=>[]),AppStore.get('sales').catch(()=>[])]);
-      const paid=sales.filter(s=>s.status==='pagato');
-      const now=Date.now();
-      // Enrich clients with RFM
-      const enriched=clients.map(cl=>{
-        const cSales=paid.filter(s=>s.clientId===cl.id||(s.clientName||'').toLowerCase()===(cl.name||'').toLowerCase());
-        const revenue=cSales.reduce((a,s)=>a+(+s.amount||0),0);
-        const lastDate=cSales.length?Math.max(...cSales.map(s=>new Date(s.date||0).getTime())):0;
-        const days=lastDate?Math.floor((now-lastDate)/864e5):999;
-        return {...cl,_revenue:revenue,_orders:cSales.length,_days:days,_clv:revenue};
-      }).filter(c=>c._orders>0).sort((a,b)=>b._revenue-a._revenue);
-      
-      const vip=enriched.filter(c=>c._revenue>=500);
-      const active=enriched.filter(c=>c._days<90);
-      const atRisk=enriched.filter(c=>c._days>=90&&c._days<365);
-      const avgClv=enriched.length?enriched.reduce((a,c)=>a+c._revenue,0)/enriched.length:0;
-      
-      const el2=document.getElementById('ai-clv-content');
-      if(!el2)return;
-      el2.innerHTML=`
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
-        ${[
-          {l:'CLV Medio',    v:'€'+Math.round(avgClv),   c:'#a855f7',ico:'💎'},
-          {l:'Clienti VIP',  v:vip.length,               c:'#fbbf24',ico:'⭐'},
-          {l:'Clienti Attivi',v:active.length,           c:'#22c55e',ico:'🟢'},
-          {l:'A rischio',    v:atRisk.length,            c:'#ef4444',ico:'⚠️'},
-        ].map(k=>`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:11px;text-align:center">
-          <div style="font-size:20px">${k.ico}</div>
-          <div style="font-size:18px;font-weight:900;color:${k.c}">${k.v}</div>
-          <div style="font-size:10px;color:var(--text-muted)">${k.l}</div>
-        </div>`).join('')}
-      </div>
-      ${enriched.length?`<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-        <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:800">🏆 Top clienti per CLV</div>
-        ${enriched.slice(0,8).map((cl,i)=>`<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-          <div style="width:24px;height:24px;border-radius:6px;background:${i<3?'linear-gradient(135deg,#fbbf24,#f59e0b)':'var(--bg-card2)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:${i<3?'#000':'var(--text-muted)'};flex-shrink:0">${i+1}</div>
-          <div style="flex:1;font-size:12px;font-weight:700">${cl.name||'—'}</div>
-          <div style="font-size:10px;color:var(--text-muted)">${cl._orders} ordini · ${cl._days<90?'🟢 Attivo':'⚠️ A rischio'}</div>
-          <div style="font-size:13px;font-weight:900;color:#a855f7">€${Math.round(cl._revenue)}</div>
-          <button onclick="Clients.renderClientPanel(${cl.id})" style="padding:3px 8px;background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:10px">👤</button>
-        </div>`).join('')}
-      </div>`:
-      `<div style="background:var(--bg-card2);border-radius:10px;padding:20px;text-align:center;color:var(--text-muted)">Aggiungi clienti e vendite per la segmentazione CLV</div>`}`;
-    }catch(e){const el2=document.getElementById('ai-clv-content');if(el2)el2.innerHTML=`<div style="color:#ef4444;padding:10px">${e.message}</div>`;}
-  }
+  async render() {
+    if (typeof App !== 'undefined' && typeof App.navigate === 'function') App.navigate('clv');
+  },
 };
 
 // ── AI Anomaly: Anomalie Finanziarie ──────────────────────────────────
@@ -3376,8 +3327,16 @@ const AIDashboard = {
   const _origNavigate = App.navigate.bind(App);
   const _AI_SECTIONS = {
     'ai-predictor': () => { if(typeof AIPredictor !== "undefined") (typeof AIPredictor!=='undefined'&&AIPredictor.render()); },
-    'ai-reorder': () => { if(typeof AIReorder !== "undefined") (typeof AIReorder!=='undefined'&&AIReorder.render()); },
-    'ai-clv': () => { if(typeof AICLV !== "undefined") (typeof AICLV!=='undefined'&&AICLV.render()); },
+    /* «Riordino Intelligente» era la seconda risposta alla domanda «cosa devo
+       ricomprare», e la peggiore delle due. Diceva «in base allo stock e ai
+       consumi» e i consumi non li guardava mai: era `stock <= minStock`, con
+       `minStock || 3` — una soglia inventata quando nessuno l'ha scritta — e
+       una banda «in esaurimento» larga il doppio, anche quella decisa qui.
+       Per giunta leggeva lo store `items`, che su un'installazione nuova e'
+       vuoto: mostrava «aggiungi materiali» con 172 materiali in archivio.
+       `stockalert` la stessa domanda la calcola sui movimenti veri. */
+    'ai-reorder': () => App.navigate('stockalert'),
+    'ai-clv': () => App.navigate('clv'),
     'ai-anomaly': () => { if(typeof AIAnomaly !== "undefined") (typeof AIAnomaly!=='undefined'&&AIAnomaly.render()); },
     'ai-dashboard': () => { if(typeof AIDashboard !== "undefined") (typeof AIDashboard!=='undefined'&&AIDashboard.render()); }
 

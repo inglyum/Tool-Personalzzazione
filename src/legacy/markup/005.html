@@ -352,24 +352,14 @@
       </div>
 
       <!-- Smart Reorder -->
-      <div id="view-ai-reorder" class="section-view">
-        <div class="section-header">
-          <div class="section-title">📦 Smart Reorder <small>Ottimizzazione magazzino</small></div>
-        </div>
-        <div class="kpi-grid" id="reorder-kpis"></div>
-        <div class="table-wrap" id="reorder-table"></div>
-      </div>
+<!-- «Riordino Intelligente» ora e' `stockalert`, che la stessa domanda la
+     calcola sui movimenti di magazzino invece che su una soglia inventata. -->
 
       <!-- CLV & Segmentazione -->
-      <div id="view-ai-clv" class="section-view">
-        <div class="section-header">
-          <div class="section-title">👥 CLV & Segmentazione <small>Valore cliente nel tempo</small></div>
-        </div>
-        <div class="grid-2" style="margin-bottom:16px">
-          <div class="dash-chart-wrap"><div class="dash-chart-title">Segmenti Clienti</div><canvas id="chart-clv-segments" height="140"></canvas></div>
-          <div class="card"><div class="card-title">📋 Clienti per cluster</div><div id="clv-list"></div></div>
-        </div>
-      </div>
+<!-- «CLV & Segmentazione» calcolava il valore cliente sul fatturato invece che
+     sul margine: e' il difetto corretto nella CLV Dashboard, e tenerne una
+     seconda copia sbagliata accanto voleva dire far coltivare il cliente
+     sbagliato. Il nome porta ora a `clv`. -->
 
       <!-- Anomaly Detection -->
       <div id="view-ai-anomaly" class="section-view">

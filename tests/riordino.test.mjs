@@ -270,3 +270,118 @@ test('il modulo non conosce archivi: riceve i movimenti, non li va a prendere', 
   const src = fs.readFileSync('src/product/inventory-riordino.js', 'utf8');
   assert.ok(!/localStorage|IDB\.|AppStore/.test(src));
 });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   IL CONTRATTO COL REGISTRO VERO
+   ══════════════════════════════════════════════════════════════════════════
+
+   Tutti i test qui sopra costruiscono i movimenti a mano, con i campi che
+   questo modulo si aspettava: `at` per la data, `itemId` come id nudo. E
+   passavano tutti.
+
+   Il registro vero però scrive altro. `InglyInventoryLedger.crea()` produce
+   `timestamp`, e `InglyInventory` identifica l'articolo con una chiave
+   composta `store:id`, perché lo stesso numero 5 può essere un materiale e un
+   articolo di magazzino. Risultato misurato nel browser: cinque consumi
+   registrati, e `analizza()` che rispondeva «nessuna uscita registrata negli
+   ultimi 90 giorni». La funzione non ha mai funzionato, e trentacinque test
+   verdi non se ne sono accorti perché verificavano il modulo contro
+   un'imitazione del registro invece che contro il registro.
+
+   Questi test usano `InglyInventoryLedger.crea()` — il modulo vero — e falliscono se i
+   due si scollano di nuovo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const sandboxLedger = { window: {}, console };
+sandboxLedger.globalThis = sandboxLedger;
+vm.createContext(sandboxLedger);
+vm.runInContext(fs.readFileSync('src/product/inventory-ledger.js', 'utf8'), sandboxLedger);
+const LED = sandboxLedger.window.InglyInventoryLedger;
+
+/** Un movimento come lo scrive il registro: `timestamp`, chiave composta. */
+const movimentoVero = (store, id, quantita, giorniFa_) => LED.crea({
+  type: 'CONSUMPTION',
+  itemId: store + ':' + id,
+  quantity: quantita,
+  timestamp: new Date(Date.now() - giorniFa_ * 86400000).toISOString(),
+  warehouseId: 'default',
+}, 100);
+
+test('il registro vero scrive `timestamp`, non `at`', () => {
+  const m = movimentoVero('materials', 5, 3, 10);
+  assert.ok(m.timestamp, 'il movimento non porta timestamp');
+  assert.equal(m.at, undefined, 'se un giorno scrivesse `at`, questo test va aggiornato apposta');
+});
+
+test('e identifica l articolo con una chiave composta', () => {
+  const m = movimentoVero('materials', 5, 3, 10);
+  assert.equal(m.itemId, 'materials:5');
+});
+
+test('il consumo si misura sui movimenti veri del registro', () => {
+  const movimenti = [
+    movimentoVero('materials', 5, 3, 30),
+    movimentoVero('materials', 5, 3, 20),
+    movimentoVero('materials', 5, 3, 10),
+    movimentoVero('materials', 5, 3, 5),
+  ];
+  const c = R.consumo(movimenti, 5, { store: 'materials' });
+  assert.equal(c.misurabile, true, c.motivo || 'consumo non misurabile sui movimenti veri');
+  assert.equal(c.totale, 12);
+});
+
+test('senza dichiarare l archivio non si riconosce la chiave composta', () => {
+  /* È voluto: accettare qualunque «qualcosa:5» confonderebbe `materials:5`
+     con `inventory:5`, che sono due articoli diversi. */
+  const c = R.consumo([movimentoVero('materials', 5, 3, 10)], 5, {});
+  assert.equal(c.misurabile, false);
+});
+
+test('e due archivi con lo stesso numero non si mescolano', () => {
+  const movimenti = [
+    movimentoVero('materials', 5, 3, 30), movimentoVero('materials', 5, 3, 20),
+    movimentoVero('materials', 5, 3, 10),
+    movimentoVero('inventory', 5, 900, 30), movimentoVero('inventory', 5, 900, 20),
+    movimentoVero('inventory', 5, 900, 10),
+  ];
+  const mat = R.consumo(movimenti, 5, { store: 'materials' });
+  const inv = R.consumo(movimenti, 5, { store: 'inventory' });
+  assert.equal(mat.totale, 9);
+  assert.equal(inv.totale, 2700);
+});
+
+test('l id nudo continua a funzionare, per i movimenti importati da fuori', () => {
+  const movimenti = [
+    { itemId: 'a1', type: 'CONSUMPTION', quantity: 5, timestamp: new Date(Date.now() - 30 * 86400000).toISOString() },
+    { itemId: 'a1', type: 'CONSUMPTION', quantity: 5, timestamp: new Date(Date.now() - 20 * 86400000).toISOString() },
+    { itemId: 'a1', type: 'CONSUMPTION', quantity: 5, timestamp: new Date(Date.now() - 10 * 86400000).toISOString() },
+  ];
+  const c = R.consumo(movimenti, 'a1', { store: 'materials' });
+  assert.equal(c.misurabile, true);
+  assert.equal(c.totale, 15);
+});
+
+test('analizza() legge il registro vero da capo a fondo', () => {
+  const movimenti = [
+    movimentoVero('materials', 7, 10, 60), movimentoVero('materials', 7, 10, 40),
+    movimentoVero('materials', 7, 10, 20), movimentoVero('materials', 7, 10, 5),
+  ];
+  const r = R.analizza(movimenti, { id: 7, name: 'Plexiglass', stock: 20, minStock: 5, unit: 'mq' },
+    { store: 'materials' });
+  assert.equal(r.misurabile, true, r.motivo || '');
+  assert.ok(r.suggerito > 0, 'nessun punto di riordino calcolato');
+  assert.ok(r.giorniResidui > 0, 'nessuna stima dei giorni residui');
+});
+
+test('elenco() pure', () => {
+  const movimenti = [
+    movimentoVero('materials', 7, 10, 60), movimentoVero('materials', 7, 10, 40),
+    movimentoVero('materials', 7, 10, 20),
+  ];
+  const e = R.elenco(movimenti, [{ id: 7, name: 'Plexiglass', stock: 5, minStock: 5 }],
+    { store: 'materials' });
+  assert.equal(e.righe.length, 1);
+  assert.equal(e.righe[0].misurabile, true, e.righe[0].motivo || '');
+  assert.equal(e.nonMisurabili, 0);
+});

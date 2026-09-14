@@ -694,6 +694,27 @@ const CatalogCats = {
 window.CatalogCats = CatalogCats;
 ;
 
+/* ── Il prezzo passa dal motore, anche qui ───────────────────────────────
+   Il catalogo aveva sei punti che calcolavano prezzi a mano: ricarichi,
+   sconti, prezzo da margine. Le formule sono le stesse del motore — meno il
+   pavimento sotto cui un prezzo non scende e gli arrotondamenti configurati,
+   che il motore applica e queste righe scavalcavano in silenzio. Due
+   schermate potevano mostrare due prezzi diversi per lo stesso prodotto.
+
+   Il ripiego resta: se il motore non e' caricato meglio un numero calcolato
+   qui che una schermata vuota. Ma e' un ripiego dichiarato, non la strada
+   normale. */
+function _prezzoMotore(){ return (typeof window!=='undefined') && window.InglyCostEngine; }
+function _catRicarico(costo, ricarico){
+  const E=_prezzoMotore();
+  return E ? E.prezzo(costo, { strategia:'ricarico', ricarico: ricarico }).netto : costo*ricarico;
+}
+function _catSconto(base, frazione){
+  const E=_prezzoMotore();
+  return E ? E.prezzo(base, { strategia:'fisso', prezzoFisso: base, scontoPct: frazione*100 }).netto
+           : base*(1-frazione);
+}
+
 const Catalog={
 
   /* Le decisioni commerciali del catalogo, con un nome.
@@ -2079,7 +2100,12 @@ const Catalog={
     const calcQty=+document.getElementById('cat-calc-qty')?.value||30;
     const qtyKit=+document.getElementById('cat-qty-kit')?.value||30;
     const qtyStock=+document.getElementById('cat-qty-stock')?.value||100;
-    const bf=calcQty>=100?0.35:calcQty>=30?0.55:calcQty>=10?0.75:1.0;
+    /* Quanta parte del setup resta a questa quantità: la scala sta nelle
+       politiche di prezzo, non qui. Era una riga sola in mezzo al calcolo,
+       che nessuno poteva trovare per cambiarla. */
+    const _pol=(typeof window!=='undefined')&&window.InglyPricingPolicies;
+    const bf=_pol&&_pol.setupPerQuantita ? _pol.setupPerQuantita(calcQty).quota
+      : (calcQty>=100?0.35:calcQty>=30?0.55:calcQty>=10?0.75:1.0);
     const machRate=(kw*kwh)+depr+0.25;
     const machCost=machRate*(machMin/60);
     const labCost=hasLabor&&laborMin>0?(laborRate*(laborMin/60)):0;
@@ -2202,16 +2228,23 @@ const Catalog={
     const baseCost=+document.getElementById('cat-cost')?.value||+eid('b2b-mat-cost')?.value||0;
     const baseP1=+document.getElementById('cat-price')?.value||0;
     // Apply discounts on top of campione price
+    /* Lo sconto sul prezzo passa dal motore: e' lui che conosce il pavimento
+       sotto cui un prezzo non scende, e uno sconto applicato qui lo scavalcava
+       in silenzio. */
+    const _E=(typeof window!=='undefined')&&window.InglyCostEngine;
+    const _scontato=(base,pct)=> _E
+      ? +(_E.prezzo(base,{strategia:'fisso',prezzoFisso:base,scontoPct:pct*100}).netto).toFixed(2)
+      : +(base*(1-pct)).toFixed(2);
     const campDisc=(+eid('b2b-camp-disc')?.value||0)/100;
-    const campPrice=baseP1>0?+(baseP1*(1-campDisc)).toFixed(2):0;
+    const campPrice=baseP1>0?_scontato(baseP1,campDisc):0;
     if(eid('b2b-camp-price')&&!eid('b2b-camp-price')._manualEdit&&campPrice>0)eid('b2b-camp-price').value=campPrice;
     const kitDisc=(+eid('b2b-kit-disc')?.value||15)/100;
-    const kitPrice=baseP1>0?+(baseP1*(1-kitDisc)).toFixed(2):+document.getElementById('cat-price-kit')?.value||0;
+    const kitPrice=baseP1>0?_scontato(baseP1,kitDisc):+document.getElementById('cat-price-kit')?.value||0;
     const kitQty=+eid('b2b-kit-qty')?.value||25;
     if(eid('b2b-kit-price')&&!eid('b2b-kit-price')._manualEdit&&kitPrice>0)eid('b2b-kit-price').value=kitPrice;
     if(eid('b2b-kit-total'))eid('b2b-kit-total').value=(kitPrice*kitQty).toFixed(2);
     const stockDisc=(+eid('b2b-stock-disc')?.value||25)/100;
-    const stockPrice=baseP1>0?+(baseP1*(1-stockDisc)).toFixed(2):+document.getElementById('cat-price-stock')?.value||0;
+    const stockPrice=baseP1>0?_scontato(baseP1,stockDisc):+document.getElementById('cat-price-stock')?.value||0;
     const stockQty=+eid('b2b-stock-qty')?.value||100;
     if(eid('b2b-stock-price')&&!eid('b2b-stock-price')._manualEdit&&stockPrice>0)eid('b2b-stock-price').value=stockPrice;
     if(eid('b2b-stock-total'))eid('b2b-stock-total').value=(stockPrice*stockQty).toFixed(2);
@@ -3053,14 +3086,29 @@ const Listino = {
     const disp = eid('lc-unit-cost');
     if(disp) disp.textContent = costo>0 ? '€ '+costo.toFixed(2) : '€ —';
     if(costo<=0) return;
+    /* ── Il prezzo lo fa il motore ────────────────────────────────────
+       Qui c'erano tre conti di prezzo scritti a mano: il prezzo da margine
+       e due sconti. Sembrano le stesse formule del motore, e infatti lo
+       sono — meno il pavimento di prezzo e gli arrotondamenti, che il
+       motore applica e queste righe scavalcavano in silenzio. Tre listini
+       calcolati qui potevano non coincidere con gli stessi tre calcolati
+       dal preventivatore. */
+    const _E = (typeof window !== 'undefined') && window.InglyCostEngine;
+    const _daMargine = (c, m) => _E
+      ? _E.prezzo(c, { strategia: 'margine', marginePct: m * 100 }).netto
+      : c / (1 - m);
+    const _conSconto = (base, pct) => _E
+      ? _E.prezzo(base, { strategia: 'fisso', prezzoFisso: base, scontoPct: pct * 100 }).netto
+      : base * (1 - pct);
+
     // Campione
     const campMargin = (+eid('lc-camp-margin')?.value||50)/100;
-    const campPrice = costo / (1-campMargin);
+    const campPrice = _daMargine(costo, campMargin);
     if(eid('lc-camp-price')) eid('lc-camp-price').value = campPrice.toFixed(2);
     if(eid('lc-camp-info')) eid('lc-camp-info').textContent = 'Margine: '+Math.round(campMargin*100)+'% · Costo: €'+costo.toFixed(2);
     // Kit Classe
     const kitDisc = (+eid('lc-kit-disc')?.value||18)/100;
-    const kitPrice = campPrice * (1-kitDisc);
+    const kitPrice = _conSconto(campPrice, kitDisc);
     const kitQtyA = +eid('lc-kit-qty-a')?.value||25;
     const kitQtyB = +eid('lc-kit-qty-b')?.value||30;
     const kitMid = Math.round((kitQtyA+kitQtyB)/2);
@@ -3069,7 +3117,7 @@ const Listino = {
     if(eid('lc-kit-info')) eid('lc-kit-info').textContent = 'Totale '+kitQtyA+'pz: €'+(kitPrice*kitQtyA).toFixed(0)+' · '+kitQtyB+'pz: €'+(kitPrice*kitQtyB).toFixed(0)+' · Margine: '+kitMargin+'%';
     // Stock
     const stockDisc = (+eid('lc-stock-disc')?.value||28)/100;
-    const stockPrice = campPrice * (1-stockDisc);
+    const stockPrice = _conSconto(campPrice, stockDisc);
     const stockQty = +eid('lc-stock-qty')?.value||100;
     if(eid('lc-stock-price')) eid('lc-stock-price').value = stockPrice.toFixed(2);
     const stockMargin = Math.round((1-costo/stockPrice)*100);
@@ -3238,8 +3286,8 @@ const Anchoring = {
     const markup  = parseFloat(eid('qr-markup')?.value || 100) / 100;
     const disc    = parseFloat(eid('qr-discount')?.value || 0) / 100;
     const lines   = Quoter.lines || [];
-    const subTot  = lines.reduce((a, l) => a + (l.subtotal || 0) * (1 + markup), 0);
-    const finalP  = subTot * (1 - disc);
+    const subTot  = lines.reduce((a, l) => a + _catRicarico(l.subtotal || 0, 1 + markup), 0);
+    const finalP  = _catSconto(subTot, disc);
 
     if (!lines.length && !name) {
       el.innerHTML = '<div style="color:#ef4444;font-size:11px;padding:8px">⚠️ Aggiungi almeno una voce al preventivo prima</div>';
@@ -3318,7 +3366,7 @@ Prezzi realistici per mercato italiano Etsy/artigianato. BASE ≥ costo*2, MEDIO
     const markup = parseFloat(eid('qr-markup')?.value || 100) / 100;
     const lines = Quoter.lines || [];
     if (!lines.length) return;
-    const baseSub = lines.reduce((a, l) => a + (l.subtotal || 0) * (1 + markup), 0);
+    const baseSub = lines.reduce((a, l) => a + _catRicarico(l.subtotal || 0, 1 + markup), 0);
     if (baseSub <= 0) return;
     // Compute what discount % would produce this price
     const targetDisc = Math.max(0, Math.min(80, Math.round((1 - price / baseSub) * 100)));
@@ -4065,7 +4113,7 @@ const ListinoTabs = {
       c.name||'—',c.category||'—',
       fmtCur(+c.salePrice||0),
       disc?'-'+disc+'%':'—',
-      fmtCur((+c.salePrice||0)*(1-disc/100))
+      fmtCur(_catSconto(+c.salePrice||0, disc/100))
     ]);
     doc.autoTable({startY:36,head:[['Prodotto','Cat.','Prezzo Base','Sconto','Prezzo Listino']],
       body:rows,theme:'grid',
@@ -4127,7 +4175,7 @@ const ListinoTabs = {
       const item=catalog.find(c=>String(c.id)===cb.value);
       if(!item) return null;
       const base=+(item.salePrice||0);
-      const final=base*(1-disc/100);
+      const final=_catSconto(base, disc/100);
       return [item.name||'—',item.category||'—',fmtCur(base),disc?'-'+disc+'%':'—',fmtCur(final)];
     }).filter(Boolean);
     doc.autoTable({startY:38,head:[['Prodotto','Categoria','Prezzo','Sconto','Totale']],

@@ -103,10 +103,8 @@
   "views": [
     "ai",
     "ai-anomaly",
-    "ai-clv",
     "ai-dashboard",
     "ai-predictor",
-    "ai-reorder",
     "aicoach",
     "analytics",
     "apparel",

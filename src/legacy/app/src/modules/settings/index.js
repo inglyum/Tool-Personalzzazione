@@ -3655,18 +3655,36 @@ const Booking = {
         <div class="module-title"><i class="fas fa-calendar-check"></i> Booking & Appuntamenti</div>
         <div class="module-actions"><button class="btn btn-primary btn-sm" onclick="Booking.openNew()"><i class="fas fa-plus"></i> Nuovo Appuntamento</button></div>
       </div>
+      ${!bookings.length ? `
+      <!-- Uno stato vuoto che dice cosa ci finirà dentro e come metterlo.
+           Prima la sezione mostrava due schede vuote con «Nessun appuntamento
+           in programma» e «Nessuno storico»: tecnicamente corretto e inutile,
+           perché non diceva né a cosa serve la sezione né da dove si comincia.
+           Chi la apriva la prima volta pensava fosse rotta. -->
+      <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
+        <div style="font-size:44px;margin-bottom:14px">📅</div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:8px;font-size:15px">Nessun appuntamento, per ora</div>
+        <div style="max-width:460px;margin:0 auto;line-height:1.7;font-size:13px">
+          Qui finiscono consegne, sopralluoghi, consulenze e videocall: ognuno con
+          data, ora, luogo e cliente. Quelli entro le ventiquattr'ore si accendono
+          da soli, e per ciascuno si può mandare un promemoria su WhatsApp.
+        </div>
+        <button onclick="Booking.openNew()" class="btn btn-primary" style="margin-top:18px">
+          <i class="fas fa-plus"></i> Il primo appuntamento
+        </button>
+      </div>` : `
       <div class="grid-2">
         <div class="card">
           <div class="card-title">📅 Prossimi Appuntamenti (${upcoming.length})</div>
-          ${!upcoming.length ? '<div style="color:var(--text-muted);text-align:center;padding:20px">Nessun appuntamento in programma</div>' :
+          ${!upcoming.length ? '<div style="color:var(--text-muted);text-align:center;padding:20px">Nessun appuntamento in programma — solo storico</div>' :
             upcoming.map(b => this.renderCard(b, false)).join('')}
         </div>
         <div class="card">
           <div class="card-title">📁 Storico (${past.length})</div>
-          ${!past.length ? '<div style="color:var(--text-muted);text-align:center;padding:20px">Nessuno storico</div>' :
+          ${!past.length ? '<div style="color:var(--text-muted);text-align:center;padding:20px">Nessuno storico: nessun appuntamento è ancora passato</div>' :
             past.slice(0, 5).map(b => this.renderCard(b, true)).join('')}
         </div>
-      </div>`;
+      </div>`}`;
   },
 
   renderCard(b, isPast) {
@@ -6517,7 +6535,12 @@ const StockAlert = {
            che nessun numero, purché si sappia da dove viene. */
         let riordino = null;
         if (RIORDINO) {
-          riordino = RIORDINO.analizza(movimenti, { ...m, id: m.id, stock, minStock }, {});
+          /* `store` va dichiarato: il registro identifica l'articolo con
+             `materials:5`, non con `5`, perché lo stesso numero è anche un
+             articolo di magazzino. Senza questa riga nessun movimento
+             veniva riconosciuto e il consumo risultava sempre non
+             misurabile — cioè la funzione non ha mai funzionato. */
+          riordino = RIORDINO.analizza(movimenti, { ...m, id: m.id, stock, minStock }, { store: 'materials' });
         }
         const misurato = !!(riordino && riordino.misurabile);
         const monthlyConsumption = misurato
