@@ -249,3 +249,70 @@ test('se l archivio non si può leggere la migrazione non lo riscrive', () => {
   assert.equal(Object.keys(finale).sort().join(','), '3d/77,apparel/1');
   assert.ok(dati.ingly_consuntivo_migrato_p3d);
 });
+
+
+/* ── Scrivere non deve poter cancellare ──────────────────────────────────
+   `salva()` e `migra()` leggono la mappa, la modificano e la riscrivono per
+   intero. È corretto finché la lettura è attendibile — ma se torna vuota
+   quando l'archivio invece ha contenuto, la riscrittura porta via tutto il
+   resto in silenzio.
+
+   Misurato in collaudo sotto catena piena: dopo un ricaricamento l'archivio
+   conteneva solo la voce migrata, e i due consuntivi scritti durante la prova
+   erano spariti. Da solo il caso non si riproduce — ed è il genere di difetto
+   che non si fa trovare quando lo si cerca. */
+
+const CHIAVE = 'ingly_consuntivo_v1';
+
+test('salvare una commessa non porta via le altre', () => {
+  const { C, dati } = nuovo();
+  C.salva('apparel', 1, { capi: 10 });
+  C.salva('3d', 7, { costo: 99 });
+  C.salva('laser', 3, { costo: 12 });
+  const tutte = Object.keys(JSON.parse(dati[CHIAVE] || '{}'));
+  assert.equal(tutte.length, 3, 'tre commesse, tre voci: ' + tutte.join(' '));
+});
+
+test('e nemmeno se la lettura di un momento torna vuota', () => {
+  /* Si simula la lettura che fallisce: l'archivio ha contenuto, ma la
+     `getItem` di quel preciso istante risponde vuoto. Prima questo bastava a
+     riscrivere la mappa senza il resto. */
+  const dati = {};
+  let cieco = false;
+  const contesto = vm.createContext({
+    Math, JSON, Object, Array, Date, parseFloat, isFinite, isNaN, String,
+    localStorage: {
+      getItem: (k) => {
+        if (cieco && k === CHIAVE) { cieco = false; return null; }   // una volta sola
+        return (k in dati ? dati[k] : null);
+      },
+      setItem: (k, v) => { dati[k] = String(v); },
+      removeItem: (k) => { delete dati[k]; },
+    },
+  });
+  vm.runInContext(sorgente, contesto);
+  const C = contesto.InglyConsuntivo;
+  C.salva('apparel', 1, { capi: 10 });
+  C.salva('3d', 7, { costo: 99 });
+  const primaDelGuasto = dati[CHIAVE];
+
+  cieco = true;
+  C.salva('laser', 3, { costo: 12 });
+
+  const dopo = JSON.parse(dati[CHIAVE] || '{}');
+  assert.ok(dopo['apparel/1'], 'il consuntivo tessile è sparito');
+  assert.ok(dopo['3d/7'], 'quello 3D pure');
+  assert.ok(dopo['laser/3'], 'e quello nuovo non è stato scritto');
+  assert.notEqual(dati[CHIAVE], primaDelGuasto, 'la scrittura nuova deve esserci');
+});
+
+test('ma cancellare continua a cancellare', () => {
+  /* Il difetto opposto sarebbe un archivio che non si può più svuotare. */
+  const { C, dati } = nuovo();
+  C.salva('apparel', 1, { capi: 10 });
+  C.salva('3d', 7, { costo: 99 });
+  C.cancella('apparel', 1);
+  const dopo = JSON.parse(dati[CHIAVE] || '{}');
+  assert.ok(!dopo['apparel/1'], 'la commessa cancellata deve sparire');
+  assert.ok(dopo['3d/7'], 'e le altre restare');
+});

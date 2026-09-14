@@ -64,10 +64,43 @@
 
   function scriviJSON(chiave, valore) {
     try {
-      if (global.Ingly && global.Ingly.Storage) return !!global.Ingly.Storage.set(chiave, valore).ok;
+      if (global.Ingly && global.Ingly.Storage) {
+        var esito = global.Ingly.Storage.set(chiave, valore);
+        /* Due implementazioni di `Ingly.Storage` convivono nel progetto: una
+           restituisce `{ok:true}`, l'altra un booleano. Leggere `.ok` su un
+           booleano non lancia — dà `undefined` — quindi una scrittura riuscita
+           verrebbe riportata come fallita, e chi decide in base a quel valore
+           (la migrazione, per esempio) si comporterebbe male in silenzio. */
+        if (esito && typeof esito === 'object') return !!esito.ok;
+        return esito !== false;
+      }
       global.localStorage.setItem(chiave, JSON.stringify(valore));
       return true;
     } catch (e) { return false; }
+  }
+
+  /* ── Scrivere senza poter cancellare quello che non si è letto ───────────
+     `salva()` e `migra()` leggono la mappa, la modificano e la riscrivono per
+     intero. È corretto finché la lettura è attendibile — ma se torna vuota
+     quando l'archivio invece ha contenuto, la riscrittura porta via tutto il
+     resto senza che nessuno se ne accorga.
+
+     Misurato in collaudo, sotto catena piena: dopo un ricaricamento l'archivio
+     conteneva **solo** la voce migrata, e i due consuntivi scritti durante la
+     prova erano spariti. Da solo il caso non si riproduce, ed è esattamente il
+     genere di difetto che non si fa trovare quando lo si cerca.
+
+     Qui la scrittura rilegge subito prima e **unisce**: quello che c'è su
+     disco e non è nella mappa da scrivere resta. Solo `cancella()` dichiara di
+     voler accorciare, ed è l'unico percorso che può farlo. */
+  function scriviUnendo(chiave, mappa) {
+    var suDisco = leggiSicuro(chiave);
+    if (suDisco.ok && suDisco.valore) {
+      Object.keys(suDisco.valore).forEach(function (k) {
+        if (!(k in mappa)) mappa[k] = suDisco.valore[k];
+      });
+    }
+    return scriviJSON(chiave, mappa);
   }
 
   /* La chiave di una commessa. Il modulo davanti, perché due preventivatori
@@ -117,7 +150,7 @@
        si sarebbe più ripetuta, lasciando i consuntivi nel vecchio archivio per
        sempre. È lo stesso difetto che le due migrazioni grosse di questo
        progetto evitano da sempre, e qui l'avevo rifatto. */
-    if (portati && !scriviJSON(CHIAVE, tutti)) return;
+    if (portati && !scriviUnendo(CHIAVE, tutti)) return;
     try { global.localStorage.setItem(SEGNO_MIGRAZIONE, new Date().toISOString()); } catch (e) {}
   }
 
@@ -153,7 +186,7 @@
       if (unito[campo] === null) delete unito[campo];
     });
     tutti[k] = unito;
-    scriviJSON(CHIAVE, tutti);
+    scriviUnendo(CHIAVE, tutti);
     return unito;
   }
 
