@@ -46,6 +46,26 @@ const WorkflowSync = {
       if(newStage==='delivered') order.deliveredAt = new Date().toISOString();
       if(newStage==='sold')      order.soldAt = new Date().toISOString();
       if(newStage==='invoiced')  order.invoicedAt = new Date().toISOString();
+
+      /* ── Il routing di produzione ────────────────────────────────────
+         Un ordine che entra in produzione riceve una operazione per ogni
+         tecnologia che dichiara: è il momento in cui smette di essere un
+         prezzo e diventa un lavoro da fare.
+
+         Non si inventa niente — nessun tempo, nessuna macchina: quelli li
+         misura chi produce. E se il routing c'è già non si ricostruisce, o
+         i tempi reali già registrati sparirebbero. */
+      const _INPROD = ['produzione','production','working','in_produzione','lavorazione'];
+      if(_INPROD.indexOf(String(newStage))>=0 && typeof window!=='undefined' && window.InglyOperazioni){
+        try {
+          const _r = window.InglyOperazioni.costruisciDaOrdine(order);
+          if(_r.create && _r.operations.length){
+            order.production = Object.assign({}, order.production, { operations: _r.operations });
+            if(!order.operations) order.operations = _r.operations;
+          }
+        } catch(ex){ console.warn('[WorkflowSync routing]', ex); }
+      }
+
       await IDB.put('orders', order);
       AppStore.invalidate('orders');
 

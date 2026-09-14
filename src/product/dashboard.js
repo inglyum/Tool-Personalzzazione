@@ -250,6 +250,61 @@
       + '</section>';
   }
 
+  /* ── Quale macchina si ripaga ─────────────────────────────────────────
+
+     La domanda a cui questa tabella risponde non e' «quanto ho fatturato»:
+     e' «questa macchina vale le ore che le do». Per questo la colonna che
+     conta e' euro all'ora, e per questo una macchina senza ore misurate
+     mostra un trattino e non uno zero.
+
+     La riga «Non attribuibile» non e' un difetto da nascondere: e' il
+     fatturato che nessuna operazione ha saputo collegare a una macchina, e
+     vederlo grande e' il segnale che vale la pena registrare i tempi. */
+  function renderMacchineRedditivita(m) {
+    if (!m || m.vuoto) return '';
+    const eur = (v) => (v == null ? '—' : '€' + Math.round(v).toLocaleString('it-IT'));
+    const riga = (r) => {
+      const ore = r.oreMisurate == null ? '<span style="opacity:.45">non misurate</span>'
+        : r.oreMisurate.toLocaleString('it-IT');
+      const orario = r.ricavoOrario == null ? '<span style="opacity:.45">—</span>'
+        : '<strong>' + eur(r.ricavoOrario) + '/h</strong>';
+      const nonAttr = !r.attribuibile
+        ? '<div style="font-size:10px;opacity:.6">nessuna operazione collega questo importo a una macchina</div>'
+        : '';
+      return '<tr' + (r.attribuibile ? '' : ' style="opacity:.75"') + '>'
+        + '<td style="padding:8px 10px">' + UI.esc(r.label) + nonAttr + '</td>'
+        + '<td style="padding:8px 10px;text-align:center">' + r.ordini + '</td>'
+        + '<td style="padding:8px 10px;text-align:right">' + ore + '</td>'
+        + '<td style="padding:8px 10px;text-align:right">' + eur(r.ricavo) + '</td>'
+        + '<td style="padding:8px 10px;text-align:right;opacity:.75">' + eur(r.costo) + '</td>'
+        + '<td style="padding:8px 10px;text-align:right;font-weight:700">' + eur(r.profitto) + '</td>'
+        + '<td style="padding:8px 10px;text-align:right">' + orario + '</td>'
+        + '</tr>';
+    };
+    const nota = m.nonAttribuiti
+      ? '<div style="font-size:11px;opacity:.7;padding:8px 10px;line-height:1.6">'
+        + m.nonAttribuiti + (m.nonAttribuiti === 1 ? ' ordine non ha' : ' ordini non hanno')
+        + ' operazioni con una macchina e un tempo: il loro fatturato resta intero '
+        + 'sotto «Non attribuibile» invece di essere diviso fra le macchine a caso.</div>'
+      : '';
+    return '<section class="oc__section">'
+      + UI.sectionHeader('Redditività per macchina')
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="opacity:.6;font-size:10px;text-transform:uppercase">'
+      + '<th style="padding:6px 10px;text-align:left">Macchina</th>'
+      + '<th style="padding:6px 10px;text-align:center">Ordini</th>'
+      + '<th style="padding:6px 10px;text-align:right">Ore</th>'
+      + '<th style="padding:6px 10px;text-align:right">Ricavo</th>'
+      + '<th style="padding:6px 10px;text-align:right">Costo</th>'
+      + '<th style="padding:6px 10px;text-align:right">Profitto</th>'
+      + '<th style="padding:6px 10px;text-align:right">€/ora</th>'
+      + '</tr></thead><tbody>'
+      + m.righe.map(riga).join('')
+      + '</tbody></table></div>'
+      + nota
+      + '</section>';
+  }
+
   function renderProfitability(p) {
     if (p.empty) {
       return '<section class="oc__section">' + UI.sectionHeader('Redditività') +
@@ -390,13 +445,19 @@
       /* Gli ordini per l'aggregato di tecnologia: una lettura sola, e se
          qualcosa non va la sezione non c'è invece di far cadere la schermata. */
       let tec = null;
+      let macRedd = null;
       try {
         const RT = global.InglyRedditivitaTecnologia;
-        if (RT && global.IDB && typeof global.IDB.getAll === 'function') {
+        const RM = global.InglyRedditivitaMacchina;
+        if (global.IDB && typeof global.IDB.getAll === 'function') {
           const ordini = await global.IDB.getAll('orders').catch(() => []);
-          tec = RT.per(ordini);
+          if (RT) tec = RT.per(ordini);
+          if (RM) {
+            const parco = await global.IDB.getAll('equipment').catch(() => []);
+            macRedd = RM.per(ordini, parco);
+          }
         }
-      } catch (e) { tec = null; }
+      } catch (e) { tec = null; macRedd = null; }
 
       el.innerHTML =
         renderHeader(ws) +
@@ -406,6 +467,7 @@
         '<section class="oc__section oc__two">' + renderInventory(inv) + renderMachines(mac) + '</section>' +
         renderProfitability(prof) +
         renderTecnologie(tec) +
+        renderMacchineRedditivita(macRedd) +
         renderInsights(ins);
 
       el.dataset.rendered = '1';

@@ -609,8 +609,16 @@
   function getOrderProductionCost(ordine) {
     var o = ordine || {};
     var e = o.economic || {};
-    if (e.costTotal != null && _num(e.costTotal) > 0) {
-      return { valore: _num(e.costTotal), noto: true, fonte: 'economic.costTotal' };
+    /* `costTotal` e' il nome che la distinta economica scrive. Gli altri due
+       sono i nomi con cui lo stesso numero arriva da chi costruisce il blocco
+       a mano: il ricavo accettava gia' piu' nomi, il costo no, e un ordine
+       ben documentato usciva con ricavo noto e costo ignoto — cioe' senza
+       profitto, che e' il caso peggiore perche' sembra un dato e non lo e'. */
+    var nomi = ['costTotal', 'productionCost', 'totalCost'];
+    for (var i = 0; i < nomi.length; i++) {
+      if (e[nomi[i]] != null && _num(e[nomi[i]]) > 0) {
+        return { valore: _num(e[nomi[i]]), noto: true, fonte: 'economic.' + nomi[i] };
+      }
     }
     var base = costoOrdine(o);
     if (base.noto) return { valore: base.valore, noto: true, fonte: 'campi ordine' };

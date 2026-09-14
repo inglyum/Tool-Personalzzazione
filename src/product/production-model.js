@@ -86,6 +86,23 @@
     /* Gli alias con spazi, già normalizzati sopra. */
     var senzaSpazi = testo(v).toLowerCase().trim();
     if (PER_ALIAS[senzaSpazi]) return PER_ALIAS[senzaSpazi];
+
+    /* Fin qui il riconoscimento era solo esatto, e «Laser CO2» — il modo in
+       cui una macchina si chiama davvero — non veniva classificato. Si
+       guardano allora le singole parole.
+
+       Il limite delle cinque parole non è arbitrario: serve a distinguere un
+       campo tecnologia da una frase. «targa in legno con finitura opaca» è una
+       descrizione, e classificarla come «finitura» sarebbe peggio che non
+       classificarla. Un nome di macchina o un campo di categoria stanno sempre
+       sotto le cinque parole. */
+    var parole = senzaSpazi.split(/[^a-z0-9]+/).filter(Boolean);
+    if (!parole.length || parole.length > 5) return null;
+    for (var i = 0; i < parole.length; i++) {
+      var w = parole[i];
+      if (PER_ID[w]) return w;
+      if (PER_ALIAS[w]) return PER_ALIAS[w];
+    }
     return null;
   }
 

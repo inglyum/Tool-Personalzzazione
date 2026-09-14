@@ -640,6 +640,120 @@
     };
   }
 
+
+  /* ── Preventivato, reale, scostamento ─────────────────────────────────
+
+     Le voci di costo il modulo le conosceva già — sono le quattordici di
+     `VOCI_COSTO`. Quello che mancava è il confronto fra quanto si era previsto
+     e quanto è costato davvero. `scostamento()` qui sopra confronta due
+     revisioni dello stesso preventivo: è un'altra domanda.
+
+     Regola: `scostamento = reale - preventivato`. Positivo vuol dire che è
+     costato più del previsto. Non si inverte il segno per farlo sembrare
+     buono.
+
+     Un driver senza dato reale NON vale zero: vale «non rilevato», e il
+     totale reale non lo conta. Altrimenti un consuntivo compilato a metà
+     farebbe apparire un risparmio che non esiste. */
+
+  var ETICHETTE_COSTO = {
+    materiale: 'Materiale', energia: 'Energia', macchina: 'Macchina',
+    manutenzione: 'Manutenzione', manodopera: 'Manodopera', setup: 'Avviamento',
+    postProcesso: 'Post-processo', scarto: 'Scarti', overhead: 'Spese generali',
+    packaging: 'Imballo', accessori: 'Accessori', commissioni: 'Commissioni',
+    spedizione: 'Spedizione', altro: 'Altro',
+  };
+
+  function _mappaCosti(x) {
+    if (!x) return {};
+    /* Si accetta sia la mappa `costs` sia l'intero snapshot economico. */
+    if (x.costs && typeof x.costs === 'object') return x.costs;
+    return x;
+  }
+
+  /**
+   * @param preventivato mappa dei costi previsti (o lo snapshot che la contiene)
+   * @param reale        mappa dei costi rilevati (o lo snapshot che la contiene)
+   * @returns { righe[], totali, completo, driverMancanti[] }
+   */
+  function varianza(preventivato, reale) {
+    var prev = _mappaCosti(preventivato);
+    var real = _mappaCosti(reale);
+    var righe = [];
+    var totPrev = 0;
+    var totReal = 0;
+    var mancanti = [];
+
+    VOCI_COSTO.forEach(function (id) {
+      var p = prev[id];
+      var r = real[id];
+      var haPrev = p != null && isFinite(parseFloat(p));
+      var haReal = r != null && isFinite(parseFloat(r));
+      if (!haPrev && !haReal) return;
+
+      var vp = haPrev ? arr(num(p)) : 0;
+      var vr = haReal ? arr(num(r)) : null;
+      totPrev += vp;
+      if (haReal) totReal += vr; else if (haPrev && vp > 0) mancanti.push(id);
+
+      righe.push({
+        id: id,
+        label: ETICHETTE_COSTO[id] || id,
+        estimated: vp,
+        actual: vr,
+        rilevato: haReal,
+        variance: haReal ? arr(vr - vp) : null,
+        variancePct: (haReal && vp > 0) ? arr(((vr - vp) / vp) * 100) : null,
+      });
+    });
+
+    totPrev = arr(totPrev);
+    totReal = arr(totReal);
+    return {
+      righe: righe,
+      totali: {
+        estimated: totPrev,
+        actual: totReal,
+        variance: arr(totReal - totPrev),
+        variancePct: totPrev > 0 ? arr(((totReal - totPrev) / totPrev) * 100) : null,
+      },
+      /* «Completo» non vuol dire «pareggia»: vuol dire che ogni driver
+         previsto ha un corrispondente rilevato. Senza questa distinzione un
+         consuntivo a metà sembrerebbe un risparmio. */
+      completo: mancanti.length === 0,
+      driverMancanti: mancanti,
+    };
+  }
+
+  /**
+   * Ricavo fermo, costo reale: profitto e margine consuntivi.
+   * Il ricavo NON si tocca — il mandato lo dice e il modello economico pure.
+   */
+  function consuntivoEconomico(snapshot, costiReali) {
+    var s = snapshot || {};
+    var v = varianza(s, costiReali);
+    var ricavo = arr(num(s.revenueNet));
+    /* Se qualche driver non è stato rilevato, il costo reale è quello
+       rilevato più il previsto di ciò che manca: dichiarare 0 su un driver
+       non compilato gonfierebbe il profitto. */
+    var daIntegrare = 0;
+    v.righe.forEach(function (r) { if (!r.rilevato) daIntegrare += r.estimated; });
+    var costoReale = arr(v.totali.actual + daIntegrare);
+    var profitto = arr(ricavo - costoReale);
+    return {
+      revenueNet: ricavo,
+      actualCost: costoReale,
+      estimatedCost: v.totali.estimated,
+      actualProfit: profitto,
+      actualMarginPct: ricavo > 0 ? arr((profitto / ricavo) * 100) : null,
+      variance: arr(costoReale - v.totali.estimated),
+      completo: v.completo,
+      integratoConPreventivo: arr(daIntegrare),
+      driverMancanti: v.driverMancanti,
+      righe: v.righe,
+    };
+  }
+
   global.InglyCostBreakdown = {
     VOCI_COSTO: VOCI_COSTO,
     costoDi: costoDi,
@@ -657,6 +771,9 @@
     senzaVoce: senzaVoce,
     conNuovaVoce: conNuovaVoce,
     scostamento: scostamento,
+    varianza: varianza,
+    consuntivoEconomico: consuntivoEconomico,
+    ETICHETTE_COSTO: ETICHETTE_COSTO,
     vuota: vuota,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

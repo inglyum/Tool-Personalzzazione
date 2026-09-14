@@ -209,6 +209,28 @@
     var out = {
       id: r.id || null,
       label: [r.brand, r.model].filter(Boolean).join(' ') || r.name || r.n || r.id || 'Macchina',
+      /* L'identita' della macchina, separata dalla sua economia. Serviva per
+         collegare una operazione a una macchina e una macchina a una
+         tecnologia: senza `technology` il conto per tecnologia non sa a chi
+         attribuire le ore. Nessuno di questi campi e' obbligatorio — una
+         macchina inserita con il solo prezzo continua a funzionare. */
+      name: r.name || r.n || null,
+      manufacturer: r.manufacturer || r.brand || r.marca || null,
+      model: r.model || r.modello || null,
+      technology: (function () {
+        var P = global.InglyProduction;
+        var grezza = r.technology || r.tecnologia || r.tech || r.type || r.tipo || r.category;
+        return P ? P.normalizza(grezza) : (grezza || null);
+      }()),
+      category: r.category || r.categoria || null,
+      status: (function () {
+        var v = String(r.status || r.stato || '').toLowerCase();
+        if (['attiva', 'active', 'ok', 'operativa'].indexOf(v) >= 0) return 'attiva';
+        if (['manutenzione', 'maintenance', 'service'].indexOf(v) >= 0) return 'manutenzione';
+        if (['ferma', 'stopped', 'guasta', 'offline', 'dismessa'].indexOf(v) >= 0) return 'ferma';
+        return v ? v : 'attiva';
+      }()),
+      location: r.location || r.posizione || r.sede || null,
       purchasePrice: r.purchasePrice != null ? num(r.purchasePrice)
         : (r.price != null ? num(r.price) : (r.c != null ? num(r.c) : 0)),
       shipping: num(r.shipping, 0), installation: num(r.installation, 0),

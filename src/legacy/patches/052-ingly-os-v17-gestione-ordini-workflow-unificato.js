@@ -1437,7 +1437,29 @@ const GestioneOrdini = {
        storici»: sono due gradi di certezza diversi, e chi decide deve saperlo. */
     const dedotta = letto.dedotta
       ? ' <span title="dedotta dai campi dell ordine, non dichiarata" style="opacity:.5">·</span>' : '';
-    return '<span style="font-size:9px;font-weight:700;white-space:nowrap">'+pezzi+dedotta+'</span>';
+
+    /* Un ordine misto si legge gia' dai due nomi affiancati, ma la parola
+       MISTO e' quella che si cerca con gli occhi in un elenco lungo — ed e'
+       anche la categoria sotto cui il suo fatturato finisce in dashboard. Che
+       le due cose si chiamino uguale evita una domanda. */
+    const M = letto.isMixed && PM.MISTO
+      ? '<span style="font-size:8px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:99px;'
+        + 'background:'+PM.MISTO.colore+'22;color:'+PM.MISTO.colore+';margin-right:5px">MISTO</span>'
+      : '';
+
+    /* L'avanzamento del routing, se un routing c'e'. Un ordine semplice non
+       vede niente di nuovo. */
+    const OP = window.InglyOperazioni;
+    let avanz = '';
+    if(OP){
+      const a = OP.avanzamento(OP.leggi(ordine));
+      if(a.operazioni){
+        const finito = a.pct === 100;
+        avanz = '<span style="font-size:9px;opacity:.7;margin-left:6px" title="operazioni di produzione">'
+          + (finito ? '\u2713 ' : '\u2699 ') + a.completate + '/' + a.operazioni + '</span>';
+      }
+    }
+    return '<span style="font-size:9px;font-weight:700;white-space:nowrap">'+M+pezzi+dedotta+avanz+'</span>';
   },
 
   _setMachine(v){ this._filterMachine=v; this._listPage=0; this.render(); },
