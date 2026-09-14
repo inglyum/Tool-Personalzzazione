@@ -281,16 +281,16 @@
       +kpiGrid([{val:'+32%',label:'Potenziale crescita',color:'#22c55e'},{val:(window._aiData_growth||D_GROWTH).length,label:'Azioni',color:'#fbbf24'}])
       +editableTable(Object.assign({id:'growth'},TABLES.growth)); },
 
-    forecaster:function(){
-      var data=window._aiData_forecast||lsGet('ai_forecast',D_FORECAST);
-      var max=Math.max.apply(null,data.map(function(d){return +d.revenue||0;}))||1;
-      var chart='<div style="display:flex;align-items:flex-end;gap:8px;height:150px;padding:10px 0">'
-        +data.map(function(d){var h=Math.round((+d.revenue||0)/max*100);return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><div style="font-size:10px;font-weight:700;color:var(--text-muted,#888)">'+eu(d.revenue)+'</div><div style="width:100%;height:'+h+'%;background:linear-gradient(180deg,var(--primary,#fbbf24),rgba(251,191,36,.3));border-radius:4px 4px 0 0;min-height:6px"></div><div style="font-size:9px;color:var(--text-muted,#888)">'+esc((d.month||'').slice(0,3))+'</div></div>';}).join('')+'</div>';
-      var tot=data.reduce(function(s,d){return s+(+d.revenue||0);},0);
-      return header('🔮','Financial Forecaster','Previsioni — editabili')
-        +kpiGrid([{val:eu(tot),label:'Totale periodo',color:'#fbbf24'},{val:eu(max),label:'Picco mensile',color:'#22c55e'}])
-        +noteCard('📊 Proiezione Ricavi',chart)
-        +editableTable(Object.assign({id:'forecast'},TABLES.forecast)); },
+    /* `forecaster` non sta più qui. Questo renderer disegnava una tabella di
+       ricavi mensili **scritti a mano** — partendo da valori d'esempio — sotto
+       il titolo «Financial Forecaster», e lo faceva riscrivendo l'intera vista
+       ogni 600 millisecondi. Cancellava `#ff-root`, e con quello la previsione
+       vera: `FinancialForecaster` calcolava sulle vendite reali e non si è mai
+       visto, perché questo ciclo gli cancellava il contenitore sotto.
+
+       Un piano compilato a mano e una previsione calcolata sono due cose
+       diverse, e chiamarle con lo stesso nome era il modo per non avere né
+       l'una né l'altra. La sezione ora mostra il calcolo sulle vendite vere. */
 
     supplierintel:function(){
       var data=window._aiData_suppliers||lsGet('ai_suppliers',D_SUPPLIERS);
@@ -341,7 +341,7 @@
   // Register stub modules (for routes WITH handlers)
   var MODULE_MAP={trendscanner:'TrendScanner',supplierintel:'SupplierIntel',contentperf:'ContentPerf',competitormon:'CompetitorMon',
     etsy_pulse:'EtsyPulse',price_radar:'PriceRadar',demand_map:'DemandMap',product_hunter:'ProductHunter',market_agent:'MarketAgent',
-    etsy_seo_wizard:'EtsySeoWizard',live_intel:'LiveIntel',growthengine:'GrowthEngine',forecaster:'Forecaster'};
+    etsy_seo_wizard:'EtsySeoWizard',live_intel:'LiveIntel',growthengine:'GrowthEngine'};
   Object.keys(MODULE_MAP).forEach(function(route){
     var modName=MODULE_MAP[route];
     window[modName]=window[modName]||{};

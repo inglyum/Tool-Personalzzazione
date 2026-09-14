@@ -4777,60 +4777,23 @@ window.IdeasModule = IdeasModule;
 
 
 // ===== ⑨ QR CODE PER PRODOTTI =====
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORECASTING — ritirato, non cancellato
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Erano 54 righe con un pulsante «Analizza & Prevedi» che sommava le vendite
+   per mese, sotto un'intestazione che prometteva «Previsioni ricavi · Scenario
+   planning · Break-even · Cash runway»: esattamente quello che fa
+   `FinancialForecaster`, che quelle cose le fa davvero. Due voci di menù per
+   una risposta sola, e quella più povera prometeva di più.
+
+   Il nome resta — la ricerca e i collegamenti vecchi lo usano — ma porta alla
+   sezione vera invece di disegnarne una seconda. */
 const Forecasting = {
   async render() {
-    const el = eid('view-forecasting');
-    if (!el) return;
-    el.innerHTML = `<div class="module-header"><div class="module-title"><i class="fas fa-chart-line"></i> AI Previsioni</div></div>
-      <div class="card">
-        <div class="card-title">📈 Genera Previsioni AI</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Basato sulle tue vendite storiche, l'AI calcola previsioni mensili e consiglio di produzione.</p>
-        <button class="btn btn-primary" onclick="Forecasting.generate()"><i class="fas fa-robot"></i> Analizza & Prevedi</button>
-      </div>
-      <div id="forecast-result" style="margin-top:16px"></div>`;
+    if (typeof App !== 'undefined' && typeof App.navigate === 'function') App.navigate('forecaster');
   },
-
-  async generate() {
-    const resultEl = eid('forecast-result');
-    if (resultEl) resultEl.innerHTML = '<div class="card"><div style="text-align:center;padding:20px">⏳ Analisi in corso...</div></div>';
-    const [sales, events] = await Promise.all([IDB.getAll('sales'), IDB.getAll('events').catch(() => [])]);
-    // Build monthly data
-    const monthlyRevenue = {};
-    sales.forEach(s => {
-      if (!s.date) return;
-      const key = s.date.substring(0, 7);
-      monthlyRevenue[key] = (monthlyRevenue[key] || 0) + parseFloat(s.amount || 0);
-    });
-    const sortedMonths = Object.entries(monthlyRevenue).sort((a,b) => a[0].localeCompare(b[0]));
-    const dataStr = sortedMonths.map(([m, v]) => `${m}: €${v.toFixed(0)}`).join(', ');
-    const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1);
-    const nextMonthName = nextMonth.toLocaleDateString('it-IT', {month:'long', year:'numeric'});
-    
-    try {
-      const text = await AIProvider.call(`Sei un business analyst per un'artigiana laser italiana (Ingly Laser). \nDati vendite mensili: ${dataStr || 'Nessun dato ancora'}.\nProssimo mese: ${nextMonthName}.\nAnalizza e fornisci: 1) Previsione ricavi 2) Categorie prodotto da spingere 3) Consigli pratici.\nRispondi in italiano, in formato strutturato con emoji, massimo 300 parole.`, 1000).catch(()=>'Analisi non disponibile');
-      if (resultEl) resultEl.innerHTML = `
-        <div class="card">
-          <div class="card-title">🤖 Analisi AI per ${nextMonthName}</div>
-          <div style="font-size:14px;line-height:1.7;white-space:pre-wrap">${text}</div>
-        </div>
-        <div class="card" style="margin-top:12px">
-          <div class="card-title">📊 Storico Revenue</div>
-          ${sortedMonths.slice(-6).map(([m,v]) => {
-            const max = Math.max(...sortedMonths.slice(-6).map(x=>x[1]));
-            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <span style="font-size:12px;color:var(--text-muted);width:80px">${m}</span>
-              <div style="flex:1;background:var(--bg-card2);border-radius:4px;height:20px">
-                <div style="height:100%;width:${max?v/max*100:0}%;background:linear-gradient(90deg,#8b5cf6,#06b6d4);border-radius:4px;display:flex;align-items:center;padding-left:8px">
-                  <span style="font-size:11px;color:#fff;font-weight:600">€${v.toFixed(0)}</span>
-                </div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`;
-    } catch (e) {
-      if (resultEl) resultEl.innerHTML = `<div class="card"><p style="color:var(--text-muted)">AI temporaneamente non disponibile. Dati storici: ${dataStr || 'nessuno'}</p></div>`;
-    }
-  }
+  async generate() { return this.render(); },
 };
 
 // ===== ⑫ MINI CATALOG VIEW =====
@@ -7668,7 +7631,7 @@ const BDW = {
   },
 
   metrics: {
-    revenue: { mtd:0, ytd:0, lm:0, growth:0, forecast:[], revsArr:[], slope:0, intercept:0 },
+    revenue: { mtd:0, ytd:0, lm:0, growth:0, forecast:[], revsArr:[], slope:0, intercept:0, previsione:null },
     clients: { total:0, champions:0, loyal:0, atRisk:0, lost:0, newbie:0, promising:0, ltvAvg:0, churnCount:0 },
     products: { top:[], marginAvg:0, lowMargin:[], bestsellers:[] },
     finance:  { netProfit:0, netMarginPct:0, breakEven:0, cashBalance:0, cashRunway:0, taxReserve:0, mCosts:0 },
@@ -7710,17 +7673,34 @@ const BDW = {
     const yRev = paid.filter(s=>new Date(s.date)>=new Date(now.getFullYear(),0,1)).reduce((a,s)=>a+(+s.amount||0),0);
     const revsArr = last12.map(m=>paid.filter(s=>s.date?.slice(0,7)===m).reduce((a,s)=>a+(+s.amount||0),0));
 
-    // Weighted linear regression (recent months weighted more)
-    const n = revsArr.length;
-    const weights = revsArr.map((_,i)=>1+(i/n)); // more weight to recent
-    const wSum = weights.reduce((a,v)=>a+v,0);
-    const wMeanX = weights.reduce((a,v,i)=>a+v*i,0)/wSum;
-    const wMeanY = weights.reduce((a,v,i)=>a+v*revsArr[i],0)/wSum;
-    const ssXY = weights.reduce((a,v,i)=>a+v*(i-wMeanX)*(revsArr[i]-wMeanY),0);
-    const ssXX = weights.reduce((a,v,i)=>a+v*(i-wMeanX)**2,0);
-    const slope = ssXX>0 ? ssXY/ssXX : 0;
-    const intercept = wMeanY - slope*wMeanX;
-    const forecast = [1,2,3].map(i=>Math.max(0,Math.round(intercept+slope*(n+i))));
+    /* ── La previsione ────────────────────────────────────────────────────
+       Qui c'era una regressione lineare pesata scritta a mano su `revsArr`,
+       cioè su **dodici mesi fissi**: i mesi in cui il laboratorio non
+       esisteva ancora valevano zero, e il mese corrente — sempre incompleto —
+       entrava come se fosse finito. Da una retta tirata attraverso nove zeri
+       e tre valori veri uscivano tre cifre in euro precise all'unità.
+
+       Ora il calcolo sta in `InglyPrevisioni`, che fa partire la finestra dal
+       primo mese con attività, tiene fuori il mese in corso, e sotto quattro
+       mesi conclusi **non prevede niente** dicendo perché. `revsArr` resta
+       com'è: è la serie del grafico, non quella del calcolo. */
+    const previsione = (typeof window!=='undefined' && window.InglyPrevisioni)
+      ? window.InglyPrevisioni.daRighe(paid, {
+          adesso: now.getTime(),
+          data: (r)=>r.date,
+          valore: (r)=>r.amount,
+        })
+      : { disponibile:false, previsione:null, pendenza:null, intercetta:null,
+          mesiReali:0, r2:null, affidabilita:null,
+          motivo:'il modulo delle previsioni non è caricato' };
+    const slope = previsione.pendenza || 0;
+    const intercept = previsione.intercetta || 0;
+    /* Chi legge `forecast` si aspetta tre numeri. Quando non c'è previsione
+       resta vuoto — e vuoto è una risposta, mentre `[0,0,0]` sarebbe una
+       previsione di chiusura che nessuno ha calcolato. */
+    const forecast = previsione.disponibile
+      ? previsione.previsione.map(p=>p.valore)
+      : [];
 
     // ── Financial ─────────────────────────────────────────────────────────────
     const mFixed = fixedCosts.reduce((a,c)=>a+(+c.monthly||+c.amount||0),0);
@@ -7852,7 +7832,7 @@ const BDW = {
 
     // ── Store results (after real cost engine so realMarginAvg is defined) ──
     this.metrics = {
-      revenue:  {mtd:mRev,ytd:yRev,lm:lRev,growth:lRev>0?(mRev-lRev)/lRev*100:0,forecast,revsArr,slope,intercept},
+      revenue:  {mtd:mRev,ytd:yRev,lm:lRev,growth:lRev>0?(mRev-lRev)/lRev*100:0,forecast,revsArr,slope,intercept,previsione},
       clients:  {total:clients.length,champions:segs.champions.length,loyal:segs.loyal.length,atRisk:segs.atRisk.length,lost:segs.lost.length,newbie:segs.newbie.length,promising:segs.promising.length,ltvAvg,churnCount:segs.atRisk.length+segs.lost.length},
       products: {top:topProds.slice(0,5),marginAvg:avgMarginPct,lowMargin:topProds.filter(p=>p.margin<25&&p.rev>0)},
       finance:  {netProfit,netMarginPct,breakEven,cashBalance,cashRunway,taxReserve,mCosts,realMarginAvg:realMarginAvg||avgMarginPct,totalLaborCost},
@@ -8035,7 +8015,11 @@ const GrowthEngine = {
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
         ${[
           {val:(rev.growth>=0?'+':'')+rev.growth.toFixed(1)+'%', lbl:'MoM Growth', sub:rev.growth>=0?'📈 Positivo':'📉 Attenzione', col:rev.growth>=0?'#22c55e':'#ef4444'},
-          {val:fmtCur(rev.forecast[0]||0),       lbl:'Forecast +1 mese', sub:`→ ${fmtCur(rev.forecast[1]||0)} · ${fmtCur(rev.forecast[2]||0)}`, col:'#38bdf8'},
+          /* Senza previsione si scrive che non c'è, non €0: uno zero qui
+             si legge come «il mese prossimo non incasserai niente». */
+          rev.forecast.length
+            ? {val:fmtCur(rev.forecast[0]), lbl:'Forecast +1 mese', sub:`→ ${fmtCur(rev.forecast[1])} · ${fmtCur(rev.forecast[2])}`, col:'#38bdf8'}
+            : {val:'—', lbl:'Forecast +1 mese', sub:(rev.previsione&&rev.previsione.motivo)||'storia insufficiente', col:'var(--text-muted)'},
           {val:fmtCur(fin.netProfit),             lbl:'Profitto netto MTD', sub:`Margine ${fin.netMarginPct.toFixed(1)}%`, col:fin.netProfit>=0?'#22c55e':'#ef4444'},
           {val:cl.atRisk+cl.lost,                 lbl:'Clienti a rischio', sub:`${cl.atRisk} at-risk · ${cl.lost} persi`, col:cl.atRisk+cl.lost>3?'#ef4444':'#22c55e'},
         ].map(k=>`<div class="card" style="text-align:center;border-top:3px solid ${k.col}">
@@ -8113,7 +8097,7 @@ const GrowthEngine = {
     el.innerHTML=`<div class="card"><div style="text-align:center;padding:20px;color:var(--text-muted)"><i class="fas fa-spinner fa-spin"></i> AI elabora il tuo Growth Plan...</div></div>`;
     const prompt=`Business artigianale laser italiano. Dati reali:
 Revenue MTD: €${m.revenue.mtd.toFixed(0)} (${(m.revenue.growth>=0?'+':'')+m.revenue.growth.toFixed(1)}% vs mese scorso)
-Revenue YTD: €${m.revenue.ytd.toFixed(0)} | Forecast next 3m: €${m.revenue.forecast.join(', ')}
+Revenue YTD: €${m.revenue.ytd.toFixed(0)} | Forecast next 3m: ${m.revenue.forecast.length?'€'+m.revenue.forecast.join(', €'):'non disponibile ('+((m.revenue.previsione&&m.revenue.previsione.motivo)||'storia insufficiente')+')'}
 Margine netto: ${m.finance.netMarginPct.toFixed(1)}% | Breakeven: €${m.finance.breakEven.toFixed(0)} | Cash runway: ${m.finance.cashRunway} mesi
 Clienti: ${m.clients.total} totali · ${m.clients.champions} champions · ${m.clients.atRisk} at-risk · ${m.clients.lost} persi
 LTV medio: €${m.clients.ltvAvg.toFixed(0)} | Ordini attivi: ${m.ops.ordersActive} | Scaduti: ${m.ops.ordersOverdue}

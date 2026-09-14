@@ -2556,13 +2556,28 @@ const FinancialForecaster = {
     const el = eid('ff-root'); if(!el) return;
     const m=BDW.metrics; const rev=m.revenue; const fin=m.finance;
 
+    /* Su quanti mesi si basa la previsione, e quanto la tendenza spiega i
+       mesi passati. È l'informazione che rende leggibile la cifra o la
+       smaschera: tre cifre precise su quattro mesi ballerini non sono una
+       previsione, e chi guarda ha diritto di saperlo prima di decidere. */
+    const _prev = rev.previsione;
+    const _nota = (typeof window!=='undefined' && window.InglyPrevisioni && _prev)
+      ? window.InglyPrevisioni.frase(_prev) : '';
+    const _colNota = (_prev && _prev.disponibile)
+      ? (_prev.affidabilita.id==='buona' ? '#22c55e' : _prev.affidabilita.id==='discreta' ? '#f59e0b' : '#ef4444')
+      : 'var(--text-muted)';
+
     el.innerHTML=`
+      ${_nota?`<div style="border-left:3px solid ${_colNota};background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-muted);line-height:1.6">${_nota}</div>`:''}
       <!-- KPIs -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
         ${[
-          {v:fmtCur(rev.forecast[0]),l:'Forecast +1 mese',c:'#38bdf8'},
-          {v:fmtCur(rev.forecast[1]),l:'Forecast +2 mesi',c:'#6366f1'},
-          {v:fmtCur(rev.forecast[2]),l:'Forecast +3 mesi',c:'#a855f7'},
+          /* Senza abbastanza mesi conclusi non esce un numero: esce un
+             trattino. Prima usciva `fmtCur(undefined)`, che il formattatore
+             traduceva in un euro-zero indistinguibile da una previsione. */
+          {v:rev.forecast.length?fmtCur(rev.forecast[0]):'—',l:'Forecast +1 mese',c:rev.forecast.length?'#38bdf8':'var(--text-muted)'},
+          {v:rev.forecast.length?fmtCur(rev.forecast[1]):'—',l:'Forecast +2 mesi',c:rev.forecast.length?'#6366f1':'var(--text-muted)'},
+          {v:rev.forecast.length?fmtCur(rev.forecast[2]):'—',l:'Forecast +3 mesi',c:rev.forecast.length?'#a855f7':'var(--text-muted)'},
           {v:fin.cashRunway+'m',     l:'Cash Runway',     c:fin.cashRunway>3?'#22c55e':'#ef4444'},
         ].map(k=>`<div class="card" style="text-align:center;border-top:3px solid ${k.c}">
           <div style="font-size:20px;font-weight:900;color:${k.c}">${k.v}</div>
@@ -2652,7 +2667,7 @@ const FinancialForecaster = {
     await BDW.init(); const m=BDW.metrics;
     el.innerHTML=`<div class="card"><div style="text-align:center;padding:20px;color:var(--text-muted)"><i class="fas fa-spinner fa-spin"></i> AI analisi finanziaria...</div></div>`;
     const prompt=`CFO advisor per artigiano laser italiano.
-Revenue MTD: €${m.revenue.mtd.toFixed(0)} | Forecast: €${m.revenue.forecast.join(', €')}
+Revenue MTD: €${m.revenue.mtd.toFixed(0)} | Forecast: ${m.revenue.forecast.length?'€'+m.revenue.forecast.join(', €'):'non disponibile'}
 Margine netto: ${m.finance.netMarginPct.toFixed(1)}% | Breakeven: €${m.finance.breakEven.toFixed(0)}
 Cash balance: €${m.finance.cashBalance.toFixed(0)} | Cash runway: ${m.finance.cashRunway} mesi
 Riserva fiscale da accantonare: €${m.finance.taxReserve.toFixed(0)}

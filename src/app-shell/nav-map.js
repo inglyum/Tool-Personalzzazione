@@ -139,8 +139,13 @@ export const NAV_GROUPS = [
       { id: 'leadscorer', label: 'Lead Scorer', icon: 'star', feature: 'ai' },
       { id: 'clv', label: 'Valore cliente (CLV)', aka: ['CLV Clienti'], icon: 'gem', feature: 'ai' },
       { id: 'growthengine', label: 'Growth Engine', icon: 'rocket', feature: 'ai' },
-      { id: 'forecaster', label: 'Financial Forecaster', icon: 'line-chart', feature: 'analytics' },
-      { id: 'forecasting', label: 'Forecasting', aka: ['AI Previsioni'], icon: 'trending-up', feature: 'analytics' },
+      /* Una voce sola per le previsioni. «Forecasting» e «Simulatore ricavi»
+         erano due voci separate: la prima portava a un modulo di 54 righe
+         sotto un'intestazione che prometteva quello che fa questa, la
+         seconda a `RevSim`, che non e mai esistito. I nomi restano come
+         alias, perche chi li conosce deve continuare a trovarli. */
+      { id: 'forecaster', label: 'Previsioni', icon: 'line-chart', feature: 'analytics',
+        aka: ['Financial Forecaster', 'Forecasting', 'AI Previsioni', 'Simulatore ricavi', 'Revenue Simulator'] },
       { id: 'smartnotif', label: 'Notifiche intelligenti', aka: ['Notifiche Smart'], icon: 'bell', feature: 'ai' },
       { id: 'replyai', label: 'Reply AI', aka: ['Reply Assistant'], icon: 'message-square', feature: 'ai' },
     ],
@@ -183,7 +188,6 @@ export const NAV_GROUPS = [
       { id: 'taxcalendar', label: 'Scadenzario fiscale', aka: ['Calendario Fiscale'], icon: 'calendar-days', feature: 'core' },
       { id: 'xmlsdi', label: 'Fatturazione elettronica', aka: ['Fattura XML SDI'], icon: 'send', feature: 'core' },
       { id: 'profitscope', label: 'Profit Scope', aka: ['ProfitScope'], icon: 'pie-chart', feature: 'analytics' },
-      { id: 'revsim', label: 'Simulatore ricavi', aka: ['Revenue Simulator'], icon: 'sliders', feature: 'analytics' },
       { id: 'reports', label: 'Report', aka: ['Report PDF'], icon: 'file-bar-chart', primary: true, feature: 'core' },
       { id: 'weeklyreport', label: 'Report settimanale', icon: 'calendar-range', feature: 'core' },
       { id: 'pdfmonth', label: 'Report PDF mensile', icon: 'file-down', feature: 'core' },
@@ -208,6 +212,13 @@ export const NAV_GROUPS = [
    destinazione (i link esistenti continuano a funzionare) ma non compaiono due
    volte nel menu. Verificato a runtime in tests/qa/navigation.mjs. */
 export const NAV_ALIASES = {
+  /* Due sezioni che promettevano quello che fa `forecaster` e non lo
+     facevano: `forecasting` con 54 righe sotto un'intestazione che
+     annunciava «Scenario planning · Break-even · Cash runway», e `revsim`
+     con un modulo — `RevSim` — mai definito in nessun file. I nomi restano
+     cercabili e aprono la sezione vera. */
+  forecasting: 'forecaster',
+  revsim: 'forecaster',
   clients: 'clienti',
   crm: 'clienti',
   /* Lo store pipeline era un mirror di orders: la destinazione è Gestione

@@ -1,15 +1,12 @@
 
 // === /src/core/app.js ===
 
-/* Tre voci del menu — Revenue Simulator, Business Unit, Team — annunciano un
-   modulo che non e' mai stato scritto. Fino a ieri la rotta faceva
-   `if(typeof RevSim!=='undefined')`, non trovava niente e non faceva niente,
-   in silenzio: la sezione restava bianca e il pulsante dentro si premeva
-   senza effetto.
-
-   `_sezione` prova prima il modulo vero — se un giorno verra' scritto, vince
-   lui — e solo se non c'e' lascia parlare `InglySezioneIncompleta`, che dice
-   cosa manca e dove andare adesso. */
+/* «Revenue Simulator» era l'unica voce rimasta ad annunciare un modulo mai
+   scritto, e per lei esisteva un pannello che spiegava l'assenza. Non serve
+   piu' un pannello: la sezione e' stata ritirata e il suo nome e' un alias
+   verso `forecaster`, che la previsione la fa davvero. Un nome che porta a
+   qualcosa di funzionante e' meglio di una spiegazione ben scritta del vuoto.
+   `_sezione` e `InglySezioneIncompleta` se ne vanno con lei. */
 /* `requestIdleCallback(fn)` senza scadenza vuol dire «quando capita», e in una
    pagina che carica centoquarantotto script puo' voler dire mai: sei sezioni
    restavano bianche perche' il loro disegno aspettava un momento di quiete che
@@ -31,16 +28,6 @@ function _appenaPossibile(fn, scadenzaMs){
   } else {
     setTimeout(una, 100);
   }
-}
-
-function _sezione(nome, disegna){
-  try { disegna(); } catch(e){
-    if(window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('App.sezione', e, {sezione:nome});
-  }
-  try {
-    var S = window.InglySezioneIncompleta;
-    if (S && S.mostra) S.mostra(nome);
-  } catch(e){}
 }
 
 const App={
@@ -343,7 +330,11 @@ const App={
       booking:()=>{ if(typeof Booking!=='undefined') Booking.render(); },
       scanner:()=>{ if(typeof BarcodeScanner!=='undefined') (typeof BarcodeScanner!=='undefined'&&BarcodeScanner.render()); else { const el=document.getElementById('view-scanner'); if(el&&!el.querySelector('.page-title')) App._renderScannerPlaceholder(); } },
       reports:()=>{ setTimeout(async()=>{ try{ const el=document.getElementById('reports-kpis'); if(!el||el.innerHTML.trim()) return; await BDW.init(); const m=BDW.metrics; el.innerHTML=[{l:'Revenue MTD',v:fmtCur(m.revenue.mtd),i:'fa-euro-sign',c:'#22c55e'},{l:'Ordini Attivi',v:m.ops.ordersActive,i:'fa-box-open',c:'#3b82f6'},{l:'Clienti',v:m.clients.total,i:'fa-users',c:'#a855f7'},{l:'Margine',v:m.finance.netMarginPct.toFixed(1)+'%',i:'fa-chart-pie',c:'#f59e0b'}].map(k=>`<div class="kpi-card"><i class="fas ${k.i} kpi-icon" style="color:${k.c}"></i><div class="kpi-value">${k.v}</div><div class="kpi-label">${k.l}</div></div>`).join(''); }catch(e){} },150); },
-      forecasting:()=>{ if(typeof Forecasting!=='undefined') _appenaPossibile(function(){Forecasting.render();}); },
+      /* `forecasting` e `revsim` erano due sezioni che promettevano quello
+         che fa `forecaster`: la prima con 54 righe, la seconda con un
+         modulo — `RevSim` — che non e definito in nessun file. Ora i due
+         nomi portano alla sezione vera invece che a un guscio. */
+      forecasting:()=>this.navigate('forecaster'),
       contentcalendar:()=>{ if(typeof ContentCalendar!=='undefined') _appenaPossibile(function(){ContentCalendar.render();}); },
       trendscanner:()=>{if(typeof TrendHunterPro!=='undefined')TrendHunterPro.render();else if(typeof TrendScanner!=='undefined')TrendScanner.render();},
       laserresources:()=>{if(typeof LaserResources!=='undefined')(typeof LaserResources!=='undefined'&&LaserResources.render());},
@@ -364,7 +355,7 @@ const App={
       etsy_analytics:()=>{ if(typeof EtsyAnalytics!=='undefined') EtsyAnalytics.render(); },
       bizai:()=>{if(typeof BizAI!=='undefined')(typeof BizAI!=='undefined'&&BizAI.render());},
       photostudio:()=>{if(typeof PhotoStudio!=='undefined')(typeof PhotoStudio!=='undefined'&&PhotoStudio.render());},
-      revsim:()=>_sezione('revsim',()=>{if(typeof RevSim!=='undefined')RevSim.render();}),
+      revsim:()=>this.navigate('forecaster'),
       replyai:()=>{if(typeof ReplyAI!==typeof undefined)(typeof ReplyAI!=='undefined'&&ReplyAI.render());},
       comptrack:()=>{if(typeof CompetitorPrices!=='undefined')(typeof CompetitorPrices!=='undefined'&&CompetitorPrices.render());},
       fiera:()=>{if(typeof FieraAI!=='undefined')(typeof FieraAI!=='undefined'&&FieraAI.render());},

@@ -94,7 +94,6 @@ export const PRODUCT_FILES = [
   /* Le tre sezioni annunciate nel menu e mai costruite. Sta qui, e non fra i
      preventivatori, perche' non calcola niente: dice la verita' al posto di
      una pagina bianca. */
-  'sezione-incompleta.js',
   /* La provenienza dei numeri, tradotta in un posto solo. Dopo il motore,
      perche' ne legge l'uscita, e prima delle viste che la mostrano. */
   'cost-audit.js',
@@ -104,6 +103,7 @@ export const PRODUCT_FILES = [
   /* Quale lavoro rende davvero: legge tecnologia e macchina da order-fields e
      ricavo e costo da order-economics, quindi sta dopo entrambi. */
   'redditivita.js',
+  'previsioni.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i
