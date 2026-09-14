@@ -1173,7 +1173,16 @@
     var avvisi = [];
 
     if (!PROFILI[tec]) {
-      return { ok: false, problemi: ['tecnologia sconosciuta: «' + (tec || '(nessuna)') + '»'], avvisi: [], mancanti: [] };
+      /* Questa uscita anticipata restituiva solo i nomi storici, mentre
+         l'uscita normale ne restituisce due serie. `avvisi()` legge
+         `val.errors`, quindi si rompeva con un TypeError ogni volta che la
+         tecnologia non era ancora stata scelta — cioè mentre qualcuno sta
+         compilando il modulo. Una funzione, un contratto solo. */
+      var fuori = ['tecnologia sconosciuta: «' + (tec || '(nessuna)') + '»'];
+      return {
+        valid: false, errors: fuori, warnings: [], fields: {},
+        ok: false, problemi: fuori, avvisi: [], mancanti: [],
+      };
     }
 
     var noti = CAMPI.comuni.concat(CAMPI[tec] || []);
