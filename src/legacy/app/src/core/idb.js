@@ -279,8 +279,24 @@ const IDB = (function(){
       attempt(2);
     });
   }
+  /* Gli archivi in cui perdere un record costa qualcosa. Le cache, i log e le
+     code di notifica non ci sono: conservarne le versioni farebbe solo
+     crescere il database senza rendere recuperabile niente che manchi. */
+  const RECUPERABILI=['clients','sales','quotes','orders','catalog','items',
+    'materials','inventory','components','gadgets','paints','suppliers',
+    'supplier_orders','client_pricelists','cost_entries','projects','equipment',
+    'quote_templates','team','fixed_costs'];
+
   async function del(store,key){
     if(!db) await open();
+    /* Cancellare era l'unica operazione senza rete di sicurezza: 56 punti nel
+       codice chiamano `del`, e nessuno faceva prima uno snapshot. Farlo qui li
+       copre tutti, e non cambia niente per chi chiama. Il sistema di
+       versionamento e' quello che esiste gia' — non se ne apre un secondo. */
+    if(RECUPERABILI.indexOf(store)>=0 && typeof snapshotRecord==='function'){
+      try{ await snapshotRecord(store,key); }
+      catch(e){ console.warn('[IDB.del] snapshot non riuscito, cancello comunque',e); }
+    }
     return new Promise((res,rej)=>{
       try{
         const r=db.transaction(store,'readwrite').objectStore(store).delete(key);
