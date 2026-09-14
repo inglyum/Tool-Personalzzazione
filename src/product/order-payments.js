@@ -44,6 +44,45 @@
     return isFinite(n) ? n : null;
   }
 
+  /* ── Gli stati ────────────────────────────────────────────────────────
+
+     Prima ce n'erano due: pagato e non pagato. Ma una vendita con un acconto
+     incassato non è nessuno dei due, e una fattura scaduta da tre mesi non è
+     uguale a una emessa ieri — sono la stessa riga in archivio e due problemi
+     diversi per chi deve incassare.
+
+     `scaduto` non è un campo che qualcuno scrive: è `non_pagato` più il
+     calendario. Calcolarlo invece di memorizzarlo evita uno stato che diventa
+     falso da solo col passare dei giorni. */
+
+  var STATI = [
+    { id: 'non_pagato', label: 'Da incassare', emoji: '\u23f3', colore: '#f97316' },
+    { id: 'parziale', label: 'Acconto incassato', emoji: '\u25d1', colore: '#eab308' },
+    { id: 'pagato', label: 'Incassato', emoji: '\u2705', colore: '#22c55e' },
+    { id: 'scaduto', label: 'Scaduto', emoji: '\u26a0\ufe0f', colore: '#ef4444' },
+    { id: 'rimborsato', label: 'Rimborsato', emoji: '\u21a9\ufe0f', colore: '#a78bfa' },
+    { id: 'annullato', label: 'Annullato', emoji: '\u2716\ufe0f', colore: '#6b7280' },
+  ];
+  var ALIAS_STATO = {
+    unpaid: 'non_pagato', dapagare: 'non_pagato', da_pagare: 'non_pagato', aperto: 'non_pagato',
+    partial: 'parziale', acconto: 'parziale', deposit: 'parziale',
+    paid: 'pagato', incassato: 'pagato', saldato: 'pagato',
+    overdue: 'scaduto', insoluto: 'scaduto',
+    refunded: 'rimborsato', reso: 'rimborsato',
+    cancelled: 'annullato', canceled: 'annullato', storno: 'annullato', stornato: 'annullato',
+  };
+
+  function infoStato(id) {
+    for (var i = 0; i < STATI.length; i++) if (STATI[i].id === id) return STATI[i];
+    return STATI[0];
+  }
+
+  function _statoDichiarato(v) {
+    var k = String(v == null ? '' : v).toLowerCase().replace(/[^a-z_]/g, '');
+    for (var i = 0; i < STATI.length; i++) if (STATI[i].id === k) return k;
+    return ALIAS_STATO[k] || ALIAS_STATO[k.replace(/_/g, '')] || null;
+  }
+
   /* ── Lo stato di incasso, letto dai campi che esistono già ────────────── */
 
   /**
@@ -59,25 +98,64 @@
     if (totale == null) { totale = num(v.total); fonteTot = 'total'; }
 
     var acconto = num(v.deposit);
-    var pagato = String(v.status || '').toLowerCase() === 'pagato';
+    var dichiarato = _statoDichiarato(v.paymentStatus || v.status);
+    var pagato = dichiarato === 'pagato';
+    var chiuso = dichiarato === 'rimborsato' || dichiarato === 'annullato';
 
     if (totale == null) {
       return {
         noto: false, motivo: 'importo della vendita non leggibile',
         totale: null, incassato: null, residuo: null,
+        amountDue: null, amountPaid: null, amountRemaining: null,
+        stato: dichiarato || 'non_pagato', info: infoStato(dichiarato || 'non_pagato'),
         pagato: pagato, acconto: acconto, fonte: null,
+        paymentMethod: v.paymentMethod || v.metodo || null,
+        history: Array.isArray(v.paymentHistory) ? v.paymentHistory : [],
       };
     }
+
     var incassato = pagato ? totale : (acconto != null ? acconto : 0);
+    var residuo = Math.max(0, totale - incassato);
+
+    /* Lo stato: prima quello che la vendita dichiara, poi quello che i numeri
+       dicono, poi il calendario. Un acconto incassato su una vendita marcata
+       «da pagare» è uno stato parziale, non un non pagato — e chi telefona al
+       cliente deve saperlo prima di chiamare. */
+    var stato = chiuso ? dichiarato
+      : pagato ? 'pagato'
+        : (incassato > 0 ? 'parziale' : 'non_pagato');
+
+    var scadenza = v.dueDate || v.scadenza || null;
+    var giorniRitardo = null;
+    if (!chiuso && stato !== 'pagato' && scadenza) {
+      var t = Date.parse(scadenza);
+      if (isFinite(t)) {
+        var g = Math.floor((Date.now() - t) / 86400000);
+        if (g > 0) { stato = 'scaduto'; giorniRitardo = g; }
+      }
+    }
+
     return {
       noto: true, motivo: null,
       totale: totale,
       incassato: incassato,
-      residuo: Math.max(0, totale - incassato),
+      residuo: residuo,
+      /* Gli stessi tre numeri con i nomi del mandato: una vendita, un
+         vocabolario, due lingue — non due calcoli. */
+      amountDue: totale,
+      amountPaid: incassato,
+      amountRemaining: residuo,
+      stato: stato,
+      info: infoStato(stato),
+      chiuso: chiuso,
+      scadenza: scadenza,
+      giorniRitardo: giorniRitardo,
       pagato: pagato,
       acconto: acconto,
       accontoPagatoIl: v.depositPaidAt || null,
       saldoPagatoIl: v.paidAt || null,
+      paymentMethod: v.paymentMethod || v.metodo || null,
+      history: Array.isArray(v.paymentHistory) ? v.paymentHistory : [],
       fonte: fonteTot,
     };
   }
@@ -145,6 +223,12 @@
 
     var s = stato(v);
     if (s.pagato) return { ok: true, vendita: v, giaPagata: true, effetti: effetti };
+    /* Una vendita rimborsata o annullata non si «incassa»: sarebbe un numero
+       che rientra in cassa senza che sia rientrato niente. */
+    if (s.chiuso) {
+      return { ok: false, vendita: v, motivo: 'vendita ' + s.info.label.toLowerCase(),
+        effetti: effetti };
+    }
 
     /* Prima di toccare: la copia di sicurezza. Era il passo che due percorsi
        su tre saltavano. */
@@ -155,8 +239,19 @@
 
     var quando = C.adesso();
     v.status = 'pagato';
+    v.paymentStatus = 'pagato';
     v.paidAt = quando;
     if (s.noto) v.incassato = s.totale;
+    if (opzioni && opzioni.paymentMethod) v.paymentMethod = opzioni.paymentMethod;
+    /* Lo storico: chi, quanto, quando. Non un secondo archivio — una riga
+       sulla vendita, che segue la vendita ovunque vada. */
+    if (!Array.isArray(v.paymentHistory)) v.paymentHistory = [];
+    v.paymentHistory.push({
+      at: quando,
+      amount: s.noto ? s.residuo : null,
+      method: v.paymentMethod || null,
+      by: (opzioni && opzioni.by) || 'InglyPagamenti',
+    });
 
     if (!C.idb || typeof C.idb.put !== 'function') {
       return { ok: false, motivo: 'archivio non disponibile', vendita: v, effetti: effetti };
@@ -215,6 +310,8 @@
 
   global.InglyPagamenti = {
     VERSIONE: VERSIONE,
+    STATI: STATI,
+    infoStato: infoStato,
     stato: stato,
     piano: piano,
     registra: registra,

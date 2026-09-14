@@ -94,6 +94,7 @@ const Sales={
         <td style="padding:10px 14px;max-width:220px;font-size:12px;color:var(--text)">
           <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_s(s.desc)}">${_s(s.desc)||'—'}</div>
           ${(()=>{ const b=this._badgeTec(s); return b?`<div style="font-size:9px;font-weight:700;margin-top:2px;white-space:nowrap">${b}</div>`:''; })()}
+          ${(()=>{ const p=this._badgePagamento(s); return p?`<div style="margin-top:3px">${p}</div>`:''; })()}
           ${s.invoiceNum?`<div style="font-size:9px;color:var(--text-dim);margin-top:1px">#${_s(s.invoiceNum)}</div>`:''}
           ${s.fromOrderId?`<div style="font-size:9px;color:var(--primary);margin-top:1px;cursor:pointer" onclick="App.navigate('orders')" title="Da ordine #${+s.fromOrderId}">↩ Ord. #${+s.fromOrderId}</div>`:''}
         </td>
@@ -171,6 +172,20 @@ const Sales={
     }).join('');
   },
 
+  /** Lo stato di incasso di una riga, con il suo colore. */
+  _badgePagamento(vendita){
+    const PG = typeof window!=='undefined' && window.InglyPagamenti;
+    if(!PG) return '';
+    const s = PG.stato(vendita);
+    if(!s.noto) return '';
+    const i = s.info;
+    const ritardo = s.giorniRitardo ? ' <span style="opacity:.75">'+s.giorniRitardo+'gg</span>' : '';
+    const quanto = (s.stato==='parziale')
+      ? ' <span style="opacity:.75">'+(Math.round(s.amountPaid))+'/'+(Math.round(s.amountDue))+'</span>' : '';
+    return '<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:99px;white-space:nowrap;'
+      + 'background:'+i.colore+'1f;color:'+i.colore+'">'+i.emoji+' '+i.label+quanto+ritardo+'</span>';
+  },
+
   /** Il badge di tecnologia di una riga. */
   _badgeTec(vendita){
     const PM = typeof window!=='undefined' && window.InglyProduction;
@@ -196,7 +211,17 @@ const Sales={
     const maxAmt  = parseFloat(eid('sales-max-amount')?.value||0) || 0;
 
     let filtered = (this._all||[]).filter(s=>{
-      if(st && s.status !== st)                                         return false;
+      /* Lo stato di incasso: «scaduto» e «parziale» non sono campi scritti in
+         archivio, sono conti — un acconto incassato, una scadenza passata. Il
+         confronto secco su `s.status` non li avrebbe mai trovati. Se il valore
+         chiesto e' uno stato di pagamento si passa dal modulo che lo calcola;
+         se no resta il confronto di prima, per non rompere i filtri storici. */
+      if(st){
+        const PG = typeof window!=='undefined' && window.InglyPagamenti;
+        const noto = PG && PG.STATI.some(x=>x.id===st);
+        if(noto){ if(PG.stato(s).stato !== st)                           return false; }
+        else if(s.status !== st)                                         return false;
+      }
       if(ch && s.channel !== ch)                                        return false;
       if(dateFrom && (s.date||'') < dateFrom)                          return false;
       if(dateTo   && (s.date||'') > dateTo)                            return false;

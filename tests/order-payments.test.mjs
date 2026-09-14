@@ -185,3 +185,81 @@ test('registra · un importo illeggibile non genera un cashflow da zero euro', a
   assert.equal(e.ok, true);
   assert.equal(t.archivio.cashflow.size, 0);
 });
+
+/* ── Gli stati (Fase 18) ────────────────────────────────────────────────── */
+
+test('stato · i sei stati esistono e hanno etichetta', () => {
+  const { P } = nuovo();
+  assert.equal(P.STATI.length, 6);
+  assert.equal(P.STATI.map((s) => s.id).join('|'),
+    'non_pagato|parziale|pagato|scaduto|rimborsato|annullato');
+  assert.ok(P.STATI.every((s) => s.label && s.colore));
+});
+
+test('stato · un acconto incassato non è «non pagato»', () => {
+  const { P } = nuovo();
+  const s = P.stato({ amount: 200, deposit: 50 });
+  assert.equal(s.stato, 'parziale');
+  assert.equal(s.amountPaid, 50);
+  assert.equal(s.amountRemaining, 150);
+});
+
+test('stato · scaduto si calcola dal calendario, non si memorizza', () => {
+  const { P } = nuovo();
+  const s = P.stato({ amount: 150, dueDate: '2020-01-01' });
+  assert.equal(s.stato, 'scaduto');
+  assert.ok(s.giorniRitardo > 1000);
+});
+
+test('stato · una vendita pagata non diventa scaduta', () => {
+  const { P } = nuovo();
+  assert.equal(P.stato({ amount: 150, status: 'pagato', dueDate: '2020-01-01' }).stato, 'pagato');
+});
+
+test('stato · una scadenza futura non scade', () => {
+  const { P } = nuovo();
+  assert.equal(P.stato({ amount: 150, dueDate: '2099-01-01' }).stato, 'non_pagato');
+});
+
+test('stato · rimborsata e annullata si riconoscono anche in inglese', () => {
+  const { P } = nuovo();
+  assert.equal(P.stato({ amount: 150, paymentStatus: 'refunded' }).stato, 'rimborsato');
+  assert.equal(P.stato({ amount: 150, paymentStatus: 'cancelled' }).stato, 'annullato');
+  assert.equal(P.stato({ amount: 150, paymentStatus: 'refunded' }).chiuso, true);
+});
+
+test('stato · i nomi del mandato e quelli italiani sono lo stesso numero', () => {
+  const { P } = nuovo();
+  const s = P.stato({ amount: 200, deposit: 50 });
+  assert.equal(s.amountDue, s.totale);
+  assert.equal(s.amountPaid, s.incassato);
+  assert.equal(s.amountRemaining, s.residuo);
+});
+
+test('registra · una vendita rimborsata non si incassa', async () => {
+  const t = nuovo();
+  t.archivio.sales.set(20, { id: 20, amount: 150, paymentStatus: 'refunded' });
+  const e = await t.P.registra(20);
+  assert.equal(e.ok, false);
+  assert.match(e.motivo, /rimborsat/);
+  assert.equal(t.archivio.sales.get(20).status, undefined, 'e non viene toccata');
+});
+
+test('registra · lascia una riga di storico con importo, metodo e autore', async () => {
+  const t = nuovo();
+  t.archivio.sales.set(21, { id: 21, amount: 150 });
+  await t.P.registra(21, { paymentMethod: 'bonifico', by: 'Giuseppe' });
+  const v = t.archivio.sales.get(21);
+  assert.equal(v.paymentHistory.length, 1);
+  assert.equal(v.paymentHistory[0].amount, 150);
+  assert.equal(v.paymentHistory[0].method, 'bonifico');
+  assert.equal(v.paymentHistory[0].by, 'Giuseppe');
+  assert.ok(v.paymentHistory[0].at);
+});
+
+test('registra · lo storico di un acconto già incassato registra solo il residuo', async () => {
+  const t = nuovo();
+  t.archivio.sales.set(22, { id: 22, amount: 200, deposit: 50 });
+  await t.P.registra(22);
+  assert.equal(t.archivio.sales.get(22).paymentHistory[0].amount, 150, 'il saldo, non il totale');
+});
