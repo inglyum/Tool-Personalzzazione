@@ -1240,6 +1240,13 @@ const Quoter={
       catTotals[cat]=(catTotals[cat]||0)+l.subtotal;
     });
 
+    /* Il listino prima dello sconto. Il motore restituisce il netto già
+       scontato e la percentuale che ha davvero applicato: ricostruirlo di qui
+       evita di far nascere una seconda matematica del prezzo. Senza questa
+       riga `grossRevenue` non esisteva e il PDF interno non si apriva. */
+    const _scontoApplicato=(+_an.discountAppliedPct||0)/100;
+    const grossRevenue=_scontoApplicato<1?netAfterDiscount/(1-_scontoApplicato):netAfterDiscount;
+
     const marginColor=marginPct>=40?'#22c55e':marginPct>=20?'#f59e0b':'#ef4444';
     const marginIcon=marginPct>=40?'✅':marginPct>=20?'⚠️':'🔴';
 
@@ -1525,6 +1532,10 @@ const Quoter={
     const quoteNum='PRV-'+Date.now().toString().slice(-6);
     const dateStr=new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
     const accentColor=cfg.accentColor||'#10b981';
+    /* Stessa ragione: il nome azienda veniva letto da una costante che vive
+       nell'altra funzione. */
+    const _cfgCompany=cfg.company||'LA TUA AZIENDA';
+    const _cfgTagline=cfg.tagline||'Laser · Incisione · Personalizzazione';
 
     // Build table rows HTML
     const rowsHTML=selectedLines.map((l,i)=>{
