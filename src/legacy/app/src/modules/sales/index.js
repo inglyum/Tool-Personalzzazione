@@ -93,6 +93,7 @@ const Sales={
         <!-- Descrizione -->
         <td style="padding:10px 14px;max-width:220px;font-size:12px;color:var(--text)">
           <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_s(s.desc)}">${_s(s.desc)||'—'}</div>
+          ${(()=>{ const b=this._badgeTec(s); return b?`<div style="font-size:9px;font-weight:700;margin-top:2px;white-space:nowrap">${b}</div>`:''; })()}
           ${s.invoiceNum?`<div style="font-size:9px;color:var(--text-dim);margin-top:1px">#${_s(s.invoiceNum)}</div>`:''}
           ${s.fromOrderId?`<div style="font-size:9px;color:var(--primary);margin-top:1px;cursor:pointer" onclick="App.navigate('orders')" title="Da ordine #${+s.fromOrderId}">↩ Ord. #${+s.fromOrderId}</div>`:''}
         </td>
@@ -143,8 +144,48 @@ const Sales={
       pgEl.innerHTML=h;
     }
   },
+  /* `''` vuol dire «tutte». */
+  _filtroTec: '',
+  filtraTecnologia(v){ this._filtroTec = v||''; this.applyFilter(); },
+
+  /** La barra dei filtri tecnologia, costruita dalle vendite che ci sono. */
+  _barraTecnologie(){
+    const host = eid('sales-tech-filter');
+    if(!host) return;
+    const PM = typeof window!=='undefined' && window.InglyProduction;
+    if(!PM){ host.innerHTML=''; return; }
+    const voci = PM.filtriDisponibili(this._all||[]);
+    /* Con una voce sola oltre a «tutte» il filtro non serve a niente e ruba
+       spazio: si mostra solo quando c'è davvero qualcosa da distinguere. */
+    if(voci.length <= 2){ host.innerHTML=''; return; }
+    const attivo = this._filtroTec || 'tutti';
+    host.innerHTML = voci.map(v=>{
+      const on = (v.id===attivo);
+      return '<button onclick="Sales.filtraTecnologia(\''+(v.id==='tutti'?'':v.id)+'\')" '
+        + 'style="padding:4px 10px;border-radius:99px;font-size:11px;cursor:pointer;'
+        + 'font-weight:'+(on?'700':'500')+';'
+        + 'border:1px solid '+(on?'var(--primary)':'var(--border)')+';'
+        + 'background:'+(on?'var(--primary-dim,rgba(99,102,241,.15))':'transparent')+';'
+        + 'color:'+(on?'var(--primary)':'var(--text-muted)')+'">'
+        + (v.emoji?v.emoji+' ':'')+v.label+'<span style="opacity:.6;margin-left:5px">'+v.n+'</span></button>';
+    }).join('');
+  },
+
+  /** Il badge di tecnologia di una riga. */
+  _badgeTec(vendita){
+    const PM = typeof window!=='undefined' && window.InglyProduction;
+    if(!PM) return '';
+    const letto = PM.leggi(vendita);
+    if(!letto.technologies.length) return '';
+    return letto.technologies.map(id=>{
+      const t = PM.info(id);
+      return t ? '<span style="color:'+t.colore+'">'+t.emoji+' '+t.label+'</span>' : id;
+    }).join('<span style="opacity:.45"> + </span>');
+  },
+
   applyFilter(keepPage=false){
     if(!keepPage) this._page=0;
+    this._barraTecnologie();
     const q       = (eid('sales-search')?.value||'').toLowerCase().trim();
     const st      = eid('sales-filter-status')?.value || this._activeStatus || '';
     const ch      = eid('sales-filter-channel')?.value || '';
@@ -163,6 +204,14 @@ const Sales={
       if(maxAmt > 0 && (+s.amount||0) > maxAmt)                        return false;
       if(q && ![(s.clientName||''),(s.desc||''),(s.channel||''),(s.amount||'').toString()]
                .join(' ').toLowerCase().includes(q))                    return false;
+      /* La tecnologia: una vendita nata da un ordine se la porta dietro. Un
+         lavoro laser+UV passa sia sotto «laser» sia sotto «UV», perché chi
+         cerca il laser vuole vedere anche quello in cui il laser c'è insieme
+         ad altro. */
+      if(this._filtroTec){
+        const PM = typeof window!=='undefined' && window.InglyProduction;
+        if(PM && !PM.passa(s, this._filtroTec))                         return false;
+      }
       return true;
     });
 

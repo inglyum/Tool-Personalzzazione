@@ -811,6 +811,10 @@
     </div>
   </div>
   <!-- KPI Strip -->
+  <!-- I filtri per tecnologia: compaiono solo quando c'è più di una
+       tecnologia fra le vendite, altrimenti rubano spazio senza distinguere
+       niente. Li riempie `Sales._barraTecnologie()`. -->
+  <div id="sales-tech-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
   <div class="grid-4 mb-16" id="sales-kpis" style="animation:none">
     <div class="kpi-card"><i class="fas fa-check-circle kpi-icon" style="color:var(--green)"></i><div class="kpi-value">--</div><div class="kpi-label">Totale Incassato</div></div>
     <div class="kpi-card"><i class="fas fa-clock kpi-icon" style="color:var(--orange)"></i><div class="kpi-value">--</div><div class="kpi-label">Da Incassare</div></div>

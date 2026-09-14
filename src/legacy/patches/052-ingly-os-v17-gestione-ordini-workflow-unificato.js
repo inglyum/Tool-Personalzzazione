@@ -618,7 +618,10 @@ const GestioneOrdini = {
               onclick="GestioneOrdini._openDetail(${o.id})">
               <td style="padding:6px 6px 6px 12px">${img}</td>
               <td style="padding:8px 12px;font-weight:700">${_s(o.clientName)||'—'}</td>
-              <td style="padding:8px 12px;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_s(o.name)||'—'}</td>
+              <td style="padding:8px 12px;color:var(--text-muted);max-width:200px">
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_s(o.name)||'—'}</div>
+                ${this._badgeTec(o)}
+              </td>
               <td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${st.color}18;color:${st.color};font-weight:700">${st.emoji} ${st.label}</span></td>
               <td style="padding:8px 12px;font-size:11px;color:${chi?'var(--text)':'var(--text-dim)'};white-space:nowrap">${chi?_s(chi):'—'}</td>
               <td style="padding:8px 12px;font-size:11px;color:${isOver?'#ef4444':'var(--text-muted)'};white-space:nowrap">${o.dueDate?new Date(o.dueDate).toLocaleDateString('it-IT'):'—'}</td>
@@ -1389,7 +1392,16 @@ const GestioneOrdini = {
       } else if(fltState!=='all' && o._state!==fltState) return false;
       if(fltPrio!=='all'&&(o.priority||'normal')!==fltPrio) return false;
       if(q&&![(o.clientName||''),(o.name||''),(o.notes||'')].join(' ').toLowerCase().includes(q)) return false;
-      if(OF && !OF.passa(o, criteri)) return false;
+      /* Macchina e operatore restano a `InglyOrderFields`. La tecnologia no:
+         da quando un ordine può averne più d'una, il filtro deve far passare
+         un laser+UV sia sotto «laser» sia sotto «UV» — chi cerca il laser
+         vuole vedere anche il lavoro in cui il laser c'è insieme ad altro. */
+      if(OF && !OF.passa(o, { macchina:criteri.macchina, operatore:criteri.operatore })) return false;
+      const PM = window.InglyProduction;
+      if(criteri.tecnologia && criteri.tecnologia !== 'all'){
+        if(PM){ if(!PM.passa(o, criteri.tecnologia)) return false; }
+        else if(OF && !OF.passa(o, { tecnologia: criteri.tecnologia })) return false;
+      }
       return true;
     });
   },
@@ -1398,7 +1410,34 @@ const GestioneOrdini = {
      filtro che offre una macchina che nessun ordine nomina è un vicolo cieco. */
   _opzioniFiltri(orders){
     const OF = window.InglyOrderFields;
-    return OF ? OF.opzioni(orders) : { macchine:[], operatori:[], tecnologie:[] };
+    const base = OF ? OF.opzioni(orders) : { macchine:[], operatori:[], tecnologie:[] };
+    /* Le tecnologie le costruisce il modello di produzione: sa contare i misti
+       e sa che un ordine può comparire sotto due voci. Le altre due restano
+       dove stavano. */
+    const PM = window.InglyProduction;
+    if(PM){
+      base.tecnologie = PM.filtriDisponibili(orders)
+        .filter(v=>v.id!=='tutti')
+        .map(v=>({ id:v.id, label:(v.emoji?v.emoji+' ':'')+v.label+' ('+v.n+')' }));
+    }
+    return base;
+  },
+
+  /** Il badge di tecnologia di una riga: «🟣 Laser» o «🟣 Laser + 🔵 Stampa UV». */
+  _badgeTec(ordine){
+    const PM = window.InglyProduction;
+    if(!PM) return '';
+    const letto = PM.leggi(ordine);
+    if(!letto.technologies.length) return '';
+    const pezzi = letto.technologies.map(id=>{
+      const t = PM.info(id);
+      return t ? '<span style="color:'+t.colore+'">'+t.emoji+' '+t.label+'</span>' : id;
+    }).join('<span style="opacity:.45"> + </span>');
+    /* Il puntino distingue «me l'ha detto l'ordine» da «l'ho dedotto dai campi
+       storici»: sono due gradi di certezza diversi, e chi decide deve saperlo. */
+    const dedotta = letto.dedotta
+      ? ' <span title="dedotta dai campi dell ordine, non dichiarata" style="opacity:.5">·</span>' : '';
+    return '<span style="font-size:9px;font-weight:700;white-space:nowrap">'+pezzi+dedotta+'</span>';
   },
 
   _setMachine(v){ this._filterMachine=v; this._listPage=0; this.render(); },

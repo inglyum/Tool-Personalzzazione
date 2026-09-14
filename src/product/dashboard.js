@@ -192,6 +192,64 @@
   }
 
   /* ── Redditività ────────────────────────────────────────────────────────  */
+  /* ── Performance per tecnologia ─────────────────────────────────────────
+     «Quanto rende il laser, quanto la stampa 3D» è la domanda per cui esiste
+     il modello di produzione, e questa è la sezione che la risponde.
+
+     L'aggregato lo fa `InglyRedditivitaTecnologia`, che è puro e testato: qui
+     si disegna soltanto. In particolare **non** si cicla sulle tecnologie di
+     un ordine — sarebbe il modo di far dire al grafico che un laser+UV da 150
+     ne vale 300. */
+  function renderTecnologie(t) {
+    if (!t || !t.righe.length) return '';
+    const eur = (v) => '€' + Math.round(v).toLocaleString('it-IT');
+    const riga = (r) => {
+      const margine = r.marginePct == null ? '—' : Math.round(r.marginePct) + '%';
+      const scost = r.scostamentoNoto
+        ? '<span style="color:' + (r.scostamento > 0 ? 'var(--red,#ef4444)' : 'var(--green,#22c55e)') + '">'
+          + (r.scostamento > 0 ? '+' : '') + eur(r.scostamento) + '</span>'
+        : '<span style="opacity:.45">—</span>';
+      const parziale = r.copertura.ordiniSenzaCosto
+        ? '<div style="font-size:10px;opacity:.6">costo noto su ' + r.copertura.ordiniConCosto + ' di ' + r.ordini + '</div>'
+        : '';
+      return '<tr>'
+        + '<td style="padding:8px 10px"><span style="color:' + r.colore + ';font-weight:700">'
+          + r.emoji + ' ' + UI.esc(r.label) + '</span>' + parziale + '</td>'
+        + '<td style="padding:8px 10px;text-align:center">' + r.ordini + '</td>'
+        + '<td style="padding:8px 10px;text-align:right">' + eur(r.ricavo) + '</td>'
+        + '<td style="padding:8px 10px;text-align:right;opacity:.75">' + (r.ordiniConCosto ? eur(r.costo) : '—') + '</td>'
+        + '<td style="padding:8px 10px;text-align:right;font-weight:700">' + (r.ordiniConCosto ? eur(r.profitto) : '—') + '</td>'
+        + '<td style="padding:8px 10px;text-align:right;font-weight:700">' + margine + '</td>'
+        + '<td style="padding:8px 10px;text-align:right">' + scost + '</td>'
+        + '</tr>';
+    };
+    /* La nota sui misti non è un dettaglio: senza, un lettore che vede «Misto»
+       in classifica non sa perché quel lavoro non è sotto «Laser». */
+    const uno = t.misti === 1;
+    const notaMisti = t.misti
+      ? '<div style="font-size:11px;opacity:.7;padding:8px 10px;line-height:1.6">'
+        + t.misti + (uno ? ' ordine usa' : ' ordini usano') + ' più di una tecnologia e '
+        + (uno ? 'sta sotto «Misto» con il suo importo intero' : 'stanno sotto «Misto» con il loro importo intero')
+        + ': attribuirlo a ciascuna tecnologia farebbe contare lo stesso fatturato due volte.</div>'
+      : '';
+    return '<section class="oc__section">'
+      + UI.sectionHeader('Performance per tecnologia')
+      + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="opacity:.6;font-size:10px;text-transform:uppercase">'
+      + '<th style="padding:6px 10px;text-align:left">Tecnologia</th>'
+      + '<th style="padding:6px 10px;text-align:center">Ordini</th>'
+      + '<th style="padding:6px 10px;text-align:right">Ricavo</th>'
+      + '<th style="padding:6px 10px;text-align:right">Costo</th>'
+      + '<th style="padding:6px 10px;text-align:right">Profitto</th>'
+      + '<th style="padding:6px 10px;text-align:right">Margine</th>'
+      + '<th style="padding:6px 10px;text-align:right">Scostamento</th>'
+      + '</tr></thead><tbody>'
+      + t.righe.map(riga).join('')
+      + '</tbody></table></div>'
+      + notaMisti
+      + '</section>';
+  }
+
   function renderProfitability(p) {
     if (p.empty) {
       return '<section class="oc__section">' + UI.sectionHeader('Redditività') +
@@ -329,6 +387,17 @@
         Data.inventory(), Data.machines(), Data.profitability(), Data.insights(),
       ]);
 
+      /* Gli ordini per l'aggregato di tecnologia: una lettura sola, e se
+         qualcosa non va la sezione non c'è invece di far cadere la schermata. */
+      let tec = null;
+      try {
+        const RT = global.InglyRedditivitaTecnologia;
+        if (RT && global.IDB && typeof global.IDB.getAll === 'function') {
+          const ordini = await global.IDB.getAll('orders').catch(() => []);
+          tec = RT.per(ordini);
+        }
+      } catch (e) { tec = null; }
+
       el.innerHTML =
         renderHeader(ws) +
         renderKpis(k) +
@@ -336,6 +405,7 @@
         renderAttention(att) +
         '<section class="oc__section oc__two">' + renderInventory(inv) + renderMachines(mac) + '</section>' +
         renderProfitability(prof) +
+        renderTecnologie(tec) +
         renderInsights(ins);
 
       el.dataset.rendered = '1';
