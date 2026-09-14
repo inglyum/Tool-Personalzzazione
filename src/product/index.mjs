@@ -101,6 +101,9 @@ export const PRODUCT_FILES = [
   /* Quanto vale un cliente, in margine. Dopo order-economics, di cui usa le
      letture canoniche di ricavo e costo. */
   'clv.js',
+  /* Quale lavoro rende davvero: legge tecnologia e macchina da order-fields e
+     ricavo e costo da order-economics, quindi sta dopo entrambi. */
+  'redditivita.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i

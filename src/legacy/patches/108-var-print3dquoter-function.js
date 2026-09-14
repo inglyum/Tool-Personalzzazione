@@ -235,7 +235,33 @@ function salvaConsuntivo(id,dati){
   try{ localStorage.setItem(CONSUNTIVO_K, JSON.stringify(tutti)); }catch(e){}
 }
 
-function persist(){try{localStorage.setItem(SK,JSON.stringify({mats:MATS,saved:SAVED}));}catch(e){}}
+/* ── Salvare non deve poter cancellare ───────────────────────────────────
+   `persist()` scriveva lo stato in memoria per intero: `{mats:MATS, saved:SAVED}`.
+   Vuol dire che qualunque percorso lo chiamasse con `SAVED` non ancora
+   idratato — il modulo nasce con `SAVED=[]` e si riempie solo dentro
+   `render()` — riscriveva l'archivio dei preventivi vuoto. In silenzio: il
+   `catch` è vuoto e nessuno se ne accorgeva fino al ricaricamento dopo.
+
+   Ora l'archivio si unisce a quello su disco invece di sostituirlo. Chi
+   cancella davvero lo dichiara (`{cancella:true}`), ed è l'unico caso in cui
+   l'elenco può accorciarsi. Non toglie un difetto osservato: toglie la
+   possibilità di quel difetto, che è meglio, perché il costo di sbagliarlo è
+   perdere il lavoro di qualcuno. */
+function persist(opzioni){
+  try{
+    var suDisco={};
+    try{ suDisco=JSON.parse(localStorage.getItem(SK)||'{}')||{}; }catch(e){}
+    var salvati=SAVED||[];
+    if(!(opzioni&&opzioni.cancella)){
+      var visti={};
+      salvati.forEach(function(x){ visti[String(x&&x.id)]=true; });
+      var superstiti=(suDisco.saved||[]).filter(function(x){ return !visti[String(x&&x.id)]; });
+      if(superstiti.length) salvati=salvati.concat(superstiti);
+    }
+    SAVED=salvati;
+    localStorage.setItem(SK,JSON.stringify({mats:MATS,saved:salvati}));
+  }catch(e){}
+}
 function hydrate(){
   try{
     var d=JSON.parse(localStorage.getItem(SK)||'{}');
@@ -2509,8 +2535,8 @@ function loadSaved(id){
   });
   showToastP('📋 Caricato: '+q.n,'info');
 }
-function delSaved(id){SAVED=SAVED.filter(function(x){return x.id!=id;});persist();render();}
-function clearSaved(){if(confirm('Eliminare tutti i preventivi salvati?')){SAVED=[];persist();render();}}
+function delSaved(id){SAVED=SAVED.filter(function(x){return x.id!=id;});persist({cancella:true});render();}
+function clearSaved(){if(confirm('Eliminare tutti i preventivi salvati?')){SAVED=[];persist({cancella:true});render();}}
 
 function doPdf(){
   if(!LINES.length){showToastP('⚠️ Nessuna voce','warning');return;}

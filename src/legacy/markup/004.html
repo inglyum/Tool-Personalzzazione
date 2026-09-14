@@ -2944,23 +2944,10 @@
   <div id="competitor-mon-body" style="min-height:200px"></div>
 </div>
 
-<div class="section-view" id="view-profitscope">
-  <div style="padding:20px;max-width:1100px">
-    <div class="module-header">
-      <div><div class="module-title"><i class="fas fa-microscope" style="color:#f59e0b"></i> Profit Scope</div>
-      <div class="module-subtitle">Analisi profittabilità per prodotto · Margini · Profit leak detector</div></div>
-      <button onclick="if(typeof ProfitLeakDetector!=='undefined'){App.navigate('finance');setTimeout(()=>ProfitLeakDetector.render?.(),300);}" class="btn btn-primary"><i class="fas fa-search-dollar"></i> Analizza Profitti</button>
-    </div>
-    <div id="profitscope-content">
-      <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
-        <div style="font-size:48px;margin-bottom:12px">🔬</div>
-        <div style="font-weight:700;margin-bottom:8px">Profit Leak Detector</div>
-        <div style="font-size:13px;margin-bottom:16px">Identifica dove perdi margine e ottimizza i prezzi automaticamente</div>
-        <button onclick="App.navigate('finance')" class="btn btn-primary">💰 Analizza in Finance</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- ProfitScope: il contenuto lo disegna ProfitScope.render(). Qui c'era un
+     segnaposto con un pulsante che chiamava `ProfitLeakDetector`, un modulo che
+     non esiste: era tutto quello che la sezione ha mai mostrato. -->
+<div class="section-view" id="view-profitscope"></div>
 <div class="section-view" id="view-goals"></div>
 <div class="section-view" id="view-profitleak"></div>
 <div class="section-view" id="view-fiscal"></div>

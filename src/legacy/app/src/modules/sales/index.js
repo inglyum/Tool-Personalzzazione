@@ -2052,191 +2052,270 @@ const Solleciti = {
 // ══════════════════════════════════════════════════════════════════
 // AI GROQ SETUP GUIDE — wizard inline per configurare la key gratis
 // ══════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROFITSCOPE — quale lavoro rende davvero
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Questa sezione era rotta in due modi insieme, ed è il motivo per cui è
+   stata riscritta invece che ritoccata.
+
+   1. **Non veniva mai disegnata.** La rotta `profitscope` chiamava
+      `ProfitLeakDetector.renderPage?.()`, e `ProfitLeakDetector` non è
+      definito in nessun file del progetto: c'erano solo quattro riferimenti
+      protetti da `typeof`, che non trovano niente e non fanno niente. Chi
+      apriva la sezione vedeva il segnaposto scritto nel markup. `ProfitScope`
+      esisteva — duecento righe, esportato su `window` — e non lo chiamava
+      nessuno.
+
+   2. **Rispondeva con numeri inventati.** Diceva «€8/ora è sotto il minimo
+      vitale», «punta a €20+/ora, sei sopra la media per artigiani»: soglie
+      senza una fonte, presentate come fatti. Attribuiva le ore ai prodotti
+      cercando il nome del timer dentro il nome del prodotto, con dieci
+      caratteri di sottostringa. E chiamava «costo» il solo materiale, così il
+      margine usciva più alto del vero di tutta la manodopera.
+
+   Ora la sezione risponde alla domanda che prometteva — **mi conviene più il
+   laser o la stampa 3D?** — e la risponde con `InglyRedditivita`, che è puro
+   e testato a parte. Qui dentro non si calcola niente: si legge l'archivio,
+   si passa al modulo, si disegna.
+
+   ── Cosa si conta ────────────────────────────────────────────────────────
+
+   Gli ordini che sono arrivati in fondo: consegnati, venduti, fatturati. Un
+   ordine ancora in lavorazione ha un prezzo ma non ha una storia, e metterlo
+   nella classifica sposterebbe il margine di un gruppo a ogni cambio di
+   colonna nel kanban.
+
+   ── Cosa non si conta ────────────────────────────────────────────────────
+
+   Un ordine senza costo dichiarato non entra nel margine, e la riga dice
+   quanti ne ha esclusi. Le ore non si deducono mai dal prezzo. Un gruppo
+   coperto per meno di metà non entra in classifica: si mostra sotto, con il
+   motivo scritto.
+   ═══════════════════════════════════════════════════════════════════════════ */
 const ProfitScope = {
 
   _period: 'year',
+  _dimensione: 'tecnologia',
+  /* 'auto' = per ora quando le ore ci sono, per margine totale quando no. */
+  _ordine: 'auto',
+
+  /* Un ordine conta quando è arrivato in fondo. Gli stadi sono quelli delle
+     colonne del kanban ordini (`Orders._COLS`), non un elenco parallelo. */
+  _STADI_CHIUSI: ['delivered', 'sold', 'invoiced'],
 
   async render() {
     const el = eid('view-profitscope');
     if (!el) return;
     el.innerHTML = `<div style="padding:20px;max-width:1200px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
         <h2 style="color:#22c55e;margin:0;font-size:22px">💰 ProfitScope</h2>
-        <span style="font-size:11px;background:#22c55e15;color:#22c55e;padding:3px 10px;border-radius:99px;border:1px solid #22c55e30;font-weight:700">VERITÀ DEI NUMERI</span>
+        <span style="font-size:11px;background:#22c55e15;color:#22c55e;padding:3px 10px;border-radius:99px;border:1px solid #22c55e30;font-weight:700">MARGINE, NON FATTURATO</span>
       </div>
-      <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">Scopri esattamente quali prodotti guadagnano e quanto vale la tua ora di lavoro</p>
+      <p style="color:var(--text-muted);margin-bottom:20px;font-size:14px">Quale lavoro rende davvero: il margine per ordine e per ora di laboratorio, non il giro d'affari.</p>
       <div id="ps-content"><div style="text-align:center;padding:40px"><div style="width:40px;height:40px;border:3px solid var(--border);border-top-color:#22c55e;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px"></div><div style="color:var(--text-muted)">Calcolo in corso…</div></div></div>
     </div>`;
     await this._load();
   },
 
+  _esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+
+  _eur(v) {
+    const n = Number(v) || 0;
+    return `€${n.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  },
+
+  _inizioPeriodo() {
+    const now = new Date();
+    const p = this._period;
+    if (p === 'month') return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    if (p === 'quarter') return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).getTime();
+    if (p === 'year') return new Date(now.getFullYear(), 0, 1).getTime();
+    return 0;
+  },
+
+  /** La data a cui l'ordine si è chiuso. Se nessuna delle date di chiusura è
+      scritta si ripiega sulla data dell'ordine: è meno precisa, ma escludere
+      l'ordine lo farebbe sparire dal periodo invece di collocarlo male. */
+  _dataDi(o) {
+    const d = o.invoicedAt || o.soldAt || o.deliveredAt || o.completedAt || o.date || o.createdAt;
+    const t = d ? new Date(d).getTime() : NaN;
+    return isFinite(t) ? t : 0;
+  },
+
+  _chiuso(o) {
+    const stadio = String(o.stage || o.status || '').toLowerCase();
+    if (this._STADI_CHIUSI.indexOf(stadio) >= 0) return true;
+    /* Gli ordini nati prima delle colonne attuali non portano `stage`: si
+       riconoscono dalle date di chiusura, che venivano scritte comunque. */
+    return !!(o.invoicedAt || o.soldAt || o.deliveredAt || String(o.paymentStatus || '').toLowerCase() === 'paid');
+  },
+
   async _load() {
     const el = eid('ps-content');
     if (!el) return;
-    try {
-      const [sales, materials, fixedCosts, timers] = await Promise.all([
-        IDB.getAll('sales'),
-        IDB.getAll('materials').catch(() => []),
-        IDB.getAll('fixed_costs').catch(() => []),
-        IDB.getAll('timers').catch(() => [])
-      ]);
-
-      const now = new Date();
-      const periods = {
-        month: new Date(now.getFullYear(), now.getMonth(), 1),
-        quarter: new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1),
-        year: new Date(now.getFullYear(), 0, 1),
-        all: new Date(0)
-      };
-      const p = this._period;
-      const cutoff = periods[p].getTime();
-      const filtered = sales.filter(s => s.status === 'pagato' && new Date(s.date||0).getTime() >= cutoff);
-
-      // Total revenue & costs
-      const totalRev = filtered.reduce((a, s) => a + (+s.amount || 0), 0);
-      const totalCostMat = filtered.reduce((a, s) => a + (+s.materialCost || 0), 0);
-
-      // Monthly fixed costs
-      const monthlyFixed = fixedCosts.reduce((a, fc) => {
-        const v = +fc.amount || 0;
-        if (fc.frequency === 'monthly' || !fc.frequency) return a + v;
-        if (fc.frequency === 'yearly') return a + v/12;
-        if (fc.frequency === 'quarterly') return a + v/3;
-        return a + v;
-      }, 0);
-      const periodMonths = { month:1, quarter:3, year:12, all: Math.max(1, Math.ceil((Date.now()-cutoff)/(30*24*3600*1000))) };
-      const totalFixed = monthlyFixed * periodMonths[p];
-
-      const totalCost = totalCostMat + totalFixed;
-      const netProfit = totalRev - totalCost;
-      const marginPct = totalRev > 0 ? (netProfit/totalRev*100) : 0;
-
-      // Timer data → total hours worked
-      const totalMinutes = timers.filter(t => t.completed).reduce((a,t) => a + (+t.elapsed||0)/60, 0);
-      const eurPerHour = totalMinutes > 60 ? (netProfit / (totalMinutes/60)) : null;
-
-      // Product breakdown
-      const prodMap = {};
-      filtered.forEach(s => {
-        const k = (s.productName||s.description||'Prodotto generico').substring(0,40);
-        if (!prodMap[k]) prodMap[k] = { name:k, revenue:0, cost:0, qty:0, minutes:0 };
-        prodMap[k].revenue += (+s.amount||0);
-        prodMap[k].cost += (+s.materialCost||0);
-        prodMap[k].qty += (+s.quantity||1);
-      });
-      // Attach timer minutes per product
-      timers.filter(t=>t.completed).forEach(t => {
-        const k = Object.keys(prodMap).find(k => k.toLowerCase().includes((t.productName||'').toLowerCase().substring(0,10)));
-        if(k) prodMap[k].minutes += (+t.elapsed||0)/60;
-      });
-
-      const products = Object.values(prodMap).sort((a,b) => (b.revenue-b.cost)-(a.revenue-a.cost));
-
-      // --- RENDER ---
-      const pLabel = { month:'Questo Mese', quarter:'Questo Trimestre', year:"Quest'Anno", all:'Tutto' };
-      const fmt = v => `€${v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}`;
-      const fmtDec = v => `€${v.toFixed(2)}`;
-
-      const alertHtml = () => {
-        if (!eurPerHour) return '';
-        if (eurPerHour < 8) return `<div style="background:#ef444420;border:1.5px solid #ef4444;border-radius:10px;padding:14px 18px;display:flex;gap:12px;align-items:center;margin-bottom:16px"><span style="font-size:24px">🚨</span><div><div style="color:#ef4444;font-weight:700;font-size:14px">Stai guadagnando €${eurPerHour.toFixed(2)}/ora — sotto il minimo vitale</div><div style="color:#fca5a5;font-size:12px;margin-top:3px">Devi alzare i prezzi o ridurre il tempo di produzione. Usa Price Intelligence nel Business AI Hub.</div></div></div>`;
-        if (eurPerHour < 15) return `<div style="background:#f59e0b20;border:1.5px solid #f59e0b;border-radius:10px;padding:14px 18px;display:flex;gap:12px;align-items:center;margin-bottom:16px"><span style="font-size:24px">⚠️</span><div><div style="color:#f59e0b;font-weight:700;font-size:14px">€${eurPerHour.toFixed(2)}/ora — puoi fare meglio</div><div style="color:#fde68a;font-size:12px;margin-top:3px">Target consigliato: €20+/ora. Punta a ottimizzare i prodotti con margine più alto.</div></div></div>`;
-        return `<div style="background:#22c55e20;border:1.5px solid #22c55e;border-radius:10px;padding:14px 18px;display:flex;gap:12px;align-items:center;margin-bottom:16px"><span style="font-size:24px">✅</span><div><div style="color:#22c55e;font-weight:700;font-size:14px">€${eurPerHour.toFixed(2)}/ora — ottimo risultato!</div><div style="color:#86efac;font-size:12px;margin-top:3px">Sei sopra la media per artigiani. Continua a puntare sui prodotti ad alto margine.</div></div></div>`;
-      };
-
-      const kpiCard = (icon, label, value, sub, color) => `
-        <div style="background:var(--bg-card);border-radius:12px;padding:18px;border:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase">${icon} ${label}</div>
-          <div style="font-size:26px;font-weight:800;color:${color};margin-bottom:2px">${value}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${sub}</div>
-        </div>`;
-
-      const prodRow = (pr, rank) => {
-        const gross = pr.revenue - pr.cost;
-        const margin = pr.revenue > 0 ? (gross/pr.revenue*100) : 0;
-        const eph = pr.minutes > 30 ? (gross/(pr.minutes/60)) : null;
-        const barW = products[0].revenue > 0 ? Math.round(pr.revenue/products[0].revenue*100) : 0;
-        const rankColor = rank===0?'#f59e0b':rank===1?'#9ca3af':rank===2?'#92400e':'#6b7280';
-        const marginColor = margin>=50?'#22c55e':margin>=30?'#f59e0b':'#ef4444';
-        return `<tr>
-          <td style="padding:10px 12px;font-weight:700;color:${rankColor}">#${rank+1}</td>
-          <td style="padding:10px 12px">
-            <div style="font-weight:600;font-size:13px;color:var(--text)">${pr.name}</div>
-            <div style="height:4px;background:var(--border);border-radius:2px;margin-top:5px;width:100%;max-width:200px">
-              <div style="height:4px;background:#22c55e;border-radius:2px;width:${barW}%"></div>
-            </div>
-          </td>
-          <td style="padding:10px 12px;text-align:right;font-weight:600;color:#22c55e">${fmt(pr.revenue)}</td>
-          <td style="padding:10px 12px;text-align:right;color:var(--text-muted)">${fmt(pr.cost)}</td>
-          <td style="padding:10px 12px;text-align:right;font-weight:700;color:${marginColor}">${margin.toFixed(0)}%</td>
-          <td style="padding:10px 12px;text-align:center;color:var(--text)">${pr.qty}</td>
-          <td style="padding:10px 12px;text-align:right;font-weight:700;color:${eph?eph>=15?'#22c55e':eph>=8?'#f59e0b':'#ef4444':'var(--text-muted)'}">${eph?`€${eph.toFixed(0)}/h`:'—'}</td>
-        </tr>`;
-      };
-
-      el.innerHTML = `
-        <!-- PERIOD TABS -->
-        <div style="display:flex;gap:8px;margin-bottom:20px">
-          ${['month','quarter','year','all'].map(k=>`<button onclick="ProfitScope._period='${k}';ProfitScope._load()" style="padding:8px 16px;border-radius:8px;border:1.5px solid ${p===k?'#22c55e':'var(--border)'};background:${p===k?'#22c55e20':'transparent'};color:${p===k?'#22c55e':'var(--text-muted)'};cursor:pointer;font-size:13px;font-weight:${p===k?'700':'500'}">${pLabel[k]}</button>`).join('')}
-        </div>
-
-        ${alertHtml()}
-
-        <!-- KPI GRID -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px">
-          ${kpiCard('💵','Revenue',''+fmt(totalRev),'Vendite incassate','#22c55e')}
-          ${kpiCard('📦','Costo Materiali',''+fmt(totalCostMat),'Da tutte le vendite','#f97316')}
-          ${kpiCard('🏗','Costi Fissi',''+fmt(totalFixed),`${periodMonths[p]} mese/i × €${monthlyFixed.toFixed(0)}/m`,'#a855f7')}
-          ${kpiCard('🏆','Profitto Netto',''+fmt(netProfit),`Margine: ${marginPct.toFixed(0)}%`,netProfit>=0?'#22c55e':'#ef4444')}
-          ${eurPerHour ? kpiCard('⏱','€ per Ora','€'+eurPerHour.toFixed(2),'Basato su timer ordini',eurPerHour>=15?'#22c55e':eurPerHour>=8?'#f59e0b':'#ef4444') : ''}
-        </div>
-
-        ${products.length === 0 ? `<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--bg-card);border-radius:12px;border:1px solid var(--border)"><div style="font-size:40px;margin-bottom:12px">📊</div>Nessuna vendita registrata nel periodo selezionato.<br>Aggiungi vendite in <button onclick="App.navigate('sales')" style="background:none;border:none;color:#22c55e;cursor:pointer;font-weight:700">Vendite & Fatture →</button></div>` : `
-        <!-- PRODUCT TABLE -->
-        <div style="background:var(--bg-card);border-radius:12px;border:1px solid var(--border);overflow:hidden">
-          <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-            <div style="font-weight:700;color:var(--text);font-size:14px">📦 Prodotti per Redditività</div>
-            <div style="font-size:11px;color:var(--text-muted)">Ordinati per profitto lordo</div>
-          </div>
-          <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse">
-            <thead>
-              <tr style="background:var(--bg-card2)">
-                <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">#</th>
-                <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Prodotto</th>
-                <th style="padding:10px 12px;text-align:right;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Revenue</th>
-                <th style="padding:10px 12px;text-align:right;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Costi Mat.</th>
-                <th style="padding:10px 12px;text-align:right;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Margine</th>
-                <th style="padding:10px 12px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Qty</th>
-                <th style="padding:10px 12px;text-align:right;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">€/Ora</th>
-              </tr>
-            </thead>
-            <tbody>${products.map((pr,i) => prodRow(pr, i)).join('')}</tbody>
-          </table>
-          </div>
-          <!-- INSIGHT FOOTER -->
-          ${products.length >= 2 ? (() => {
-            const best = products[0];
-            const worst = products[products.length-1];
-            const bestM = best.revenue>0?(best.revenue-best.cost)/best.revenue*100:0;
-            const worstM = worst.revenue>0?(worst.revenue-worst.cost)/worst.revenue*100:0;
-            return `<div style="padding:14px 20px;background:var(--bg-card2);border-top:1px solid var(--border);display:flex;gap:20px;flex-wrap:wrap">
-              <div style="font-size:12px;color:#22c55e"><strong>🏆 Top:</strong> ${best.name} (${bestM.toFixed(0)}% margine)</div>
-              <div style="font-size:12px;color:#ef4444"><strong>⚠️ Da rivedere:</strong> ${worst.name} (${worstM.toFixed(0)}% margine)</div>
-              <div style="font-size:12px;color:var(--text-muted)">Concentra le energie sui top 3 → producono il miglior ROI del tuo tempo.</div>
-            </div>`;
-          })() : ''}
-        </div>`}
-
-        <!-- HOURS BREAKDOWN if no timer data -->
-        ${!totalMinutes ? `<div style="background:#6366f115;border:1px solid #6366f130;border-radius:10px;padding:14px 18px;margin-top:16px;font-size:13px;color:#a5b4fc">
-          💡 <strong>Attiva il timer ordini</strong> per vedere il tuo guadagno reale per ora. Vai in un ordine Kanban e usa il timer di produzione.
-        </div>` : ''}
-      `;
-    } catch(e) {
-      el.innerHTML = `<div style="color:#ef4444;padding:24px">Errore: ${e.message}</div>`;
+    const R = window.InglyRedditivita;
+    if (!R) {
+      el.innerHTML = `<div class="card" style="padding:24px;color:var(--text-muted)">Il modulo di redditività non è caricato: la sezione non può calcolare niente e preferisce dirlo.</div>`;
+      return;
     }
-  }
+    try {
+      const tutti = await IDB.getAll('orders').catch(() => []);
+      const cutoff = this._inizioPeriodo();
+      const chiusi = tutti.filter((o) => this._chiuso(o));
+      const ordini = chiusi.filter((o) => this._dataDi(o) >= cutoff);
+
+      /* La classifica si ordina sul numero che il verdetto in alto sta
+         usando. Ordinare per margine totale mentre il verdetto nomina il
+         migliore per ora faceva dire il contrario alle due metà della stessa
+         pagina — lo ha trovato il collaudo a schermo, non una lettura. */
+      const conOre = R.confronto(R.per(ordini, this._dimensione)).disponibile;
+      const ordine = this._ordine === 'auto' ? (conOre ? 'marginePerOra' : 'margine') : this._ordine;
+      const esito = R.per(ordini, this._dimensione, { ordine });
+      const confronto = R.confronto(esito);
+
+      el.innerHTML = this._tabs()
+        + (ordini.length === 0 ? this._vuoto(tutti.length, chiusi.length) : (
+          this._copertura(esito) + this._verdetto(confronto, esito)
+          + this._ordinamento(esito) + this._tabella(esito)
+        ));
+    } catch (e) {
+      el.innerHTML = `<div style="color:#ef4444;padding:24px">Errore: ${this._esc(e.message)}</div>`;
+    }
+  },
+
+  _tabs() {
+    const pLabel = { month: 'Questo mese', quarter: 'Questo trimestre', year: "Quest'anno", all: 'Tutto' };
+    const dLabel = { tecnologia: 'Tecnologia', cliente: 'Cliente', canale: 'Canale', macchina: 'Macchina' };
+    const bottone = (attivo, onclick, testo) => `<button onclick="${onclick}" style="padding:8px 16px;border-radius:8px;border:1.5px solid ${attivo ? '#22c55e' : 'var(--border)'};background:${attivo ? '#22c55e20' : 'transparent'};color:${attivo ? '#22c55e' : 'var(--text-muted)'};cursor:pointer;font-size:13px;font-weight:${attivo ? '700' : '500'}">${testo}</button>`;
+    return `
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        ${Object.keys(pLabel).map((k) => bottone(this._period === k, `ProfitScope._period='${k}';ProfitScope._load()`, pLabel[k])).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--text-muted);font-weight:600">Confronta per:</span>
+        ${Object.keys(dLabel).map((k) => bottone(this._dimensione === k, `ProfitScope._dimensione='${k}';ProfitScope._load()`, dLabel[k])).join('')}
+      </div>`;
+  },
+
+  /** L'ordinamento della classifica, scritto dove si legge la classifica. */
+  _ordinamento(esito) {
+    const R = window.InglyRedditivita;
+    const voci = R.ORDINI || {};
+    const scelte = ['auto'].concat(Object.keys(voci));
+    const etichetta = (k) => (k === 'auto' ? 'Automatico' : voci[k]);
+    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <span style="font-size:12px;color:var(--text-muted);font-weight:600">Ordina per:</span>
+      ${scelte.map((k) => `<button onclick="ProfitScope._ordine='${k}';ProfitScope._load()" style="padding:4px 10px;border-radius:6px;border:1px solid ${this._ordine === k ? '#22c55e' : 'var(--border)'};background:transparent;color:${this._ordine === k ? '#22c55e' : 'var(--text-muted)'};cursor:pointer;font-size:11px;font-weight:${this._ordine === k ? '700' : '500'}">${etichetta(k)}</button>`).join('')}
+      <span style="font-size:11px;color:var(--text-muted)">· in classifica ora: <strong>${this._esc(esito.ordineLabel)}</strong></span>
+    </div>`;
+  },
+
+  _vuoto(totali, chiusi) {
+    const motivo = totali === 0
+      ? 'Non ci sono ancora ordini in archivio.'
+      : (chiusi === 0
+        ? `Ci sono ${totali} ordini, ma nessuno è ancora arrivato a consegnato, venduto o fatturato. La redditività si misura sul lavoro finito.`
+        : `Nessuno dei ${chiusi} ordini chiusi cade nel periodo scelto. Prova «Tutto».`);
+    return `<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--bg-card);border-radius:12px;border:1px solid var(--border)">
+      <div style="font-size:40px;margin-bottom:12px">📊</div>
+      <div style="max-width:460px;margin:0 auto;line-height:1.6">${this._esc(motivo)}</div>
+      <button onclick="App.navigate('gestione_ordini')" style="margin-top:16px;background:none;border:none;color:#22c55e;cursor:pointer;font-weight:700">Vai agli ordini →</button>
+    </div>`;
+  },
+
+  /** La riga che dice quanto della risposta si basa su dati veri. Sta in cima
+      apposta: è la premessa di tutto quello che c'è sotto. */
+  _copertura(esito) {
+    const t = esito.totali;
+    const pct = Math.round(t.coperturaPct);
+    const colore = pct >= 80 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444';
+    const senza = t.ordini - t.ordiniConCosto;
+    const nota = senza === 0
+      ? 'Tutti gli ordini del periodo portano il costo di produzione: i margini qui sotto sono completi.'
+      : `${senza} ordini su ${t.ordini} non portano il costo di produzione e restano fuori dal margine — non contati come zero, esclusi. Il ricavo invece si vede tutto.`;
+    return `<div style="background:var(--bg-card);border:1px solid var(--border);border-left:3px solid ${colore};border-radius:10px;padding:14px 18px;margin-bottom:16px">
+      <div style="font-weight:700;color:${colore};font-size:13px;margin-bottom:4px">Costo dichiarato su ${pct}% degli ordini del periodo</div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.6">${this._esc(nota)}${esito.senzaDimensione ? ` · ${esito.senzaDimensione} ordini non dicono ${this._esc(esito.label.toLowerCase())} e non entrano in nessun gruppo.` : ''}</div>
+    </div>`;
+  },
+
+  /** Il confronto: si nomina il migliore e il peggiore per margine orario, e
+      quando non si può si dice perché. Nessun consiglio oltre i dati. */
+  _verdetto(c, esito) {
+    if (!c.disponibile) {
+      return `<div style="background:#6366f110;border:1px solid #6366f130;border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:13px;color:var(--text-muted);line-height:1.6">
+        <strong style="color:var(--text)">Il margine per ora non si può ancora confrontare:</strong> ${this._esc(c.motivo)}.
+        <div style="margin-top:6px">È il numero che risponde davvero a «cosa conviene fare», perché le ore sono la cosa di cui ce n'è una quantità fissa. Per averlo servono, sullo stesso ordine, il costo e le ore di lavorazione.</div>
+      </div>`;
+    }
+    const rapporto = c.rapporto && isFinite(c.rapporto) && c.rapporto > 1
+      ? ` — un'ora di ${this._esc(c.migliore.label)} lascia ${c.rapporto.toFixed(1)}× quello che lascia un'ora di ${this._esc(c.peggiore.label)}`
+      : '';
+    return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;margin-bottom:8px">Per ora di laboratorio · ${this._esc(esito.label)}</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div><div style="font-size:11px;color:var(--text-muted)">Rende di più</div><div style="font-size:18px;font-weight:800;color:#22c55e">${this._esc(c.migliore.label)} · ${this._eur(c.migliore.marginePerOra)}/h</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted)">Rende di meno</div><div style="font-size:18px;font-weight:800;color:#ef4444">${this._esc(c.peggiore.label)} · ${this._eur(c.peggiore.marginePerOra)}/h</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.6">Calcolato sui soli ordini che dichiarano insieme costo e ore${rapporto}.</div>
+    </div>`;
+  },
+
+  _tabella(esito) {
+    const confrontabili = esito.righe.filter((r) => r.copertura.sufficiente);
+    const scoperte = esito.righe.filter((r) => !r.copertura.sufficiente);
+    const th = (t, a) => `<th style="padding:10px 12px;text-align:${a || 'left'};font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">${t}</th>`;
+
+    const riga = (r, i) => {
+      const colore = r.marginePct == null ? 'var(--text-muted)' : r.marginePct >= 40 ? '#22c55e' : r.marginePct >= 20 ? '#f59e0b' : '#ef4444';
+      const quota = r.quotaMarginePct == null ? 0 : Math.max(0, Math.round(r.quotaMarginePct));
+      return `<tr>
+        <td style="padding:10px 12px;font-weight:700;color:var(--text-muted)">#${i + 1}</td>
+        <td style="padding:10px 12px">
+          <div style="font-weight:600;font-size:13px;color:var(--text)">${this._esc(r.label)}</div>
+          <div style="height:4px;background:var(--border);border-radius:2px;margin-top:5px;width:100%;max-width:200px"><div style="height:4px;background:#22c55e;border-radius:2px;width:${quota}%"></div></div>
+        </td>
+        <td style="padding:10px 12px;text-align:center;color:var(--text)">${r.ordini}</td>
+        <td style="padding:10px 12px;text-align:right;color:var(--text-muted)">${this._eur(r.ricavo)}</td>
+        <td style="padding:10px 12px;text-align:right;font-weight:700;color:${colore}">${this._eur(r.margine)}</td>
+        <td style="padding:10px 12px;text-align:right;font-weight:700;color:${colore}">${r.marginePct == null ? '—' : r.marginePct.toFixed(0) + '%'}</td>
+        <td style="padding:10px 12px;text-align:right;color:var(--text)">${r.marginePerOrdine == null ? '—' : this._eur(r.marginePerOrdine)}</td>
+        <td style="padding:10px 12px;text-align:right;font-weight:700;color:${r.marginePerOra == null ? 'var(--text-muted)' : 'var(--text)'}" title="${r.marginePerOra == null ? 'Ore di lavorazione non dichiarate su questi ordini' : r.copertura.ordiniConOre + ' ordini con ore dichiarate'}">${r.marginePerOra == null ? '—' : this._eur(r.marginePerOra) + '/h'}</td>
+      </tr>`;
+    };
+
+    const rigaScoperta = (r) => `<tr>
+      <td style="padding:10px 12px;color:var(--text-muted)">—</td>
+      <td style="padding:10px 12px" colspan="6">
+        <div style="font-weight:600;font-size:13px;color:var(--text-muted)">${this._esc(r.label)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${this._esc(r.copertura.motivo || '')}</div>
+      </td>
+      <td style="padding:10px 12px;text-align:right;color:var(--text-muted)">${this._eur(r.ricavo)} fatturati</td>
+    </tr>`;
+
+    return `<div style="background:var(--bg-card);border-radius:12px;border:1px solid var(--border);overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="font-weight:700;color:var(--text);font-size:14px">📦 Redditività per ${this._esc(esito.label.toLowerCase())}</div>
+        <div style="font-size:11px;color:var(--text-muted)">Ordinati per ${this._esc((esito.ordineLabel || '').toLowerCase())} · la barra è la quota sul margine totale</div>
+      </div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--bg-card2)">
+          ${th('#')}${th(esito.label)}${th('Ordini', 'center')}${th('Ricavo', 'right')}${th('Margine', 'right')}${th('Margine %', 'right')}${th('Per ordine', 'right')}${th('Per ora', 'right')}
+        </tr></thead>
+        <tbody>
+          ${confrontabili.map((r, i) => riga(r, i)).join('')}
+          ${scoperte.length ? `<tr><td colspan="8" style="padding:10px 12px;background:var(--bg-card2);font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Non confrontabili — troppi ordini senza costo dichiarato</td></tr>` : ''}
+          ${scoperte.map(rigaScoperta).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+  },
 };
 
 

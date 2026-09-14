@@ -374,7 +374,10 @@ const App={
       weeklyreport:()=>{ if(typeof WeeklyReport!=='undefined') _appenaPossibile(function(){WeeklyReport.render();}); },
       profitleak:()=>{if(typeof ProfitLeakDetector!==typeof undefined)ProfitLeakDetector.renderPage();},
       stockalert:()=>{if(typeof StockAlert!==typeof undefined)StockAlert.render?.();},
-      profitscope:()=>{if(typeof ProfitLeakDetector!==typeof undefined)ProfitLeakDetector.renderPage?.();},
+      /* Chiamava `ProfitLeakDetector`, che non è definito in nessun file: la
+         sezione mostrava il segnaposto del markup mentre `ProfitScope` — che
+         esiste ed è esportato — non lo chiamava nessuno. */
+      profitscope:()=>{if(typeof ProfitScope!=='undefined')ProfitScope.render();},
       taxcalendar:()=>{if(typeof TaxCalendar!=='undefined')TaxCalendar.render?.(); else if(typeof FiscalRadar!=='undefined')FiscalRadar.render?.();},
       xmlsdi:()=>{if(typeof XMLHelper!=='undefined')XMLHelper.render?.();},
       b2bpitch:()=>{if(typeof B2BPitch!==typeof undefined)B2BPitch.render?.();},

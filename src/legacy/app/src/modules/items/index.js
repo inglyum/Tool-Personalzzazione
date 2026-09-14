@@ -313,6 +313,33 @@ const Materials={
       this.segnaTuttiProposti();
       return;
     }
+    /* ── Nessuna memoria, ma un magazzino che esiste ─────────────────────
+       Qui le due ipotesi — «non gliel'ho mai proposto» e «l'ha cancellato
+       apposta» — non si distinguono, e la regola del modulo dice che in quel
+       caso vince la seconda: il magazzino è la decisione di chi lavora.
+
+       Ma «esiste» non basta come prova. All'avvio il corredo di base scrive
+       già quattro materiali suoi (`SEED.materials`), quindi l'archivio non è
+       mai davvero vuoto quando si arriva qui, e una regola che guardasse solo
+       la memoria lascerebbe ogni installazione nuova con quei quattro e senza
+       gli altri. Lo distingue il **contenuto**: finché dentro ci sono solo
+       predefiniti, il magazzino è ancora quello di fabbrica e il corredo si
+       completa. Appena c'è dentro qualcosa che i predefiniti non conoscono,
+       quel magazzino è di qualcuno, e sopra non ci si riversa niente.
+
+       Sono i due casi veri in cui la memoria manca: un'installazione più
+       vecchia della memoria stessa, e un ripristino da backup in cui la
+       marcatura non è arrivata — la forma esatta del guasto visto in
+       `import-export`, 3 record importati e 175 in archivio. */
+    if(!proposti.size){
+      const idDefault=new Set(this.DEFAULTS.map(m=>m.id));
+      const suoi=ex.filter(m=>!idDefault.has(m.id));
+      if(suoi.length){
+        this.segnaTuttiProposti();
+        console.log(`ℹ️ Magazzino già popolato (${suoi.length} materiali non predefiniti): nessun predefinito riproposto`);
+        return;
+      }
+    }
     const presenti=new Set(ex.map(m=>m.id));
     const nuovi=this.DEFAULTS.filter(m=>!presenti.has(m.id)&&!proposti.has(m.id));
     for(const m of nuovi) await IDB.put('materials',m);
