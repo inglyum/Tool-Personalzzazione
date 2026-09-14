@@ -92,7 +92,15 @@
   };
 
   function categoriaDi(id) {
-    var k = String(id || '').toLowerCase().replace(/[^a-z]/g, '');
+    var grezzo = String(id || '');
+    /* Una categoria già canonica deve riconoscersi. Sei delle undici non lo
+       facevano — `machine`, `energy`, `labor`, `postProcess`, `accessories`,
+       `waste` non erano nella mappa degli alias e finivano in «Altri costi».
+       Bastava ripassare una distinta già normalizzata perché sei righe su
+       undici si accorpassero in una sola, senza che niente segnalasse
+       l'accaduto. */
+    for (var i = 0; i < ORDINE.length; i++) if (ORDINE[i] === grezzo) return grezzo;
+    var k = grezzo.toLowerCase().replace(/[^a-z]/g, '');
     return MAPPA[k] || 'other';
   }
 
@@ -228,6 +236,13 @@
         totalCost: arr(l.subtotal != null ? l.subtotal : unit * q),
         source: l.itemKey ? 'magazzino' : 'preventivo',
         confidence: l.itemKey ? 'verified' : 'declared',
+        /* Il collegamento all'articolo di magazzino serviva a decidere
+           `source` e poi veniva buttato. Senza, nessuno puo' sapere *quale*
+           materiale serve a questo lavoro: si sa solo quanto costa. E' il dato
+           che manca per calcolare il fabbisogno, e c'era gia'. */
+        itemKey: l.itemKey || null,
+        itemStore: l.itemStore || null,
+        itemId: l.itemId != null ? l.itemId : null,
         editable: true,
       };
     });

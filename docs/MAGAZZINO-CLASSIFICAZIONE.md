@@ -35,16 +35,27 @@ Tre su quattro esistono e sono misurati:
   movimenti, e `inventory-view` mostra il delta fra saldo atteso e giacenza
   registrata quando i due non coincidono.
 
-**reserved non esiste, e non l'ho inventato.** Una prenotazione è materiale
-impegnato da un ordine che non è ancora stato consumato: non riduce la
-giacenza, riduce il disponibile. Per calcolarla servirebbe che ogni ordine
-dichiari di quali materiali ha bisogno e in che quantità — un dato che oggi
-nessun ordine porta in forma strutturata.
+**reserved ora esiste**, e la voce precedente di questo documento era
+sbagliata. Ci avevo scritto che il fabbisogno non era calcolabile perché
+nessun ordine lo dichiara. Rimisurato: il fabbisogno c'era già e si perdeva
+per strada.
 
-Scriverla come movimento sarebbe peggio che non averla: un movimento cambia il
-saldo, una prenotazione no. Il giorno in cui gli ordini dichiareranno il
-fabbisogno, `reserved` sarà una vista sugli ordini aperti, non una riga nel
-registro.
+Le righe di preventivo che nascono dal magazzino portano `itemKey` —
+`materials:12`, cioè *quale* articolo — insieme a quantità e unità di misura.
+La distinta economica usava quel campo per decidere se il costo fosse
+verificato o dichiarato, **e poi lo buttava**: sapeva quanto costa il
+materiale e non quale fosse. Ora lo conserva, e `InglyFabbisogno` legge di lì.
+
+- **impegnato** = il fabbisogno degli ordini aperti. **Non è un movimento e
+  non tocca il saldo**: il materiale impegnato è ancora sullo scaffale.
+  `disponibile = giacenza − impegnato`. Un ordine il cui routing è tutto
+  chiuso smette di impegnare.
+- Una riga senza `itemKey` non genera fabbisogno: finisce fra le
+  `nonCollegate` con il motivo. Un preventivo scritto a mano, senza passare
+  dal magazzino, non produce prenotazioni — e il modulo lo dice invece di
+  indovinare.
+- `disponibile` sotto zero non è un errore di conto: è un ordine che promette
+  materiale che non c'è, e si chiama `scoperto`.
 
 ## Perché non un secondo magazzino
 

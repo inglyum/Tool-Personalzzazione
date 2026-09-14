@@ -16,7 +16,7 @@ const O = ctx.InglyOperazioni;
 test('normalizza · la tecnologia è l\'unico campo che conta davvero', () => {
   const o = O.normalizza({ technology: 'Laser CO2' });
   assert.equal(o.technology, 'laser');
-  assert.equal(o.status, 'pianificata');
+  assert.equal(o.status, 'da_fare');
   assert.equal(o.sequence, 1);
   assert.equal(o.machineId, null);
   assert.equal(o.estimatedTime, null, 'non misurato è null, non zero');
@@ -39,12 +39,83 @@ test('normalizza · accetta i nomi italiani e inglesi', () => {
   assert.equal(o.status, 'completata');
 });
 
-test('statoDi · gli alias inglesi arrivano allo stesso stato', () => {
+test('statoDi · ogni nome che l\'applicazione ha usato arriva allo stato di oggi', () => {
   assert.equal(O.statoDi('done'), 'completata');
-  assert.equal(O.statoDi('in progress'), 'in_corso');
+  assert.equal(O.statoDi('in progress'), 'in_produzione');
   assert.equal(O.statoDi('cancelled'), 'annullata');
-  assert.equal(O.statoDi(undefined), 'pianificata');
-  assert.equal(O.statoDi('qualcosa di ignoto'), 'pianificata');
+  assert.equal(O.statoDi(undefined), 'da_fare');
+  assert.equal(O.statoDi('qualcosa di ignoto'), 'da_fare');
+  /* I nomi dello storico: quelli di ieri di questo stesso modulo, quelli del
+     motore di workflow, e quelli dell'elenco ordini. */
+  assert.equal(O.statoDi('pianificata'), 'da_fare', 'il nome di ieri');
+  assert.equal(O.statoDi('in_corso'), 'in_produzione', 'idem');
+  assert.equal(O.statoDi('sospesa'), 'pausa', 'idem');
+  assert.equal(O.statoDi('working'), 'in_produzione', 'il motore di workflow');
+  assert.equal(O.statoDi('produzione'), 'in_produzione', 'l\'elenco ordini');
+  assert.equal(O.statoDi('ready'), 'in_coda');
+  assert.equal(O.statoDi('qc'), 'controllo_qualita');
+});
+
+test('i sette stati MES esistono, in ordine di officina', () => {
+  assert.equal(O.STATI.map((s) => s.id).join('|'),
+    'da_fare|in_coda|in_produzione|pausa|controllo_qualita|completata|annullata');
+  assert.ok(O.STATI.every((s) => s.label && s.colore && s.ordine));
+});
+
+test('attiva · solo chi occupa davvero una macchina', () => {
+  assert.equal(O.attiva({ status: 'da_fare' }), false);
+  assert.equal(O.attiva({ status: 'in_coda' }), true);
+  assert.equal(O.attiva({ status: 'in_produzione' }), true);
+  assert.equal(O.attiva({ status: 'controllo_qualita' }), true);
+  assert.equal(O.attiva({ status: 'completata' }), false);
+});
+
+test('chiusa · completata e annullata, nient\'altro', () => {
+  assert.equal(O.chiusa({ status: 'completata' }), true);
+  assert.equal(O.chiusa({ status: 'annullata' }), true);
+  assert.equal(O.chiusa({ status: 'pausa' }), false);
+});
+
+test('qualita · buoni, scarti e resa quando qualcuno ha contato', () => {
+  const q = O.qualita({ technology: 'laser', quantity: 100, goodQuantity: 96, wasteQuantity: 4 });
+  assert.equal(q.resaPct, 96);
+  assert.equal(q.scartoPct, 4);
+  assert.equal(q.contato, true);
+  assert.equal(q.coerente, true);
+});
+
+test('qualita · senza conteggio non si deduce una resa del 100%', () => {
+  const q = O.qualita({ technology: 'laser', quantity: 100 });
+  assert.equal(q.good, null);
+  assert.equal(q.resaPct, null);
+  assert.equal(q.contato, false);
+  assert.equal(q.coerente, null);
+});
+
+test('qualita · buoni piu\' scarti oltre il totale si dichiara incoerente', () => {
+  assert.equal(O.qualita({ quantity: 10, goodQuantity: 9, wasteQuantity: 5 }).coerente, false);
+});
+
+test('riepilogo · il costo dei rifacimenti entra nel costo reale', () => {
+  const r = O.riepilogo([
+    { technology: 'laser', actualCost: 40, reworkQuantity: 2, reworkCost: 6 }]);
+  assert.equal(r.totali.actualCost, 40);
+  assert.equal(r.totali.actualCostConRifacimenti, 46);
+});
+
+test('riepilogo · senza rifacimenti misurati il costo reale non cambia', () => {
+  const r = O.riepilogo([{ technology: 'laser', actualCost: 40 }]);
+  assert.equal(r.totali.actualCostConRifacimenti, 40);
+});
+
+test('riepilogo · la resa complessiva esce solo se qualcuno ha contato', () => {
+  assert.equal(O.riepilogo([{ technology: 'laser' }]).qualita.contato, false);
+  const r = O.riepilogo([
+    { technology: 'laser', quantity: 50, goodQuantity: 48, wasteQuantity: 2 },
+    { technology: 'uv', quantity: 50, goodQuantity: 50, wasteQuantity: 0 }]);
+  assert.equal(r.qualita.contato, true);
+  assert.equal(r.qualita.resaPct, 98);
+  assert.equal(r.qualita.incoerenti, 0);
 });
 
 test('varianza · reale meno previsto, e il segno non si addolcisce', () => {
@@ -81,6 +152,7 @@ test('costruisciDaOrdine · una operazione per tecnologia dichiarata', () => {
   assert.equal(r.operations.map((o) => o.technology).join('|'), 'laser|uv');
   assert.equal(r.operations[0].sequence, 1);
   assert.equal(r.operations[1].sequence, 2);
+  assert.equal(r.operations[0].status, 'da_fare');
   assert.equal(r.operations[0].estimatedTime, null, 'non inventa tempi');
   assert.equal(r.operations[0].machineId, null, 'non inventa macchine');
 });
@@ -141,7 +213,7 @@ test('riepilogo · un\'operazione senza macchina non inventa una riga macchina',
 test('avanzamento · conta quello che è finito', () => {
   const a = O.avanzamento([
     { technology: 'laser', status: 'completata' },
-    { technology: 'uv', status: 'in_corso' }]);
+    { technology: 'uv', status: 'in_produzione' }]);
   assert.equal(a.testo, '1 di 2 completate');
   assert.equal(a.pct, 50);
   assert.equal(a.inCorso, 1);

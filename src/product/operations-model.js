@@ -44,25 +44,59 @@
 
   /* Gli stati di una operazione. `pianificata` è il default perché un'
      operazione appena creata non è ancora successa. */
+  /* Il percorso di un lavoro in officina, nell'ordine in cui succede.
+
+     «Da fare» e «in coda» non sono la stessa cosa e distinguerle serve: la
+     prima e' una operazione che esiste, la seconda una che e' stata messa in
+     fila per una macchina. Chi guarda il carico di una macchina vuole vedere
+     solo le seconde.
+
+     «Controllo qualita'» sta fra la lavorazione e il completamento perche' e'
+     li' che sta davvero: un pezzo finito di lavorare non e' ancora un pezzo
+     buono, e chiamarlo completato prima di averlo guardato e' il modo in cui
+     gli scarti spariscono dai conti. */
   var STATI = [
-    { id: 'pianificata', label: 'Pianificata', emoji: '📋', colore: '#64748b' },
-    { id: 'in_corso', label: 'In corso', emoji: '⚙️', colore: '#f59e0b' },
-    { id: 'completata', label: 'Completata', emoji: '✅', colore: '#22c55e' },
-    { id: 'sospesa', label: 'Sospesa', emoji: '⏸️', colore: '#a78bfa' },
-    { id: 'annullata', label: 'Annullata', emoji: '✖️', colore: '#ef4444' },
+    { id: 'da_fare', label: 'Da fare', emoji: '\ud83d\udccb', colore: '#64748b', ordine: 1 },
+    { id: 'in_coda', label: 'In coda', emoji: '\u23f3', colore: '#3b82f6', ordine: 2 },
+    { id: 'in_produzione', label: 'In produzione', emoji: '\u2699\ufe0f', colore: '#f59e0b', ordine: 3 },
+    { id: 'pausa', label: 'In pausa', emoji: '\u23f8\ufe0f', colore: '#a78bfa', ordine: 4 },
+    { id: 'controllo_qualita', label: 'Controllo qualit\u00e0', emoji: '\ud83d\udd0d', colore: '#06b6d4', ordine: 5 },
+    { id: 'completata', label: 'Completata', emoji: '\u2705', colore: '#22c55e', ordine: 6 },
+    { id: 'annullata', label: 'Annullata', emoji: '\u2716\ufe0f', colore: '#ef4444', ordine: 7 },
   ];
+
+  /* Lo storico non si riscrive: si traduce. Ogni nome che l'applicazione ha
+     usato in passato — inglese, italiano, del motore di workflow — arriva allo
+     stato che gli corrisponde oggi. `pianificata` e `sospesa` erano i nomi di
+     ieri di questo stesso modulo. */
   var ALIAS_STATO = {
-    planned: 'pianificata', pending: 'pianificata', todo: 'pianificata',
-    running: 'in_corso', inprogress: 'in_corso', incorso: 'in_corso', wip: 'in_corso',
-    done: 'completata', completed: 'completata', finita: 'completata',
-    paused: 'sospesa', hold: 'sospesa',
-    cancelled: 'annullata', canceled: 'annullata',
+    pianificata: 'da_fare', planned: 'da_fare', pending: 'da_fare', todo: 'da_fare',
+    backlog: 'da_fare', dafare: 'da_fare', nuova: 'da_fare',
+    queued: 'in_coda', coda: 'in_coda', incoda: 'in_coda', ready: 'in_coda', pronta: 'in_coda',
+    in_corso: 'in_produzione', incorso: 'in_produzione', running: 'in_produzione',
+    inprogress: 'in_produzione', wip: 'in_produzione', working: 'in_produzione',
+    produzione: 'in_produzione', production: 'in_produzione', lavorazione: 'in_produzione',
+    inproduzione: 'in_produzione',
+    sospesa: 'pausa', paused: 'pausa', hold: 'pausa', pausa: 'pausa', inpausa: 'pausa',
+    qc: 'controllo_qualita', quality: 'controllo_qualita', qualita: 'controllo_qualita',
+    controllo: 'controllo_qualita', controlloqualita: 'controllo_qualita', check: 'controllo_qualita',
+    done: 'completata', completed: 'completata', finita: 'completata', finished: 'completata',
+    cancelled: 'annullata', canceled: 'annullata', annullato: 'annullata', scartata: 'annullata',
   };
 
   function statoDi(v) {
     var k = String(v == null ? '' : v).toLowerCase().replace(/[^a-z_]/g, '');
     for (var i = 0; i < STATI.length; i++) if (STATI[i].id === k) return k;
-    return ALIAS_STATO[k.replace(/_/g, '')] || ALIAS_STATO[k] || 'pianificata';
+    return ALIAS_STATO[k] || ALIAS_STATO[k.replace(/_/g, '')] || 'da_fare';
+  }
+
+  /* Gli stati in cui un'operazione occupa davvero una macchina. Serve al
+     carico: una operazione «da fare» non impegna niente. */
+  var ATTIVI = ['in_coda', 'in_produzione', 'pausa', 'controllo_qualita'];
+  function attiva(op) { return ATTIVI.indexOf(statoDi(op && (op.status || op.stato))) >= 0; }
+  function chiusa(op) {
+    var s = statoDi(op && (op.status || op.stato));
+    return s === 'completata' || s === 'annullata';
   }
   function infoStato(id) {
     for (var i = 0; i < STATI.length; i++) if (STATI[i].id === id) return STATI[i];
@@ -94,7 +128,52 @@
       actualCost: num(o.actualCost != null ? o.actualCost : o.costoReale),
       startedAt: o.startedAt || o.iniziataIl || null,
       completedAt: o.completedAt || o.completataIl || null,
+      /* ── Quantita' e qualita' ──────────────────────────────────────────
+         Un'operazione su 100 pezzi che ne produce 96 buoni e 4 da rifare non
+         e' «completata» e basta: sono tre numeri diversi, e confonderli e' il
+         modo in cui gli scarti spariscono dal costo.
+
+         `goodQuantity` non si deduce sottraendo: se nessuno ha contato i
+         pezzi buoni, il numero non c'e'. Dedurlo farebbe sembrare misurato
+         qualcosa che nessuno ha guardato. */
+      quantity: num(o.quantity != null ? o.quantity : o.quantita),
+      goodQuantity: num(o.goodQuantity != null ? o.goodQuantity : o.pezziBuoni),
+      wasteQuantity: num(o.wasteQuantity != null ? o.wasteQuantity : o.scarti),
+      reworkQuantity: num(o.reworkQuantity != null ? o.reworkQuantity : o.rifacimenti),
+      reworkCost: num(o.reworkCost != null ? o.reworkCost : o.costoRifacimenti),
+      wasteReason: o.wasteReason || o.motivoScarto || null,
       notes: o.notes || o.note || null,
+    };
+  }
+
+  /**
+   * La resa di una operazione: buoni, scarti, rifacimenti.
+   * Tutto `null` finche' qualcuno non conta — una resa del 100% dichiarata
+   * senza aver contato e' peggio di nessuna resa.
+   */
+  function qualita(op) {
+    var o = normalizza(op);
+    var q = o.quantity;
+    var buoni = o.goodQuantity;
+    var scarti = o.wasteQuantity;
+    var rifatti = o.reworkQuantity;
+    var contato = buoni != null || scarti != null || rifatti != null;
+    return {
+      quantity: q,
+      good: buoni,
+      waste: scarti,
+      rework: rifatti,
+      reason: o.wasteReason,
+      reworkCost: o.reworkCost,
+      /* La resa esiste solo se c'e' un totale e un conteggio dei buoni. */
+      resaPct: (q != null && q > 0 && buoni != null) ? arr((buoni / q) * 100) : null,
+      scartoPct: (q != null && q > 0 && scarti != null) ? arr((scarti / q) * 100) : null,
+      contato: contato,
+      /* I conti tornano? Se buoni + scarti superano il totale, qualcuno ha
+         sbagliato a scrivere, e un numero sbagliato che passa inosservato
+         diventa un costo sbagliato. */
+      coerente: (q == null || buoni == null || scarti == null)
+        ? null : (buoni + scarti <= q + 0.0001),
     };
   }
 
@@ -141,7 +220,7 @@
     return {
       operations: tec.map(function (t, i) {
         return normalizza({ id: 'op-' + (i + 1), sequence: i + 1, technology: t,
-          status: 'pianificata' }, i);
+          status: 'da_fare' }, i);
       }),
       create: true,
       dedotta: !!(lettura && lettura.dedotta),
@@ -149,7 +228,8 @@
     };
   }
 
-  var CAMPI = ['estimatedTime', 'actualTime', 'estimatedCost', 'actualCost'];
+  var CAMPI = ['estimatedTime', 'actualTime', 'estimatedCost', 'actualCost',
+    'quantity', 'goodQuantity', 'wasteQuantity', 'reworkQuantity', 'reworkCost'];
 
   /* Una riga di aggregato tiene i suoi quattro totali insieme alla memoria di
      quali siano stati davvero misurati: zero e «non misurato» si scrivono
@@ -179,13 +259,14 @@
    */
   function riepilogo(operazioni) {
     var ops = (operazioni || []).map(normalizza);
-    var t = { estimatedTime: 0, actualTime: 0, estimatedCost: 0, actualCost: 0 };
-    var misurato = { estimatedTime: false, actualTime: false, estimatedCost: false, actualCost: false };
+    var t = {};
+    var misurato = {};
+    CAMPI.forEach(function (k) { t[k] = 0; misurato[k] = false; });
     var perTec = {};
     var perMacchina = {};
 
     ops.forEach(function (o) {
-      ['estimatedTime', 'actualTime', 'estimatedCost', 'actualCost'].forEach(function (k) {
+      CAMPI.forEach(function (k) {
         if (o[k] != null) { t[k] += o[k]; misurato[k] = true; }
       });
       var chiaveT = o.technology || 'sconosciuta';
@@ -203,6 +284,14 @@
 
     var tot = {};
     CAMPI.forEach(function (k) { tot[k] = misurato[k] ? arr(t[k]) : null; });
+    /* Il costo dei rifacimenti entra nel costo reale: rifare un pezzo costa
+       macchina e tempo come farlo la prima volta, e tenerlo fuori farebbe
+       apparire un margine che non c'e'. Entra solo se qualcuno l'ha misurato. */
+    if (tot.reworkCost != null && tot.actualCost != null) {
+      tot.actualCostConRifacimenti = arr(tot.actualCost + tot.reworkCost);
+    } else {
+      tot.actualCostConRifacimenti = tot.actualCost;
+    }
     tot.varianceTime = (tot.estimatedTime != null && tot.actualTime != null)
       ? arr(tot.actualTime - tot.estimatedTime) : null;
     tot.varianceCost = (tot.estimatedCost != null && tot.actualCost != null)
@@ -211,13 +300,26 @@
     return {
       operazioni: ops.length,
       completate: ops.filter(function (o) { return o.status === 'completata'; }).length,
-      inCorso: ops.filter(function (o) { return o.status === 'in_corso'; }).length,
+      inCorso: ops.filter(function (o) { return o.status === 'in_produzione'; }).length,
       totali: tot,
       perTecnologia: Object.keys(perTec).map(function (k) { return _chiudi(perTec[k]); }),
       perMacchina: Object.keys(perMacchina).map(function (k) { return _chiudi(perMacchina[k]); }),
       /* Un routing senza nemmeno un tempo reale non è «a zero ore»: è non
          misurato, e chi legge deve poterlo distinguere. */
       misurato: misurato.actualTime || misurato.actualCost,
+      attive: ops.filter(attiva).length,
+      qualita: (function () {
+        var rese = ops.map(qualita).filter(function (q) { return q.contato; });
+        if (!rese.length) return { contato: false };
+        var incoerenti = rese.filter(function (q) { return q.coerente === false; }).length;
+        return {
+          contato: true,
+          operazioniContate: rese.length,
+          resaPct: tot.quantity > 0 && tot.goodQuantity != null
+            ? arr((tot.goodQuantity / tot.quantity) * 100) : null,
+          incoerenti: incoerenti,
+        };
+      }()),
     };
   }
 
@@ -239,6 +341,9 @@
     STATI: STATI,
     statoDi: statoDi,
     infoStato: infoStato,
+    attiva: attiva,
+    chiusa: chiusa,
+    qualita: qualita,
     normalizza: normalizza,
     varianza: varianza,
     leggi: leggi,
