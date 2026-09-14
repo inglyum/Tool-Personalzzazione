@@ -91,6 +91,9 @@
      compreso: un preventivo senza righe non ha un totale da difendere. */
   var CAMPI_QUOTE = ['id', 'name', 'lines', 'totalCost', 'netPrice', 'grossPrice'];
   var CAMPI_ORDINE = ['id', 'quoteId', 'name', 'total', 'stage', 'status'];
+  /* `production` non entra fra i campi verificati: gli ordini senza tecnologia
+     dichiarata restano legittimi, e pretenderla bloccherebbe il flusso di chi
+     preventiva a mano. Viaggia se c'è, non si esige. */
 
   function mancanti(record, campi) {
     if (!record) return campi.slice();
@@ -306,6 +309,40 @@
     /* I dati del prodotto viaggiano con l'economia: un ordine che sa quanto
        costa e non sa di che cosa è un ordine a metà. */
     if (Array.isArray(quote.lines)) dati.items = clona(quote.lines);
+
+    /* ── La produzione viaggia con l'ordine ────────────────────────────────
+       L'audit ha misurato che qui non passava niente: l'ordine nasceva senza
+       sapere con che cosa sarebbe stato fatto, e la vendita lo ereditava dal
+       nulla. Da qui in avanti la tecnologia si porta dietro, e se il
+       preventivo non la dichiara si deduce dai campi che ha — dichiarando che
+       è una deduzione, perché è una cosa diversa dall'averlo detto. */
+    var PM = global.InglyProduction;
+    if (PM) {
+      if (quote.production && Array.isArray(quote.production.technologies)
+          && quote.production.technologies.length) {
+        dati.production = clona(quote.production);
+      } else {
+        var letto = PM.leggi(quote);
+        if (letto.technologies.length) {
+          dati.production = {
+            primaryTechnology: letto.primaryTechnology,
+            technologies: letto.technologies.slice(),
+            isMixed: letto.isMixed,
+            operations: [],
+            /* Chi guarderà quest'ordine deve poter distinguere «me l'hanno
+               detto» da «l'ho capito dai campi che c'erano». */
+            dedotta: letto.dedotta,
+            fonte: letto.fonte,
+          };
+        }
+      }
+      /* Il routing, quando il preventivo ne porta uno. Non si inventa: un
+         ordine senza routing continua a funzionare, ed è la maggioranza. */
+      if (Array.isArray(quote.operations) && quote.operations.length) {
+        dati.production = dati.production || PM.costruisci([], quote.operations);
+        dati.production.operations = clona(quote.operations);
+      }
+    }
     dati = decora(dati, quote, porte);
 
     /* 6 · Creazione. */

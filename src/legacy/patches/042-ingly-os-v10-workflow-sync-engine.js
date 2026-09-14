@@ -91,26 +91,41 @@ const WorkflowSync = {
           }
         } else if(newStage==='delivered' || newStage==='sold') {
           // Auto-create sale
-          const saleId = Date.now();
-          const sale = {
-            id: saleId,
-            clientId: order.clientId||null,
-            clientName: order.clientName||order.client||'',
-            date: new Date().toISOString().split('T')[0],
-            desc: order.name||order.desc||`Ordine #${id}`,
-            amount: +(order.value||order.price||order.grossPrice||order.amount||0),
+          /* ── Dal servizio, non da una catena di ripieghi ─────────────────
+             Qui c'era `order.value||order.price||order.grossPrice||order.amount||0`:
+             quattro campi in fila e uno zero in fondo. Misurato: un ordine nato
+             dal percorso canonico non ha nessuno dei quattro, quindi questa
+             riga creava una vendita da **zero euro** ogni volta che un ordine
+             passava a «consegnato». In automatico, senza che nessuno premesse
+             niente. */
+          const _OSS = typeof window !== 'undefined' && window.InglyOrderSales;
+          const _e = _OSS ? _OSS.createSaleFromOrder(order, {
             status: saleTargetStatus,
-            channel: order.channel||'Diretto',
-            fromOrderId: id,
-            originOrder: id,
-            createdFrom: 'workflow_auto',
-            ...(saleTargetStatus==='pagato'?{paidAt:new Date().toISOString()}:{}),
-          };
-          await IDB.put('sales', sale);
-          AppStore.invalidate('sales');
-          order.linkedSaleId = saleId;
-          await IDB.put('orders', order);
-          Bus.emit('sale:created', {id:saleId, orderId:id, auto:true});
+            channel: order.channel || 'Diretto',
+          }) : { ok:false, motivo:'servizio vendite non caricato' };
+          if(!_e.ok){
+            /* Non si crea una vendita a zero: si lascia l'ordine senza vendita
+               e lo si dice. Un buco visibile si ripara; uno zero scritto in
+               archivio no.
+
+               Ma **non si esce dalla funzione**: lo spostamento di stato è già
+               avvenuto, e saltare l'evento di fine funzione lascerebbe la
+               schermata ferma su uno stato vecchio. Fallisce la vendita, non
+               la transizione. */
+            console.warn('[workflow] vendita automatica non creata per ordine', id, '—', _e.motivo);
+            if(typeof toast==='function') toast('Ordine spostato, ma la vendita non è stata creata: '+_e.motivo,'warning',9000);
+          } else {
+            const sale = _e.vendita;
+            const saleId = sale.id;
+            sale.originOrder = id;
+            sale.createdFrom = 'workflow_auto';
+            if(saleTargetStatus==='pagato') sale.paidAt = new Date().toISOString();
+            await IDB.put('sales', sale);
+            AppStore.invalidate('sales');
+            order.linkedSaleId = saleId;
+            await IDB.put('orders', order);
+            Bus.emit('sale:created', {id:saleId, orderId:id, auto:true});
+          }
         }
       }
 
@@ -159,17 +174,23 @@ const WorkflowSync = {
 
         // Fix 1: order is delivered/sold but has no linked sale
         if(['delivered','sold','invoiced'].includes(stage) && !linked && !order.linkedSaleId) {
-          const saleId = Date.now()+fixed;
-          await IDB.put('sales', {
-            id:saleId, clientName:order.clientName||'',
-            desc:order.name||`Ordine #${order.id}`,
-            amount:+(order.value||0),
-            status: stage==='delivered'?'da_pagare':'pagato',
+          /* La riparazione automatica leggeva `order.value||0` — un campo
+             solo, e quello che il percorso canonico non scrive. Riparava gli
+             ordini creando vendite da zero euro. */
+          const _OSS2 = typeof window !== 'undefined' && window.InglyOrderSales;
+          const _e2 = _OSS2 ? _OSS2.createSaleFromOrder(order, {
+            id: Date.now()+fixed,
+            status: stage==='delivered' ? 'da_pagare' : 'pagato',
             date: (order.deliveredAt||order.updatedAt||new Date().toISOString()).split('T')[0],
-            fromOrderId:order.id, originOrder:order.id,
-            createdFrom:'repair',
-            channel:'Diretto',
-          });
+          }) : { ok:false, motivo:'servizio vendite non caricato' };
+          if(!_e2.ok){
+            console.warn('[workflow] riparazione saltata per ordine', order.id, '—', _e2.motivo);
+            continue;
+          }
+          const saleId = _e2.vendita.id;
+          _e2.vendita.originOrder = order.id;
+          _e2.vendita.createdFrom = 'repair';
+          await IDB.put('sales', _e2.vendita);
           order.linkedSaleId=saleId;
           await IDB.put('orders',order);
           fixed++;

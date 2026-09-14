@@ -104,6 +104,8 @@ export const PRODUCT_FILES = [
      ricavo e costo da order-economics, quindi sta dopo entrambi. */
   'redditivita.js',
   'previsioni.js',
+  'production-model.js',
+  'order-sales-service.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i

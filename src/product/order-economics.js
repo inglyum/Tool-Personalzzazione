@@ -525,7 +525,134 @@
     return fuori;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     LA SEMANTICA CANONICA
+     ═══════════════════════════════════════════════════════════════════════
+
+     L'audit ha misurato sedici nomi per «quanto vale questo record», e
+     soprattutto ha misurato la conseguenza: lo stesso ordine — netto 150,
+     lordo 183 — diventava una vendita da 0, 150 o 183 a seconda del pulsante.
+     Quattro percorsi su cinque leggevano `value` per primo, e l'ordine nato
+     dal percorso canonico `value` non ce l'ha: ha `total`, `totalNet`,
+     `totalGross`, `totalCost`.
+
+     Da qui in avanti si legge da queste funzioni, e ognuna dice **da dove** ha
+     preso il numero. La provenienza non è un dettaglio diagnostico: è ciò che
+     permette a una schermata di sapere se sta mostrando un fatto o un ripiego.
+
+     ── Il caso scomodo: `value` ─────────────────────────────────────────────
+
+     `value` sui vecchi ordini è **ambiguo per costruzione**. Misurato nel
+     codice che lo scriveva: in un punto vale `q.grossPrice || q.total`, cioè
+     lordo se c'è e netto altrimenti; in un altro vale un prezzo di vendita
+     calcolato al netto. Non è recuperabile a posteriori quale dei due sia.
+
+     La scelta: si usa, perché un ordine leggibile male è meglio di un ordine
+     muto, ma si dichiara `ambiguo: true`. Chi mostra quel numero può dirlo;
+     chi somma può decidere se fidarsi. Quello che non si fa è **indovinare**
+     un'IVA da togliere: sarebbe inventare il 22% su un dato che non lo dice. */
+
+  function _num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+  /** I totali congelati, quando l'ordine porta lo snapshot. */
+  function _snapshot(ordine) {
+    var s = ordine && ordine.economicSnapshot;
+    if (s && s.stato === 'SNAPSHOT' && s.totals) return s.totals;
+    return null;
+  }
+
+  /** Il ricavo **netto**: quello che l'azienda incassa, IVA esclusa. È il
+      numero su cui si ragiona in produzione e su cui si calcola il margine. */
+  function getOrderRevenueNet(ordine) {
+    var o = ordine || {};
+    var e = o.economic || {};
+    if (_num(e.revenueNet) > 0) return { valore: _num(e.revenueNet), noto: true, fonte: 'economic.revenueNet' };
+    if (_num(o.totalNet) > 0) return { valore: _num(o.totalNet), noto: true, fonte: 'totalNet' };
+    var t = _snapshot(o);
+    if (t && _num(t.totalNet) > 0) return { valore: _num(t.totalNet), noto: true, fonte: 'snapshot.totalNet' };
+    if (_num(o.netPrice) > 0) return { valore: _num(o.netPrice), noto: true, fonte: 'netPrice' };
+    /* `total` sul percorso canonico **è** il netto: lo scrive
+       `InglyQuoteToOrder.invia()` da `quote.netPrice`, e lo dichiara. */
+    if (_num(o.total) > 0) return { valore: _num(o.total), noto: true, fonte: 'total' };
+    if (_num(o.amount) > 0) return { valore: _num(o.amount), noto: true, fonte: 'amount', ambiguo: true };
+    if (_num(o.value) > 0) return { valore: _num(o.value), noto: true, fonte: 'value', ambiguo: true };
+    return { valore: 0, noto: false, fonte: null, motivo: 'nessun ricavo dichiarato su questo ordine' };
+  }
+
+  /** Il ricavo **lordo**: quello che il cliente paga, IVA inclusa. */
+  function getOrderRevenueGross(ordine) {
+    var o = ordine || {};
+    var e = o.economic || {};
+    if (_num(e.revenueGross) > 0) return { valore: _num(e.revenueGross), noto: true, fonte: 'economic.revenueGross' };
+    if (_num(o.totalGross) > 0) return { valore: _num(o.totalGross), noto: true, fonte: 'totalGross' };
+    var t = _snapshot(o);
+    if (t && _num(t.totalGross) > 0) return { valore: _num(t.totalGross), noto: true, fonte: 'snapshot.totalGross' };
+    if (_num(o.grossPrice) > 0) return { valore: _num(o.grossPrice), noto: true, fonte: 'grossPrice' };
+    if (_num(o.value) > 0) return { valore: _num(o.value), noto: true, fonte: 'value', ambiguo: true };
+    /* Nessun lordo dichiarato. Non si calcola aggiungendo l'IVA al netto:
+       l'aliquota di un ordine di marzo non è detto sia quella di oggi, e un
+       lordo ricostruito sarebbe un numero mai esistito. */
+    var netto = getOrderRevenueNet(o);
+    if (netto.noto) {
+      return { valore: netto.valore, noto: false, fonte: netto.fonte,
+        motivo: 'lordo non dichiarato: mostrato il netto, l\'IVA non si ricostruisce a posteriori' };
+    }
+    return { valore: 0, noto: false, fonte: null, motivo: 'nessun ricavo dichiarato su questo ordine' };
+  }
+
+  /** Il ricavo canonico, senza aggettivi: il **netto**. Chi vuole il lordo lo
+      chiede per nome, così la scelta è sempre visibile nel codice chiamante. */
+  function getOrderRevenue(ordine) { return getOrderRevenueNet(ordine); }
+
+  /** Il costo di produzione preventivato. Zero e «non dichiarato» restano due
+      cose diverse, come in `costoOrdine`. */
+  function getOrderProductionCost(ordine) {
+    var o = ordine || {};
+    var e = o.economic || {};
+    if (e.costTotal != null && _num(e.costTotal) > 0) {
+      return { valore: _num(e.costTotal), noto: true, fonte: 'economic.costTotal' };
+    }
+    var base = costoOrdine(o);
+    if (base.noto) return { valore: base.valore, noto: true, fonte: 'campi ordine' };
+    var t = _snapshot(o);
+    if (t && t.totalCost != null && _num(t.totalCost) > 0) {
+      return { valore: _num(t.totalCost), noto: true, fonte: 'snapshot.totalCost' };
+    }
+    return { valore: 0, noto: false, fonte: null, motivo: 'costo di produzione non dichiarato' };
+  }
+
+  /** Il profitto: ricavo netto meno costo di produzione. Non esiste se uno dei
+      due non è noto — un profitto calcolato su un costo mancante è il ricavo
+      travestito, ed è il modo in cui un laboratorio crede di guadagnare. */
+  function getOrderProfit(ordine) {
+    var r = getOrderRevenueNet(ordine);
+    var c = getOrderProductionCost(ordine);
+    if (!r.noto || !c.noto) {
+      return { valore: null, noto: false,
+        motivo: !r.noto ? 'ricavo non dichiarato' : 'costo di produzione non dichiarato',
+        ricavo: r, costo: c };
+    }
+    return { valore: r.valore - c.valore, noto: true, ricavo: r, costo: c };
+  }
+
+  /** Il margine in percentuale sul ricavo netto. */
+  function getOrderMargin(ordine) {
+    var p = getOrderProfit(ordine);
+    if (!p.noto) return { valore: null, noto: false, motivo: p.motivo };
+    var r = p.ricavo.valore;
+    if (!(r > 0)) return { valore: null, noto: false, motivo: 'ricavo a zero: il margine non è definito' };
+    return { valore: (p.valore / r) * 100, noto: true, profitto: p };
+  }
+
   global.InglyOrderEconomics = {
+    /* ── La semantica canonica (Fase 2) ──────────────────────────────── */
+    getOrderRevenue: getOrderRevenue,
+    getOrderRevenueNet: getOrderRevenueNet,
+    getOrderRevenueGross: getOrderRevenueGross,
+    getOrderProductionCost: getOrderProductionCost,
+    getOrderProfit: getOrderProfit,
+    getOrderMargin: getOrderMargin,
+    /* ── Le funzioni storiche, che restano ───────────────────────────── */
     ricavoOrdine: ricavoOrdine,
     ricavoNettoOrdine: ricavoNettoOrdine,
     costoOrdine: costoOrdine,

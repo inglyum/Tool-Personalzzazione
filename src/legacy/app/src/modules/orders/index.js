@@ -573,32 +573,27 @@ const Orders={
        arrivava il conto di fine mese. Si legge quello che c'è, nell'ordine in
        cui è attendibile: il prezzo corrente se l'ordine è stato modificato in
        lavorazione, altrimenti il totale con cui è nato. */
+    /* ── Da qui in giù la vendita la costruisce `OrderSalesService` ──────
+       Era uno dei cinque punti che creavano vendite ognuno a modo suo, con
+       quattro formule diverse per l'importo. Lo stesso ordine valeva 0, 150 o
+       183 a seconda del pulsante. Ora il servizio è uno, e la formula pure. */
+    const _OSS = typeof window !== 'undefined' && window.InglyOrderSales;
+    if(!_OSS){ toast('Servizio vendite non disponibile: vendita non creata','error'); return; }
     const _corr = o.currentPricing && o.currentPricing.totals;
-    const importo = +( (_corr && _corr.netto) || o.total || o.totalNet || o.value || 0 );
+    const _esito = _OSS.createSaleFromOrder(o, {
+      /* Il consuntivo, quando l'ordine è stato rilavorato: cambia il costo,
+         mai il prezzo promesso al cliente. */
+      consuntivo: _corr ? { costoTotale: _corr.costoTotale, margine: _corr.margine, marginePct: _corr.marginePct } : null,
+    });
+    if(!_esito.ok){
+      /* Una vendita a zero nasconderebbe il problema invece di mostrarlo. */
+      toast('Vendita non creata: ' + _esito.motivo, 'error', 9000);
+      return;
+    }
+    const sale = _esito.vendita;
+    const importo = sale.netAmount;
     if(!await askConfirm(`€${importo.toFixed(2)} — verrà aggiunta in Vendite & Fatture`,{title:`Creare vendita da ordine "${o.name||o.id}"?`,confirmLabel:'Crea vendita',danger:false})) return;
-    const sale = {
-      id: Date.now(),
-      clientId: o.clientId||null,
-      clientName: o.clientName||'',
-      date: today(),
-      desc: o.name||o.desc||'Ordine #'+o.id,
-      amount: importo,
-      netAmount: importo,
-      status: 'da_pagare',
-      channel: 'Diretto',
-      fromOrderId: o.id,
-      /* La distinta viaggia fino in fondo. Una vendita che conserva solo nome
-         e totale non permette più di sapere che margine si è fatto davvero, ed
-         è il punto in cui l'informazione economica si perdeva. */
-      quoteId: o.quoteId || null,
-      orderId: o.id,
-      costBreakdown: o.currentPricing || o.costBreakdown || null,
-      pricingSnapshot: o.pricingSnapshot || null,
-      totalCost: (_corr && _corr.costoTotale) != null ? _corr.costoTotale : (o.totalCost != null ? o.totalCost : null),
-      margine: (_corr && _corr.margine) != null ? _corr.margine : null,
-      marginePct: (_corr && _corr.marginePct) != null ? _corr.marginePct : null,
-      economicSnapshot: o.economicSnapshot || null,
-    };
+    if(_esito.avvisi && _esito.avvisi.length) console.warn('[OrderSalesService]', _esito.avvisi.join(' · '));
     const saleId = await IDB.put('sales', sale);
     /* Si rilegge prima di dichiarare la vendita creata. */
     const _riletta = await IDB.get('sales', saleId).catch(()=>null);
@@ -1169,20 +1164,48 @@ const Pipeline = {
     let saleId;
 
     if (!existingSale) {
-      saleId = Date.now() + 1;
-      await IDB.put('sales', {
-        id: saleId,
-        clientId: q.clientId || null,
-        clientName: q.clientName || '',
-        date: new Date().toISOString().slice(0, 10),
-        description: q.name || '',
-        amount: q.grossPrice || 0,
-        materialCost: q.totalCost || 0,
-        status: 'da_pagare',
-        channel: 'Diretto',
-        originQuote: quoteId,
-        originOrder: orderId,
-      });
+      /* ── Anche questo passa dal servizio ─────────────────────────────────
+         Qui c'era `amount: q.grossPrice || 0`: il **lordo** del preventivo,
+         mentre tutto il resto del programma ragiona sul netto. Due vendite
+         nate dagli stessi numeri da due pulsanti diversi differivano del 22%,
+         cioè esattamente l'IVA. E si costruiva dalla quote invece che
+         dall'ordine, quindi senza tecnologia e senza distinta. */
+      const _OSS = typeof window !== 'undefined' && window.InglyOrderSales;
+      const _ord = await IDB.get('orders', orderId).catch(() => null);
+      let _sale = null;
+      if (_OSS && _ord) {
+        const _e = _OSS.createSaleFromOrder(_ord, { id: Date.now() + 1 });
+        if (_e.ok) _sale = _e.vendita;
+        else console.warn('[OrderSalesService] vendita non creata:', _e.motivo);
+      }
+      if (_sale) {
+        _sale.originQuote = quoteId;
+        _sale.originOrder = orderId;
+        saleId = _sale.id;
+        await IDB.put('sales', _sale);
+      } else {
+        /* Ripiego dichiarato: se il servizio non può leggere l'ordine si
+           registra comunque la vendita, ma con il **netto** e marcata, invece
+           di lasciare il preventivo confermato senza contropartita. */
+        saleId = Date.now() + 1;
+        await IDB.put('sales', {
+          id: saleId,
+          clientId: q.clientId || null,
+          clientName: q.clientName || '',
+          date: new Date().toISOString().slice(0, 10),
+          description: q.name || '',
+          amount: +(q.netPrice || q.grossPrice || 0),
+          netAmount: +(q.netPrice || q.grossPrice || 0),
+          grossAmount: +(q.grossPrice || q.netPrice || 0),
+          materialCost: q.totalCost || 0,
+          totalCost: q.totalCost != null ? q.totalCost : null,
+          status: 'da_pagare',
+          channel: 'Diretto',
+          originQuote: quoteId,
+          originOrder: orderId,
+          createdBy: 'ripiego: ordine non leggibile dal servizio',
+        });
+      }
     } else {
       saleId = existingSale.id;
     }
@@ -2496,34 +2519,23 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;print-color-
     /* Il prezzo corrente se l'ordine è stato modificato in lavorazione,
        altrimenti quello con cui è nato. `o.value` era l'unica fonte in
        `Orders.toSale` e gli ordini del preventivatore non lo scrivono. */
+    /* ── Anche la conversione diretta passa dal servizio ─────────────────
+       Era il terzo dei cinque punti, con la sua formula: `(_corr.netto ||
+       total || totalNet || value)`. Vicina a quella giusta, ma un'altra. */
+    const _OSS = typeof window !== 'undefined' && window.InglyOrderSales;
+    if (!_OSS) { toast('Servizio vendite non disponibile','error'); return; }
     const _corr = o.currentPricing && o.currentPricing.totals;
-    const total = +((_corr && _corr.netto) || o.total || o.totalNet || o.value) || 0;
-    if (!total) { toast('Imposta il totale prima di convertire','warning'); return; }
+    const _esito = _OSS.createSaleFromOrder(o, {
+      status: 'pagato',
+      channel: o.channel || 'Diretto',
+      consuntivo: _corr ? { costoTotale: _corr.costoTotale, margine: _corr.margine, marginePct: _corr.marginePct } : null,
+    });
+    if (!_esito.ok) { toast('Vendita non creata: ' + _esito.motivo, 'error', 9000); return; }
+    const sale = _esito.vendita;
+    sale.originOrder = id;
+    const total = sale.netAmount;
     if (!await askConfirm(`Convertire "${o.name||'Ordine #'+id}" in vendita da ${fmtCur(total)}?`,{confirmLabel:'Converti',danger:false})) return;
-    const sale = {
-      id: Date.now(),
-      clientId:    o.clientId||null,
-      clientName:  o.clientName||o.client||'',
-      date:        new Date().toISOString().split('T')[0],
-      desc:        o.name||o.desc||'',
-      amount:      total,
-      netAmount:   total,
-      status:      'pagato',
-      channel:     o.channel||'Diretto',
-      originOrder: id,
-      fromOrderId: id,
-      createdAt:   new Date().toISOString(),
-      /* La distinta arriva fino alla vendita: senza, il margine di fine mese
-         non si può più ricostruire da nessuna parte. */
-      quoteId:         o.quoteId || null,
-      orderId:         id,
-      costBreakdown:   o.currentPricing || o.costBreakdown || null,
-      pricingSnapshot: o.pricingSnapshot || null,
-      totalCost:       (_corr && _corr.costoTotale) != null ? _corr.costoTotale : (o.totalCost != null ? o.totalCost : null),
-      margine:         (_corr && _corr.margine) != null ? _corr.margine : null,
-      marginePct:      (_corr && _corr.marginePct) != null ? _corr.marginePct : null,
-      economicSnapshot: o.economicSnapshot || null,
-    };
+    if (_esito.avvisi && _esito.avvisi.length) console.warn('[OrderSalesService]', _esito.avvisi.join(' · '));
     /* Si scrive, si rilegge, e solo allora si dice «registrata». */
     let _saleId;
     try { _saleId = await IDB.put('sales', sale); }
