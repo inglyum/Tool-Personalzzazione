@@ -112,6 +112,11 @@ export const PRODUCT_FILES = [
   'redditivita-macchina.js',
   'material-requirement.js',
   'repositories.js',
+  /* SaaS: il catalogo prima degli entitlement, che lo leggono. */
+  'plan-catalog.js',
+  'subscription.js',
+  'entitlements.js',
+  'auth-identity.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i

@@ -786,15 +786,40 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
     sessionStorage.removeItem(SESSION_KEY);
   }
 
+  /* Due funzioni che fallivano **aperte**: una sessione senza `expiresAt` non
+     scadeva mai, e un utente senza `modules` poteva tutto. Un dato mancante
+     deve chiudere, non aprire — altrimenti basta cancellare un campo per
+     ottenere accesso illimitato. */
   function isExpired(session){
-    if(!session || !session.expiresAt) return false;
-    return new Date(session.expiresAt) < new Date();
+    if(!session) return true;
+    var q = session.scade || session.expiresAt;
+    if(!q) return true;
+    var t = Date.parse(q);
+    if(!isFinite(t)) return true;
+    return t <= Date.now();
   }
 
+  /* L'accesso a una funzione lo decide l'abbonamento, non la sessione. La
+     sessione dice chi sei; che cosa puoi fare si ricalcola ogni volta, cosi'
+     modificare `sessionStorage` non regala un piano. */
   function userCanAccess(session, moduleId){
     if(!session) return false;
-    if(!session.modules || session.modules[0] === '*') return true;
-    return session.modules.includes(moduleId);
+    var E = window.InglyEntitlements;
+    if(E && typeof E.can === 'function'){
+      var e = E.can(moduleId);
+      /* Una funzione che il catalogo non conosce non e' una funzione a
+         pagamento: e' una sezione dell'applicazione fuori dal listino, e
+         resta accessibile a chi ha una sessione valida. */
+      if(e.motivo === 'funzione non dichiarata nel catalogo') return true;
+      return e.ok;
+    }
+    /* Senza motore degli entitlement non si indovina: si nega tutto tranne il
+       minimo, e lo si dice in console una volta. */
+    if(!window.__inglyNoEntitlementsWarned){
+      window.__inglyNoEntitlementsWarned = true;
+      console.warn('[SaaSGate] motore entitlement non disponibile: accesso limitato');
+    }
+    return ['dashboard','settings'].indexOf(String(moduleId)) >= 0;
   }
 
   // ── GATE STYLES ────────────────────────────────────────────────
@@ -953,7 +978,7 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
           <div class="iw"><i class="fas fa-store"></i><input id="reg-lab" type="text" placeholder="Nome del laboratorio"></div>
           <div class="iw"><i class="fas fa-user"></i><input id="reg-user" type="text" placeholder="Username" autocomplete="username"></div>
           <div class="iw"><i class="fas fa-envelope"></i><input id="reg-email" type="email" placeholder="Email" autocomplete="email"></div>
-          <div class="iw"><i class="fas fa-lock"></i><input id="reg-pass" type="password" placeholder="Password (min 6)" autocomplete="new-password" onkeydown="if(event.key==='Enter')SaaSGate.register()"></div>
+          <div class="iw"><i class="fas fa-lock"></i><input id="reg-pass" type="password" placeholder="Password (min 8 caratteri)" autocomplete="new-password" onkeydown="if(event.key==='Enter')SaaSGate.register()"></div>
           <button class="gate-btn" id="reg-submit" onclick="SaaSGate.register()">
             <i class="fas fa-rocket"></i> Crea account e prova gratis
           </button>
@@ -1031,7 +1056,12 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
 
     init: function(){
       var session = getSession();
-      if(session && !isExpired(session)){
+      var I = window.InglyIdentita;
+      /* Una sessione che porta diritti dentro di se' e' vecchia o manomessa:
+         in entrambi i casi non la si usa. */
+      var buona = session && !isExpired(session)
+        && (!I || I.sessioneValida(session).ok);
+      if(buona){
         this._session = session;
         this._applySession();
       } else {
@@ -1040,45 +1070,77 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       }
     },
 
-    login: function(){
+    login: async function(){
       var username = document.getElementById('gate-user').value.trim();
       var password = document.getElementById('gate-pass').value;
       var errEl    = document.getElementById('gate-err');
       var btn      = document.getElementById('gate-submit');
       errEl.style.display = 'none';
-      if(!username || !password){ errEl.textContent='Inserisci username e password'; errEl.style.display='block'; return; }
+      if(!username || !password){ errEl.textContent='Inserisci email e password'; errEl.style.display='block'; return; }
+
+      var I = window.InglyIdentita;
+      if(!I){ errEl.textContent='Servizio di accesso non disponibile. Ricarica la pagina.'; errEl.style.display='block'; return; }
 
       var db = getDB();
-      var user = db.users && db.users.find(function(u){
-        return (u.username === username || u.email === username) && u.active;
+      var cercata = I.normalizzaEmail(username);
+      var user = (db.users||[]).find(function(u){
+        return I.normalizzaEmail(u.email) === cercata
+            || String(u.username||'').toLowerCase() === String(username).toLowerCase();
       });
-
-      if(!user){ errEl.textContent='Utente non trovato o disabilitato'; errEl.style.display='block'; return; }
-      if(user.passwordHash !== password){ errEl.textContent='Password non corretta'; errEl.style.display='block'; return; }
-      if(isExpired(user)){
-        errEl.textContent='La tua licenza è scaduta il '+(user.expiresAt?new Date(user.expiresAt).toLocaleDateString('it-IT'):'—')+'. Contatta l\'amministratore.';
-        errEl.style.display='block'; return;
-      }
 
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accesso...';
+      var fallisci = function(msg){
+        btn.disabled = false;
+        btn.innerHTML = 'Accedi';
+        errEl.textContent = msg; errEl.style.display='block';
+      };
+
+      /* Lo stesso messaggio per utente inesistente e password sbagliata: dire
+         «utente non trovato» racconta a chi prova quali indirizzi esistono. */
+      var GENERICO = 'Email o password non corretti';
+
+      if(!user){
+        /* Si verifica comunque un hash finto, perche' rispondere subito
+           direbbe la stessa cosa attraverso il tempo di risposta. */
+        try{ await I.verifica(password, 'pbkdf2$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='); }catch(e){}
+        return fallisci(GENERICO);
+      }
+
+      var acc = I.statoAccount(user);
+      if(!acc.puoAccedere) return fallisci(acc.messaggio || GENERICO);
+
+      var memorizzata = user.password_hash || user.passwordHash || '';
+      var esito;
+      try{ esito = await I.verifica(password, memorizzata); }
+      catch(e){ return fallisci('Accesso non riuscito. Riprova.'); }
+
+      if(!esito.ok){
+        if(esito.daMigrare){
+          /* Password salvata prima che esistesse l'hashing: non la si accetta,
+             perche' accettarla terrebbe in vita il difetto. */
+          return fallisci('Per motivi di sicurezza questa password va reimpostata. Usa «Password dimenticata».');
+        }
+        return fallisci(GENERICO);
+      }
 
       // Save last login in DB
-      user.lastLogin = new Date().toISOString();
       var dbRef = getDB();
-      var dbUser = dbRef.users.find(function(u){ return u.id === user.id; });
-      if(dbUser) dbUser.lastLogin = user.lastLogin;
-      localStorage.setItem(DB_KEY, JSON.stringify(dbRef));
+      var dbUser = (dbRef.users||[]).find(function(u){ return u.id === user.id; });
+      if(dbUser) dbUser.last_login = new Date().toISOString();
+      try{ localStorage.setItem(DB_KEY, JSON.stringify(dbRef)); }catch(e){}
 
-      var session = {
-        id:        user.id,
-        username:  user.username,
-        labName:   user.labName || user.username,
-        plan:      user.plan,
-        modules:   user.modules,
-        expiresAt: user.expiresAt,
-        loginAt:   new Date().toISOString(),
-      };
+      /* La sessione porta chi sei. Non che cosa puoi fare: niente `plan`,
+         niente `modules`, niente `expiresAt` di licenza. */
+      var session = I.creaSessione({
+        id: user.id || user.user_id,
+        email: user.email,
+        nome: user.nome || user.labName || null,
+        tenant_id: user.tenant_id || null,
+        ruolo: user.ruolo || 'owner',
+      }, { modalita: 'locale' });
+      session.labName = user.labName || user.nome || user.email;
+
       saveSession(session);
       this._session = session;
       this._hideGate();
@@ -1461,40 +1523,34 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     function success(user) {
       resetBtn();
       sessionStorage.removeItem(bfKey);
-      /* Update last_login AND ensure password_hash is synced */
-      var updateData = { last_login: new Date().toISOString() };
-      if (user.passwordHash || user.password_hash) {
-        updateData.password_hash = user.passwordHash || user.password_hash;
-      }
-      sbUpdate(user.id, updateData);
+      /* Si aggiorna soltanto la data di accesso. Prima questa riga rimandava al
+         cloud anche la password: sincronizzare un segreto a ogni login
+         significa moltiplicarne le copie senza motivo. */
+      sbUpdate(user.id, { last_login: new Date().toISOString() });
 
-      var _plan = user.plan || user.plan_id || 'starter';
-      var _isOwner = (user.username === 'owner') || (user.id === 'standalone-owner') || (user.email === 'owner@ingly.io');
-      // L'owner è il super-account: sempre Enterprise, accesso totale.
-      if (_isOwner) _plan = 'enterprise';
-      var modules = user.modules || user.modules_json;
-      if (typeof modules === 'string') { try { modules = JSON.parse(modules); } catch(e) { modules = null; } }
-      if (!modules || typeof modules === 'number' || (Array.isArray(modules) && modules.length === 0)) modules = getModules(_plan);
-      // Enterprise (e owner) = accesso a tutto, ignora eventuali modules_json stantii.
-      if (_isOwner || _plan === 'enterprise' || (Array.isArray(modules) && modules.indexOf('*') > -1)) modules = ['*'];
+      /* Niente scorciatoia per l'utente «owner». Un ramo che assegna
+         `enterprise` in base allo username e' una regola di accesso scritta
+         nel codice: chiunque crei un account con quel nome la eredita. Il
+         piano lo dice l'abbonamento, per tutti allo stesso modo. */
+      var I = window.InglyIdentita;
+      var session = I
+        ? I.creaSessione({
+            id: user.id || user.user_id,
+            email: user.email,
+            nome: user.lab_name || user.labName || user.company || user.nome || null,
+            tenant_id: user.tenant_id || null,
+            ruolo: user.ruolo || 'owner',
+          }, { modalita: sbConfigured && sbConfigured() ? 'cloud' : 'locale' })
+        : { user_id: user.id, email: user.email, tenant_id: user.tenant_id || null,
+            ruolo: 'owner', emessa: new Date().toISOString(),
+            scade: new Date(Date.now() + 12 * 3600 * 1000).toISOString() };
 
-      var expiry = user.expiresAt || user.expires_at;
-      if (!expiry && (user.status || user.plan_id) !== 'lifetime') {
-        expiry = new Date(Date.now() + 30 * 86400000).toISOString();
-      }
+      /* Comodita' di visualizzazione, non un diritto. */
+      session.labName = user.lab_name || user.labName || user.company || user.email;
 
-      var session = {
-        id: user.id, userId: user.id,
-        username: user.username,
-        labName: user.lab_name || user.labName || user.company || user.username,
-        plan: _plan,
-        modules: modules,
-        expiresAt: expiry,
-        status: user.status || 'active',
-        passwordHash: user.passwordHash || user.password_hash || '',
-        loginAt: new Date().toISOString()
-      };
-
+      /* La sessione non contiene: la password, il suo hash, il piano, i
+         moduli, la scadenza della licenza. Chi apre `sessionStorage` vede chi
+         e' connesso, non che cosa puo' fare. */
       try { sessionStorage.setItem('ingly_saas_session', JSON.stringify(session)); } catch(e) {}
       window.SaaSGate._session = session;
       window.SaaSGate._hideGate();
@@ -1502,33 +1558,44 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       startMonitor(session);
     }
 
+    /* Questo era il **secondo** percorso di accesso, con lo stesso confronto in
+       chiaro del primo — scritto due volte, in due punti dello stesso file. Il
+       mandato vieta un secondo sistema di autenticazione: qui non se ne crea
+       uno, se ne toglie uno. Entrambi i percorsi passano ora dalla stessa
+       verifica, che e' quella che sa confrontare un hash. */
     function tryUser(user, source) {
-      if (!user) { fail('Utente non trovato'); return; }
-      var activeOk = user.active === true || ['active','trial','lifetime'].indexOf(user.status || user.plan_id) > -1;
-      if (!activeOk) { fail('Account ' + (user.status || 'inattivo')); return; }
-      var pwd = user.passwordHash || user.password_hash || '';
-      /* If Supabase returned empty password (user synced without pwd), try localStorage */
+      var GENERICO = 'Email o password non corretti';
+      var I = window.InglyIdentita;
+      if (!I) { fail('Servizio di accesso non disponibile. Ricarica la pagina.'); return; }
+      if (!user) { fail(GENERICO); return; }
+
+      var acc = I.statoAccount(user);
+      if (!acc.puoAccedere) { fail(acc.messaggio || GENERICO); return; }
+      /* Compatibilita' con i record piu' vecchi, che non hanno `status`. */
+      if (user.active === false) { fail(GENERICO); return; }
+
+      var pwd = user.password_hash || user.passwordHash || '';
+      /* Un account sincronizzato dal cloud senza password: la password resta
+         quella locale. Non si cerca un secondo posto dove confrontarla in
+         chiaro — si prende l'hash locale e lo si verifica come ogni altro. */
       if (!pwd && source === 'cloud') {
         var db = loadDB();
         var lsUser = db && (db.users || []).find(function(u) {
           return u.username === user.username || u.id === user.id;
         });
-        if (lsUser && (lsUser.passwordHash || lsUser.password_hash)) {
-          /* Verify against localStorage password */
-          var lsPwd = lsUser.passwordHash || lsUser.password_hash;
-          if (lsPwd === password) { success(Object.assign({}, user, { passwordHash: lsPwd })); return; }
-          else { fail('Password non corretta'); return; }
+        if (lsUser) pwd = lsUser.password_hash || lsUser.passwordHash || '';
+      }
+      if (!pwd) { fail('Questo account non ha una password impostata. Usa \u00abPassword dimenticata\u00bb.'); return; }
+
+      I.verifica(password, pwd).then(function(esito){
+        if (!esito.ok) {
+          fail(esito.daMigrare
+            ? 'Per motivi di sicurezza questa password va reimpostata. Usa \u00abPassword dimenticata\u00bb.'
+            : GENERICO);
+          return;
         }
-      }
-      if (!pwd) { fail('Account non ha password. Contatta l\u2019amministratore.'); return; }
-      if (pwd !== password) { fail('Password non corretta'); return; }
-      var expiry = user.expiresAt || user.expires_at;
-      var isLifetime = (user.status === 'lifetime');
-      if (!isLifetime && expiry && new Date(expiry) < new Date()) {
-        fail('Licenza scaduta il ' + new Date(expiry).toLocaleDateString('it-IT'));
-        return;
-      }
-      success(user);
+        success(user);
+      }).catch(function(){ fail('Accesso non riuscito. Riprova.'); });
     }
 
     /* Prima prova cloud, poi localStorage */
@@ -1586,7 +1653,7 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     var btn = document.getElementById('reg-submit');
     err.style.display='none';
     if(!lab || !user || !email || !pass){ err.textContent='Compila tutti i campi'; err.style.display='block'; return; }
-    if(pass.length<6){ err.textContent='Password troppo corta (min 6 caratteri)'; err.style.display='block'; return; }
+    if(pass.length<8){ err.textContent='La password deve avere almeno 8 caratteri'; err.style.display='block'; return; }
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ err.textContent='Email non valida'; err.style.display='block'; return; }
     if(!/^[a-zA-Z0-9._-]{3,}$/.test(user)){ err.textContent='Username: min 3 caratteri (lettere, numeri, . _ -)'; err.style.display='block'; return; }
     // username già in uso in locale?
@@ -1601,17 +1668,64 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       window.SaaSGate.login();
     }
     function create(){
-      var trialDays=14;
-      var u={ id:_regUid(), username:user, email:email, labName:lab,
-        plan:'pro', plan_id:'pro', status:'trial',
-        modules:getModules('pro'), active:true,
-        expiresAt:new Date(Date.now()+trialDays*86400000).toISOString(),
-        passwordHash:pass, password_hash:pass, createdAt:new Date().toISOString() };
-      db.users.unshift(u);
-      try{ localStorage.setItem('ingly_saas_db', JSON.stringify(db)); }catch(e){}
-      // sync su Supabase (best-effort)
-      try{ if(typeof sbUpsert==='function') sbUpsert(u); }catch(e){}
-      setTimeout(finish, 400);
+      /* La password non viene mai memorizzata ne' trasmessa in chiaro. Prima
+         questa funzione scriveva `passwordHash: pass` — cioe' la password —
+         e poi la mandava al cloud con `sbUpsert(u)`. Due copie in chiaro, una
+         locale e una remota, per ogni account creato. */
+      var I = window.InglyIdentita;
+      var A = window.InglyAbbonamento;
+      if(!I){
+        btn.disabled=false; btn.innerHTML='Crea account e prova gratis';
+        err.textContent='Servizio di registrazione non disponibile. Ricarica la pagina.';
+        err.style.display='block'; return;
+      }
+
+      var forza = I.robustezza(pass);
+      if(!forza.ok){
+        btn.disabled=false; btn.innerHTML='Crea account e prova gratis';
+        err.textContent='Password troppo debole: ' + forza.problemi.join(', ');
+        err.style.display='block'; return;
+      }
+
+      I.cifra(pass).then(function(hash){
+        var tenantId = 'ws_' + _regUid();
+        /* Il workspace nasce con la sua prova. Piano e durata li dice il
+           catalogo: non sono scritti qui. */
+        var abbonamento = A ? A.creaTrial({ tenant_id: tenantId }) : null;
+
+        var u={ id:_regUid(), user_id:_regUid(), username:user, email:email, labName:lab,
+          nome: lab,
+          status:'active', active:true,
+          tenant_id: tenantId, ruolo:'owner',
+          password_hash: hash,
+          created_at: new Date().toISOString() };
+
+        db.users.unshift(u);
+        db.tenants = db.tenants || [];
+        db.tenants.unshift({ id: tenantId, nome: lab, owner_id: u.id,
+          created_at: new Date().toISOString() });
+        db.subscriptions = db.subscriptions || [];
+        if(abbonamento) db.subscriptions.unshift(abbonamento);
+
+        try{ localStorage.setItem('ingly_saas_db', JSON.stringify(db)); }catch(e){}
+
+        /* Sul cloud va l'account **senza** la password: l'autenticazione
+           remota sara' di Supabase Auth, che le password se le tiene lui. */
+        try{
+          if(typeof sbUpsert==='function'){
+            var senzaSegreti = Object.assign({}, u);
+            delete senzaSegreti.password_hash;
+            delete senzaSegreti.passwordHash;
+            sbUpsert(senzaSegreti);
+          }
+        }catch(e){}
+        setTimeout(finish, 400);
+      }).catch(function(e){
+        btn.disabled=false; btn.innerHTML='Crea account e prova gratis';
+        err.textContent='Registrazione non riuscita. Riprova.';
+        err.style.display='block';
+        console.warn('[SaaSGate] registrazione:', e && e.message);
+      });
     }
     // controllo unicità username anche su cloud, poi crea
     if(typeof sbConfigured==='function' && sbConfigured() && typeof sbGet==='function'){
