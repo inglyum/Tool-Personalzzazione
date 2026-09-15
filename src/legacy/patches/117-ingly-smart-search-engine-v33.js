@@ -991,6 +991,17 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
   `;
   document.body.appendChild(gateEl);
 
+  /* La schermata di accesso viene ridisegnata dal modulo di lancio, che
+     sostituisce solo l'aspetto: i campi conservano gli stessi `id`, quindi la
+     logica qui sotto — quella appena messa in sicurezza — non cambia. Se il
+     modulo non c'e', resta la schermata di prima: nessuna pagina bianca. */
+  (function ridisegna(tentativi){
+    try{
+      if(window.InglyLancio && window.InglyLancio.disegnaAccesso()) return;
+    }catch(e){ console.warn('[SaaSGate] aspetto non applicato:', e && e.message); return; }
+    if((tentativi||0) < 40) setTimeout(function(){ ridisegna((tentativi||0)+1); }, 150);
+  })(0);
+
   // ── STRIPE BILLING (Payment Links, no-backend) ─────────────────
   // I link di pagamento si configurano dall'Admin (uno per piano) e si salvano
   // in localStorage['ingly_stripe_links']. Finché non ci sono, si ricade sulla
@@ -1169,7 +1180,29 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       window._SAAS_GATE_BLOCKING = false;
     },
 
+    /* Il contesto dei diritti si ricostruisce a ogni applicazione di
+       sessione: l'abbonamento si legge dall'archivio, non dalla sessione. */
+    _applicaDiritti: function(){
+      try{
+        var E = window.InglyEntitlements;
+        if(!E) return;
+        var s = this._session || {};
+        var db = getDB();
+        var sub = (db.subscriptions || []).find(function(x){
+          return x && x.tenant_id && s.tenant_id && String(x.tenant_id) === String(s.tenant_id);
+        }) || null;
+        E.usaContesto({
+          abbonamento: sub,
+          ruolo: s.ruolo || 'owner',
+          tenant_id: s.tenant_id || null,
+          utilizzo: (window.InglyUtilizzo && window.InglyUtilizzo.corrente)
+            ? window.InglyUtilizzo.corrente() : {},
+        });
+      }catch(e){ console.warn('[SaaSGate] diritti non applicati:', e && e.message); }
+    },
+
     _applySession: function(){
+      this._applicaDiritti();
       var session = this._session;
       if(!session) return;
 
