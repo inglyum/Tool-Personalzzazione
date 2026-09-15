@@ -170,9 +170,15 @@ const ui = await page.evaluate(() => {
     window.InglyEntitlements.can('production', { abbonamento: S.creaAttivo('standard', 'monthly') }));
 
   const gate = document.getElementById('saas-gate');
-  const campi = ['gate-user', 'gate-pass', 'gate-submit', 'gate-err',
-    'reg-lab', 'reg-user', 'reg-email', 'reg-pass', 'reg-submit', 'reg-err']
-    .filter((id) => !!document.getElementById(id));
+  /* Con l'archivio vuoto la schermata è quella di primo avvio, non quella di
+     accesso: sono due stati legittimi e l'elenco dei campi cambia. Un test che
+     ne assume uno solo misura la schermata sbagliata. */
+  const primoAvvio = !!(window.InglyPrimoAvvio && window.InglyPrimoAvvio.serve().serve);
+  const attesi = primoAvvio
+    ? ['su-lab', 'su-nome', 'su-email', 'su-pass', 'su-conf', 'su-submit', 'su-err']
+    : ['gate-user', 'gate-pass', 'gate-submit', 'gate-err',
+      'reg-lab', 'reg-user', 'reg-email', 'reg-pass', 'reg-submit', 'reg-err'];
+  const campi = attesi.filter((id) => !!document.getElementById(id));
   const etichette = gate ? gate.querySelectorAll('label[for]').length : 0;
   const risultato = {
     prezziHa3: (testoPrezzi.match(/Standard|Premium|Business/g) || []).length >= 3,
@@ -183,7 +189,9 @@ const ui = await page.evaluate(() => {
     abbStato: /Attivo/.test(testoAbb),
     bloccoPremium: /Premium/.test(bloccoHtml) && /Scopri/.test(bloccoHtml),
     gateEsiste: !!gate,
+    primoAvvio: primoAvvio,
     campi: campi.length,
+    attesi: attesi.length,
     etichette: etichette,
     /* Nessuna emoji come elemento strutturale nella schermata di accesso. */
     emojiNelGate: gate ? (gate.innerHTML.match(/[\u{1F300}-\u{1FAFF}]/gu) || []).length : -1,
@@ -197,7 +205,8 @@ dico('la chiamata all\'azione è «Inizia gratis», non «Compra ora»', ui.prez
 dico('l\'abbonamento mostra piano, stato e utilizzo (82/500)',
   ui.abbPiano && ui.abbStato && ui.abbUso);
 dico('il blocco di una funzione propone il piano invece di nasconderla', ui.bloccoPremium);
-dico('la schermata di accesso ha tutti e dieci i campi (' + ui.campi + ')', ui.campi === 10);
+dico('la schermata ' + (ui.primoAvvio ? 'di primo avvio' : 'di accesso')
+  + ' ha tutti i suoi campi (' + ui.campi + '/' + ui.attesi + ')', ui.campi === ui.attesi);
 dico('ogni campo ha la sua etichetta (' + ui.etichette + ')', ui.etichette >= 6);
 dico('nessuna emoji come struttura nella schermata di accesso (' + ui.emojiNelGate + ')',
   ui.emojiNelGate === 0);
