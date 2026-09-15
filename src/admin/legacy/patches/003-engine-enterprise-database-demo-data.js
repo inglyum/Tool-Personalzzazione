@@ -27,17 +27,40 @@ function dbLoad(){
     // Ensure all required arrays exist
     if (!db.users)        db.users = [];
     if (!db.admins)       db.admins = [];
+    /* ── Perché qui, e non solo in `createDB()` ────────────────────────
+       Questo pannello **condivide l'archivio con l'applicazione**: stessa
+       chiave `ingly_saas_db`. Quindi quando qualcuno crea il proprio account
+       nell'applicazione, l'archivio esiste già, `createDB()` non viene mai
+       eseguito, e l'elenco degli amministratori resta vuoto per sempre.
+
+       Risultato misurato: la console mostrava una schermata di accesso che
+       non poteva accettare nessuno. Non era una password sbagliata — non
+       c'era proprio nessun account da verificare.
+
+       Il super amministratore si semina anche su un archivio esistente, e
+       **senza password**: la sceglie chi apre il pannello la prima volta. */
+    if (!db.admins.length) {
+      db.admins.push({
+        id:'adm-0001', username:'superadmin', email:'superadmin@ingly.io',
+        role:'superadmin', name:'Super Admin', passwordHash:null,
+        lastLogin:null, active:true, mustChangePassword:true
+      });
+      try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e){}
+    }
     if (!db.auditLog)     db.auditLog = [];
     if (!db.sessions)     db.sessions = [];
     if (!db.creations)    db.creations = [];
     if (!db.secEvents)    db.secEvents = [];
     if (!db.notifications) db.notifications = [];
     if (!db.blockedIPs)   db.blockedIPs = [];
-    // Auto-fix: normalize admin passwords and flags for backward compat
+    /* Questa riga azzerava `mustChangePassword` su **ogni** amministratore a
+       ogni caricamento. Un amministratore creato apposta con l'obbligo di
+       cambiare password lo perdeva prima ancora di accedere, e la schermata
+       di primo accesso non compariva mai. Un flag che si cancella da solo non
+       è un flag: è un commento. */
     if (db.admins) {
       db.admins.forEach(function(a) {
-        a.mustChangePassword = false; // disable forced change
-        if (!a.active) a.active = true; // ensure admins are active
+        if (a.active === undefined) a.active = true;
       });
     }
     return db;

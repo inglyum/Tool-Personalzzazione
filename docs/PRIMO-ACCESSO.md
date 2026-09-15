@@ -66,9 +66,40 @@ non una misura di sicurezza.
 ## INGLY CLOUD ADMIN — il pannello separato
 
 `dist/INGLY-CLOUD-ADMIN.html` è lo strumento di amministrazione delle licenze,
-separato dall'applicazione. Anche lì non c'è una password preimpostata: esiste
-un solo `superadmin` **senza password**, e al primo accesso la scegli tu. Da
-quel momento è cifrata come le altre.
+separato dall'applicazione.
+
+1. Apri il file.
+2. Nel campo utente scrivi **`superadmin`**.
+3. Nel campo password scrivi **una password qualunque** — serve solo a far
+   partire il primo accesso, non viene confrontata con niente.
+4. Compare «Imposta la tua password»: scegli quella vera (minimo 8 caratteri,
+   almeno un numero e una maiuscola) e confermala.
+5. Entri. Dalla volta dopo si accede con `superadmin` e quella password.
+
+Anche qui **non c'è nessuna password preimpostata**, e la schermata non ne
+promette più una.
+
+### Il difetto che c'era, e perché
+
+Fino alla versione precedente la schermata mostrava «Credenziali predefinite —
+username `superadmin`, password `admin`» con un pulsante che le inseriva. Erano
+due cose sbagliate insieme:
+
+- una credenziale identica in ogni copia distribuita del file;
+- e per giunta **inesistente**, quindi non funzionava.
+
+La causa della seconda: il pannello **condivide l'archivio del browser con
+l'applicazione** (stessa chiave `ingly_saas_db`). Il super amministratore
+veniva creato solo quando l'archivio non esisteva. Ma appena qualcuno apre
+l'applicazione e crea il proprio account, l'archivio esiste — e da quel momento
+il pannello non creava più nessun amministratore. Restava una schermata di
+accesso che non poteva accettare nessuno.
+
+Ora l'amministratore si semina anche su un archivio già esistente, senza
+password, e i dati dell'applicazione non vengono toccati.
+`tests/qa/admin-console-accesso.mjs` percorre la strada intera — archivio
+vuoto, archivio già creato dall'app, primo accesso, ricaricamento, password
+sbagliata — e verifica anche che le due parti non si cancellino a vicenda.
 
 ## Ambiente di sviluppo
 

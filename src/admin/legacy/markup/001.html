@@ -27,20 +27,17 @@
       </div>
       <button class="lc-btn" onclick="doLogin()"><i class="fas fa-sign-in-alt"></i> Accedi</button>
       <div class="lc-err" id="l-err"></div>
-      <div style="margin-top:14px;padding:12px 14px;background:#6366f112;border:1px solid #6366f135;border-radius:10px;font-size:12px">
-        <div style="font-weight:800;color:var(--acc3);margin-bottom:8px;font-size:13px">🔑 Credenziali predefinite</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="color:var(--text2)">Username:</span>
-          <code style="background:#111;padding:2px 8px;border-radius:4px;color:#e2e2f0;font-size:12px">superadmin</code>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="color:var(--text2)">Password:</span>
-          <code style="background:#111;padding:2px 8px;border-radius:4px;color:#e2e2f0;font-size:12px">admin</code>
-        </div>
-        <button onclick="document.getElementById('l-user').value='superadmin';document.getElementById('l-pass').value='admin';doLogin();" 
-          style="width:100%;padding:8px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px">
-          ⚡ Accedi con credenziali predefinite
-        </button>
+      <!-- Qui c'erano le credenziali predefinite scritte a schermo — username
+           «superadmin», password «admin» — con un pulsante che le inseriva da
+           solo. Erano due cose sbagliate insieme: una credenziale uguale in
+           ogni copia distribuita, e per giunta **inesistente**, perché il
+           database degli admin nasce vuoto. Chi provava non entrava, e chi
+           avesse potuto entrare l'avrebbe fatto su qualunque installazione. -->
+      <div style="margin-top:14px;padding:12px 14px;background:#6366f112;border:1px solid #6366f135;border-radius:10px;font-size:12px;line-height:1.6;color:var(--text2)">
+        <div style="font-weight:800;color:var(--acc3);margin-bottom:6px;font-size:13px">Primo accesso</div>
+        Alla prima apertura scrivi <code style="background:#111;padding:2px 7px;border-radius:4px;color:#e2e2f0">superadmin</code>
+        come utente e <strong>una password a tua scelta</strong>: sarà quella da impostare.
+        Nessuna password è preconfigurata in questo file.
       </div>
     </div>
     <div style="text-align:center;margin-top:10px;font-size:10px;color:var(--text4)">🔐 Connessione crittografata · Sessione monitorata · v2.0 Enterprise</div>

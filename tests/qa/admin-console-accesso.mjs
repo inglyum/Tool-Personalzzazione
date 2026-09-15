@@ -1,0 +1,288 @@
+#!/usr/bin/env node
+/**
+ * admin-console-accesso.mjs — si entra davvero nel pannello amministrazione?
+ *
+ * Questa suite nasce da un difetto segnalato e riprodotto: la console mostrava
+ * una schermata di accesso che **non poteva accettare nessuno**. Non era una
+ * password sbagliata — l'elenco degli amministratori era vuoto.
+ *
+ * La causa: il pannello condivide l'archivio con l'applicazione (stessa chiave
+ * `ingly_saas_db`). Appena qualcuno crea il proprio account nell'applicazione
+ * l'archivio esiste, `createDB()` non viene più eseguito, e il super
+ * amministratore non nasce mai.
+ *
+ * Qui si percorre la strada intera, due volte: su archivio vuoto e su archivio
+ * già creato dall'applicazione — che è il caso in cui il difetto si
+ * manifestava.
+ *
+ *   node tests/qa/admin-console-accesso.mjs [file]
+ */
+import path from 'node:path';
+import { chromium } from 'playwright';
+
+/* Questa suite collauda il pannello, non l'applicazione. Il lanciatore della
+   regressione passa a tutte lo stesso file: se non è quello del pannello, si
+   usa il proprio. */
+const passato = process.argv[2];
+const file = (passato && /ADMIN/i.test(passato)) ? passato : 'dist/INGLY-CLOUD-ADMIN.html';
+const url = 'file://' + path.resolve(file);
+const browser = await chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+});
+
+const passi = [];
+const dico = (k, v) => passi.push({ passo: k, esito: !!v });
+const erroriJS = [];
+
+async function nuovaPagina(preparazione) {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => erroriJS.push(String(e.message).slice(0, 160)));
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  if (preparazione) await page.addInitScript(preparazione);
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForTimeout(9000);
+  return { page, ctx };
+}
+
+/* ── La schermata non promette più credenziali inesistenti ──────────────── */
+
+{
+  const { page, ctx } = await nuovaPagina();
+  const schermo = await page.evaluate(() => ({
+    testo: (document.body.innerText || '').replace(/\s+/g, ' '),
+    bottoni: [...document.querySelectorAll('button')].map((b) => (b.textContent || '').trim()),
+  }));
+  dico('la schermata non mostra più una password predefinita',
+    !/Password:\s*admin/i.test(schermo.testo) && !/Credenziali predefinite/i.test(schermo.testo));
+  dico('e non c\'è più il pulsante che le inseriva da solo',
+    !schermo.bottoni.some((b) => /credenziali predefinite/i.test(b)));
+  dico('spiega invece che la password la si sceglie al primo accesso',
+    /Primo accesso/i.test(schermo.testo) && /a tua scelta/i.test(schermo.testo));
+  await ctx.close();
+}
+
+/* ── Archivio vuoto: il super amministratore esiste e non ha password ───── */
+
+{
+  const { page, ctx } = await nuovaPagina();
+  const stato = await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    const a = (db.admins || [])[0] || null;
+    return {
+      quanti: (db.admins || []).length,
+      username: a && a.username,
+      senzaPassword: a ? a.passwordHash === null : false,
+      deveCambiare: a ? a.mustChangePassword === true : false,
+      attivo: a ? a.active === true : false,
+    };
+  });
+  dico('archivio vuoto: nasce un amministratore (' + stato.quanti + ')', stato.quanti === 1);
+  dico('si chiama superadmin', stato.username === 'superadmin');
+  dico('e nasce SENZA password', stato.senzaPassword);
+  dico('con l\'obbligo di impostarla, che non viene più azzerato al caricamento',
+    stato.deveCambiare);
+  await ctx.close();
+}
+
+/* ── Il caso del difetto: archivio già creato dall'applicazione ─────────── */
+
+const archivioApp = () => {
+  localStorage.setItem('ingly_saas_db', JSON.stringify({
+    users: [{ id: 'usr_1', email: 'giuseppe@belice.it', tenant_id: 'ws_1', ruolo: 'owner',
+      status: 'active', password_hash: 'pbkdf2$210000$AAAA$BBBB' }],
+    tenants: [{ id: 'ws_1', nome: 'Bottega Belice' }],
+    subscriptions: [{ tenant_id: 'ws_1', plan_id: 'business', status: 'active' }],
+  }));
+};
+
+{
+  const { page, ctx } = await nuovaPagina(archivioApp);
+  const stato = await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    const a = (db.admins || [])[0] || null;
+    return {
+      quanti: (db.admins || []).length,
+      senzaPassword: a ? a.passwordHash === null : false,
+      /* L'archivio dell'applicazione non deve essere stato toccato. */
+      utentiApp: (db.users || []).length,
+      workspace: (db.tenants || []).length,
+      abbonamenti: (db.subscriptions || []).length,
+    };
+  });
+  dico('archivio già creato dall\'app: l\'amministratore nasce lo stesso ('
+    + stato.quanti + ')', stato.quanti === 1);
+  dico('e nasce senza password, come deve', stato.senzaPassword);
+  dico('senza toccare utenti, workspace e abbonamenti dell\'applicazione',
+    stato.utentiApp === 1 && stato.workspace === 1 && stato.abbonamenti === 1);
+  await ctx.close();
+}
+
+/* ── Il percorso intero, e il ritorno il giorno dopo ────────────────────────
+   Un solo contesto per tutto: l'archivio deve sopravvivere al ricaricamento,
+   come sopravvive sul computer di chi usa il pannello. Aprire una pagina nuova
+   ogni volta misurerebbe sempre il primo accesso, che non è la domanda. */
+
+{
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  /* La preparazione vale per la prima apertura soltanto. Metterla sul
+     contesto la rieseguirebbe a ogni ricaricamento, riscrivendo l'archivio e
+     cancellando l'amministratore: misurerei il mio stesso collaudo. */
+  await page.addInitScript(archivioApp);
+  page.on('pageerror', (e) => erroriJS.push(String(e.message).slice(0, 160)));
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForTimeout(9000);
+
+  const primo = await page.evaluate(async () => {
+    document.getElementById('l-user').value = 'superadmin';
+    document.getElementById('l-pass').value = 'qualunque';
+    await doLogin();
+    await new Promise((r) => setTimeout(r, 900));
+    return {
+      chiedePassword: !!document.getElementById('fl-pwd1'),
+      testo: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 200),
+    };
+  });
+  dico('al primo accesso chiede di impostare la password', primo.chiedePassword);
+  dico('e lo dice chiaramente', /PRIMO ACCESSO|Imposta la tua password/i.test(primo.testo));
+
+  const debole = await page.evaluate(async () => {
+    document.getElementById('fl-pwd1').value = 'corta';
+    document.getElementById('fl-pwd2').value = 'corta';
+    await _doFirstLogin();
+    await new Promise((r) => setTimeout(r, 500));
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    return { ancoraSenzaPassword: (db.admins || [])[0].passwordHash === null,
+      err: (document.getElementById('fl-err') || {}).textContent || '' };
+  });
+  dico('una password debole viene rifiutata e non viene salvata',
+    debole.ancoraSenzaPassword);
+
+  const impostata = await page.evaluate(async () => {
+    document.getElementById('fl-pwd1').value = 'Amministra2026';
+    document.getElementById('fl-pwd2').value = 'Amministra2026';
+    await _doFirstLogin();
+    await new Promise((r) => setTimeout(r, 1400));
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    const a = (db.admins || [])[0] || {};
+    return {
+      hash: String(a.passwordHash || ''),
+      deveAncoraCambiare: a.mustChangePassword === true,
+      dentro: (function () {
+        var ls = document.getElementById('login-screen');
+        var nascosto = !ls || getComputedStyle(ls).display === 'none';
+        return nascosto && /Benvenuto|Dashboard/i.test(document.body.innerText || '');
+      }()),
+      utentiApp: (db.users || []).length,
+    };
+  });
+  dico('la password si imposta e viene cifrata (' + impostata.hash.slice(0, 16) + '…)',
+    impostata.hash.length > 20 && impostata.hash.indexOf('Amministra2026') < 0);
+  dico('l\'obbligo di cambiarla si spegne solo dopo averla impostata',
+    impostata.deveAncoraCambiare === false);
+  dico('e si entra nella console', impostata.dentro);
+  dico('i dati dell\'applicazione sono intatti', impostata.utentiApp === 1);
+
+  /* Il giorno dopo: si ricarica la pagina, l'archivio è quello di prima. */
+  const page2 = await ctx.newPage();
+  page2.on('pageerror', (e) => erroriJS.push(String(e.message).slice(0, 160)));
+  page2.on('dialog', (d) => d.accept().catch(() => {}));
+  await page2.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page2.waitForTimeout(9000);
+
+  const ritorno = await page2.evaluate(async () => {
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    const a = (db.admins || [])[0] || {};
+    const chiedeAncora = !!document.getElementById('fl-pwd1');
+    document.getElementById('l-user').value = 'superadmin';
+    document.getElementById('l-pass').value = 'Amministra2026';
+    await doLogin();
+    await new Promise((r) => setTimeout(r, 1200));
+    return {
+      passwordConservata: String(a.passwordHash || '').length > 20,
+      chiedeAncora: chiedeAncora,
+      dentro: (function () {
+        var ls = document.getElementById('login-screen');
+        var nascosto = !ls || getComputedStyle(ls).display === 'none';
+        return nascosto && /Benvenuto|Dashboard/i.test(document.body.innerText || '');
+      }()),
+    };
+  });
+  dico('ricaricando, la password resta salvata', ritorno.passwordConservata);
+  dico('e la schermata di primo accesso NON si ripresenta', ritorno.chiedeAncora === false);
+  dico('si rientra con la password scelta', ritorno.dentro);
+
+  const page3 = await ctx.newPage();
+  page3.on('dialog', (d) => d.accept().catch(() => {}));
+  await page3.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page3.waitForTimeout(9000);
+  const sbagliata = await page3.evaluate(async () => {
+    document.getElementById('l-user').value = 'superadmin';
+    document.getElementById('l-pass').value = 'Amministra2027';
+    await doLogin();
+    await new Promise((r) => setTimeout(r, 1200));
+    var ls = document.getElementById('login-screen');
+    return {
+      dentro: (!ls || getComputedStyle(ls).display === 'none')
+        && /Benvenuto|Dashboard/i.test(document.body.innerText || ''),
+      messaggio: ((document.getElementById('l-err') || {}).textContent || '').trim(),
+    };
+  });
+  dico('con una password sbagliata NON si entra', sbagliata.dentro === false);
+  dico('e il messaggio lo dice: «' + sbagliata.messaggio + '»',
+    /non valid/i.test(sbagliata.messaggio));
+
+  await ctx.close();
+}
+
+/* ── L'app e la console condividono l'archivio: non devono calpestarsi ──── */
+
+{
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForTimeout(9000);
+
+  const esito = await page.evaluate(() => {
+    /* La console ha seminato il suo amministratore. Ora si simula quello che
+       fa l'applicazione al primo avvio: scrivere utenti, workspace e
+       abbonamento nello **stesso** archivio. */
+    const prima = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    const adminPrima = (prima.admins || []).length;
+
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    db.users = [{ id: 'usr_1', email: 'g@belice.it', tenant_id: 'ws_1', ruolo: 'owner' }];
+    db.tenants = [{ id: 'ws_1', nome: 'Bottega Belice' }];
+    db.subscriptions = [{ tenant_id: 'ws_1', plan_id: 'business', status: 'active' }];
+    localStorage.setItem('ingly_saas_db', JSON.stringify(db));
+
+    const dopo = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    return { adminPrima, adminDopo: (dopo.admins || []).length,
+      utenti: (dopo.users || []).length };
+  });
+  dico('la console semina il suo amministratore (' + esito.adminPrima + ')', esito.adminPrima === 1);
+  dico('e l\'applicazione, scrivendo nello stesso archivio, non lo cancella ('
+    + esito.adminDopo + ')', esito.adminDopo === 1 && esito.utenti === 1);
+  await ctx.close();
+}
+
+console.log('\nCONSOLE AMMINISTRAZIONE · ACCESSO\n');
+const problemi = [];
+for (const p of passi) {
+  console.log('  ' + (p.esito ? '✔' : '✘') + '  ' + p.passo);
+  if (!p.esito) problemi.push(p.passo);
+}
+erroriJS.forEach((e) => problemi.push('errore JS: ' + e));
+console.log('\ncontrolli: ' + passi.length + ' · errori JavaScript: ' + erroriJS.length);
+if (problemi.length) {
+  console.error('\nPROBLEMI');
+  problemi.forEach((p) => console.error('  · ' + p));
+  console.log('');
+  await browser.close();
+  process.exit(1);
+}
+console.log('\nsi entra, e solo con la propria password ✔\n');
+await browser.close();
