@@ -244,8 +244,17 @@ window.InglySync = {
     // Mappa nel formato Print3DQuoter
     if(typeof Print3DQuoter === 'undefined'){ return; }
     // Aggiungi al localStorage dei materiali 3D
-    var stored = {};
-    try{ stored = JSON.parse(localStorage.getItem('p3dq_v4')||'{}'); }catch(e){}
+    /* La lettura e la scrittura sono la stessa operazione: questa funzione
+       riscrive l'oggetto intero, quindi se la lettura fallisce `stored` resta
+       vuoto e la scrittura porta via anche `saved` — i preventivi 3D salvati
+       dall'utente. Un archivio illeggibile e' un problema; cancellarlo per
+       reazione e' un problema peggiore. Quindi: non si scrive. */
+    var stored = null;
+    try{ stored = JSON.parse(localStorage.getItem('p3dq_v4')||'{}') || {}; }catch(e){ stored = null; }
+    if(!stored){
+      if(typeof window.showToast === 'function') window.showToast('Archivio 3D illeggibile: importazione annullata per non sovrascriverlo','error',8000);
+      return;
+    }
     var existMats = stored.mats || [];
     var existNames = existMats.map(function(m){return m.n.toLowerCase();});
     var added = 0;

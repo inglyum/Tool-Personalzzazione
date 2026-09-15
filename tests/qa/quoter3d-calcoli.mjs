@@ -532,8 +532,16 @@ const ricaricato = await page.evaluate(async () => {
      stato corrente, e se arriva prima della lettura l'elenco risulta vuoto.
      Che l'archivio sopravviva al ricaricamento è quello che questa fase deve
      misurare, e si misura appena ricaricato. */
+  /* L'attesa era a budget fisso — 8 secondi — e sotto carico l'avvio
+     dell'applicazione ci mette di piu': la fase falliva per contesa di CPU e
+     non per un difetto. Ora si aspetta che il preventivatore esista davvero,
+     e solo dopo si legge l'archivio. Quello che la fase misura non cambia. */
+  for (let atteso = 0; atteso < 30000; atteso += 250) {
+    if (typeof window.Print3DQuoter !== 'undefined' && typeof window.App !== 'undefined') break;
+    await new Promise((s) => setTimeout(s, 250));
+  }
   let saved = [];
-  for (let atteso = 0; atteso < 8000; atteso += 250) {
+  for (let atteso = 0; atteso < 20000; atteso += 250) {
     saved = (JSON.parse(localStorage.getItem('p3dq_v4') || '{}').saved) || [];
     if (saved.length) break;
     await new Promise((s) => setTimeout(s, 250));
