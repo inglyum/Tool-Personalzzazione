@@ -118,6 +118,9 @@ export const PRODUCT_FILES = [
   'entitlements.js',
   'auth-identity.js',
   'saas-view.js',
+  'setup-iniziale.js',
+  'admin-view.js',
+  'saas-sezioni.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',
   /* Il registro di com'è andata davvero: un proprietario solo per tutti i

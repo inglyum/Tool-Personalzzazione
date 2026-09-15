@@ -247,7 +247,7 @@ var INDEX = [
 })();
 
 /* ── UTILS ────────────────────────────────────────────────── */
-function normalize(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function normalize(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[-\u036f]/g,''); }
 function highlight(text, query){
   if(!query) return text;
   var re = new RegExp('('+query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')', 'gi');
@@ -997,7 +997,15 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
      modulo non c'e', resta la schermata di prima: nessuna pagina bianca. */
   (function ridisegna(tentativi){
     try{
-      if(window.InglyLancio && window.InglyLancio.disegnaAccesso()) return;
+      if(window.InglyLancio && window.InglyLancio.disegnaAccesso()){
+        /* Archivio senza utenti: non si chiede di accedere, si chiede di
+           creare l'account amministratore. E' il percorso che sostituisce la
+           credenziale scritta nel codice. */
+        try{
+          if(window.InglyPrimoAvvio) window.InglyPrimoAvvio.disegna();
+        }catch(e2){ console.warn('[SaaSGate] primo avvio:', e2 && e2.message); }
+        return;
+      }
     }catch(e){ console.warn('[SaaSGate] aspetto non applicato:', e && e.message); return; }
     if((tentativi||0) < 40) setTimeout(function(){ ridisegna((tentativi||0)+1); }, 150);
   })(0);
