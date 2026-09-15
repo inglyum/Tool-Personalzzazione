@@ -224,3 +224,78 @@ test('avanzamento · nessuna operazione si dice, non si finge al 100%', () => {
   assert.equal(a.pct, null);
   assert.match(a.testo, /nessuna/);
 });
+
+/* ── Le transizioni (Fase 6) ────────────────────────────────────────────── */
+
+test('transizioni · un salto impossibile viene rifiutato con il motivo', () => {
+  const v = O.transizioneValida('da_fare', 'completata');
+  assert.equal(v.ok, false);
+  assert.match(v.motivo, /non si passa/);
+  assert.equal(v.ammesse.join('|'), 'in_coda|in_produzione|annullata');
+});
+
+test('transizioni · il percorso normale è permesso', () => {
+  ['da_fare>in_coda', 'in_coda>in_produzione', 'in_produzione>controllo_qualita',
+    'controllo_qualita>completata', 'in_produzione>pausa', 'pausa>in_produzione']
+    .forEach((p) => {
+      const [a, b] = p.split('>');
+      assert.equal(O.transizioneValida(a, b).ok, true, p);
+    });
+});
+
+test('transizioni · i due passaggi all\'indietro che servono davvero', () => {
+  assert.equal(O.transizioneValida('controllo_qualita', 'in_produzione').ok, true,
+    'il pezzo torna in lavorazione');
+  assert.equal(O.transizioneValida('completata', 'in_produzione').ok, true, 'un rifacimento');
+});
+
+test('transizioni · ma non si torna a «da fare» da metà lavorazione', () => {
+  assert.equal(O.transizioneValida('in_produzione', 'da_fare').ok, false);
+  assert.equal(O.transizioneValida('completata', 'da_fare').ok, false);
+});
+
+test('transizioni · solo un\'operazione annullata si riapre', () => {
+  assert.equal(O.transizioneValida('annullata', 'da_fare').ok, true);
+  assert.equal(O.transizioneValida('annullata', 'in_produzione').ok, false);
+});
+
+test('transizioni · lo stesso stato non è un errore', () => {
+  const v = O.transizioneValida('in_produzione', 'in_produzione');
+  assert.equal(v.ok, true);
+  assert.equal(v.invariata, true);
+});
+
+test('transizioni · un nome legacy viene tradotto prima di essere giudicato', () => {
+  assert.equal(O.transizioneValida('working', 'completata').ok, true, 'working = in_produzione');
+  assert.equal(O.transizioneValida('pianificata', 'completata').ok, false, 'pianificata = da_fare');
+});
+
+test('cambiaStato · timbra l\'inizio quando entra in produzione', () => {
+  const r = O.cambiaStato({ technology: 'laser', status: 'da_fare' }, 'in_produzione');
+  assert.equal(r.ok, true);
+  assert.ok(r.operazione.startedAt);
+  assert.equal(r.operazione.completedAt, null);
+});
+
+test('cambiaStato · e la fine quando completa', () => {
+  const r = O.cambiaStato({ technology: 'laser', status: 'in_produzione',
+    startedAt: '2026-01-01T08:00:00.000Z' }, 'completata');
+  assert.ok(r.operazione.completedAt);
+  assert.equal(r.operazione.startedAt, '2026-01-01T08:00:00.000Z', 'l\'inizio non si riscrive');
+});
+
+test('cambiaStato · un rifacimento azzera la data di fine', () => {
+  const r = O.cambiaStato({ technology: 'laser', status: 'completata',
+    completedAt: '2026-01-02T10:00:00.000Z' }, 'in_produzione');
+  assert.equal(r.ok, true);
+  assert.equal(r.operazione.completedAt, null,
+    'lasciarla farebbe risultare finito qualcosa che è in corso');
+});
+
+test('cambiaStato · rifiuta senza toccare l\'operazione', () => {
+  const op = { technology: 'laser', status: 'da_fare' };
+  const r = O.cambiaStato(op, 'completata');
+  assert.equal(r.ok, false);
+  assert.equal(op.status, 'da_fare', 'l\'originale resta intatto');
+  assert.ok(r.ammesse.length);
+});

@@ -90,6 +90,71 @@
     return ALIAS_STATO[k] || ALIAS_STATO[k.replace(/_/g, '')] || 'da_fare';
   }
 
+  /* ── Le transizioni possibili ──────────────────────────────────────────
+
+     Non tutte le strade fra due stati esistono. Un'operazione non può passare
+     da «da fare» a «completata» senza essere stata fatta: se succede, o
+     qualcuno ha premuto il pulsante sbagliato, o un'automazione sta saltando
+     dei passaggi — e in entrambi i casi i tempi e le quantità di quel lavoro
+     non verranno mai registrati.
+
+     Due passaggi all'indietro sono leciti e servono:
+
+       controllo_qualita → in_produzione   il pezzo torna in lavorazione
+       completata        → in_produzione   un rifacimento
+
+     Uno non lo è: nessuno stato torna a «da fare» tranne «annullata», che è
+     la riapertura di un lavoro fermato. Tornare a «da fare» da metà
+     lavorazione cancellerebbe il fatto che quella lavorazione è avvenuta. */
+  var TRANSIZIONI = {
+    da_fare: ['in_coda', 'in_produzione', 'annullata'],
+    in_coda: ['in_produzione', 'da_fare', 'pausa', 'annullata'],
+    in_produzione: ['pausa', 'controllo_qualita', 'completata', 'annullata'],
+    pausa: ['in_produzione', 'in_coda', 'annullata'],
+    controllo_qualita: ['completata', 'in_produzione', 'annullata'],
+    completata: ['in_produzione', 'controllo_qualita'],
+    annullata: ['da_fare'],
+  };
+
+  /** @returns { ok, motivo, ammesse[] } */
+  function transizioneValida(da, a) {
+    var d = statoDi(da);
+    var v = statoDi(a);
+    var ammesse = TRANSIZIONI[d] || [];
+    if (d === v) {
+      return { ok: true, invariata: true, motivo: null, ammesse: ammesse };
+    }
+    if (ammesse.indexOf(v) >= 0) return { ok: true, motivo: null, ammesse: ammesse };
+    return {
+      ok: false,
+      motivo: 'da «' + infoStato(d).label + '» non si passa a «' + infoStato(v).label + '»',
+      ammesse: ammesse,
+    };
+  }
+
+  /**
+   * Cambia lo stato di un'operazione, o rifiuta.
+   * Timbra `startedAt` e `completedAt` da sé: sono le due date che nessuno si
+   * ricorda di scrivere, e senza le quali il tempo reale non si può misurare.
+   */
+  function cambiaStato(op, nuovo, opzioni) {
+    var o = normalizza(op);
+    var c = opzioni || {};
+    var v = transizioneValida(o.status, nuovo);
+    if (!v.ok) return { ok: false, operazione: o, motivo: v.motivo, ammesse: v.ammesse };
+    if (v.invariata) return { ok: true, operazione: o, invariata: true };
+
+    var quando = c.adesso || new Date().toISOString();
+    var dopo = statoDi(nuovo);
+    o.status = dopo;
+    if (dopo === 'in_produzione' && !o.startedAt) o.startedAt = quando;
+    if (dopo === 'completata') o.completedAt = quando;
+    /* Un rifacimento riapre un'operazione completata: la data di fine non
+       vale più, e lasciarla farebbe risultare finito qualcosa che è in corso. */
+    if (dopo === 'in_produzione' && o.completedAt) o.completedAt = null;
+    return { ok: true, operazione: o, da: statoDi(op && (op.status || op.stato)), a: dopo };
+  }
+
   /* Gli stati in cui un'operazione occupa davvero una macchina. Serve al
      carico: una operazione «da fare» non impegna niente. */
   var ATTIVI = ['in_coda', 'in_produzione', 'pausa', 'controllo_qualita'];
@@ -343,6 +408,9 @@
     infoStato: infoStato,
     attiva: attiva,
     chiusa: chiusa,
+    TRANSIZIONI: TRANSIZIONI,
+    transizioneValida: transizioneValida,
+    cambiaStato: cambiaStato,
     qualita: qualita,
     normalizza: normalizza,
     varianza: varianza,
