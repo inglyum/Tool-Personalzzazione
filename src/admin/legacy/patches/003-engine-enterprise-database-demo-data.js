@@ -495,7 +495,16 @@ async function doLogin(){
   if(!check.ok){
     _recordLoginFail();
     const remaining = 5 - _loginAttempts.count;
-    err.textContent='Credenziali non valide'+(remaining>0&&remaining<5?' ('+remaining+' tentativi rimanenti)':'');
+    /* Il messaggio da solo non bastava: chi ha gia' completato il primo
+       accesso una volta e non ricorda piu' la password vedeva «credenziali
+       non valide» e non aveva modo di collegarlo al pulsante di reset, gia'
+       presente ma un rigo piu' in basso e senza nome esplicito. Qui, nel
+       punto stesso dell'errore. */
+    err.innerHTML = 'Credenziali non valide'
+      + (remaining>0&&remaining<5?' ('+remaining+' tentativi rimanenti)':'')
+      + '<br><span style="font-size:10px;opacity:.8">Password dimenticata o mai impostata prima? '
+      + '<a href="#" onclick="event.preventDefault();resetAdminDB()" style="color:inherit;text-decoration:underline;cursor:pointer">'
+      + 'Reset database</a> azzera solo l\'accesso admin, non i dati dell\'applicazione.</span>';
     err.style.display='block';return;
   }
 
