@@ -12,7 +12,7 @@
 <div id="login-screen">
   <div class="lc">
     <div class="lc-logo">
-      <div style="width:56px;height:56px;background:linear-gradient(135deg,var(--accent),var(--acc2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;box-shadow:0 0 32px #6366f140">🎨</div>
+      <div id="lc-logo-box" style="width:56px;height:56px;background:linear-gradient(135deg,var(--accent),var(--acc2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;box-shadow:0 0 32px #6366f140;overflow:hidden">🎨</div>
       <div style="font-size:22px;font-weight:900;letter-spacing:-.02em">INGLY <span style="color:var(--acc3)">OS</span></div>
       <div style="font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:3px">Enterprise Admin Console</div>
     </div>
@@ -55,7 +55,7 @@
   <!-- TOPBAR -->
   <header id="topbar">
     <div class="tb-brand" id="tb-brand">
-      <div class="tb-logo">🎨</div>
+      <div class="tb-logo" id="tb-logo-box">🎨</div>
       <div id="tb-names">
         <div class="tb-name">INGLY <span style="color:var(--acc3)">OS</span></div>
         <div class="tb-ver">Enterprise v2.0</div>
@@ -160,6 +160,27 @@
           <div class="page-sub">Database cloud cross-browser</div>
         </div>
         <span class="badge b-warn" id="cloud-status-badge">Non configurato</span>
+      </div>
+      <div class="card mb-12">
+        <div class="card-title mb-8">Logo della console</div>
+        <div class="text-sm text-muted mb-8">
+          Sostituisce il riquadro con l'icona predefinita nella schermata di accesso e
+          nell'intestazione. Resta su questo computer: si carica una volta, non serve un
+          server per mostrarlo.
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+          <div id="logo-settings-preview" style="width:56px;height:56px;background:linear-gradient(135deg,var(--accent),var(--acc2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden">🎨</div>
+          <div style="font-size:12px;color:var(--text3)" id="logo-settings-stato">Nessun logo caricato: si vede l'icona predefinita.</div>
+        </div>
+        <div class="btn-group">
+          <label class="btn btn-ghost" style="cursor:pointer">
+            <i class="fas fa-upload"></i> Carica logo
+            <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onchange="uploadAdminLogo(this)" style="display:none">
+          </label>
+          <button class="btn btn-ghost" onclick="removeAdminLogo()">
+            <i class="fas fa-rotate-left"></i> Torna all'icona predefinita
+          </button>
+        </div>
       </div>
       <div class="card mb-12">
         <div class="card-title mb-8">Configurazione Supabase</div>

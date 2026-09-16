@@ -333,6 +333,112 @@ const archivioApp = () => {
   await ctx.close();
 }
 
+/* ── Il campo password non arriva più precompilato ──────────────────────
+   Difetto misurato: `l-pass` veniva riempito con la stringa 'admin' a ogni
+   apertura — un residuo dello stesso bypass rimosso dal resto del file. Chi
+   non lo cancellava per intero prima di scrivere la propria password inviava
+   'admin' più quello che aveva digitato, e il login falliva in un modo che
+   da uno screenshot sembrava «password sbagliata». */
+
+{
+  const { page, ctx } = await nuovaPagina();
+  const valore = await page.evaluate(() => document.getElementById('l-pass').value);
+  dico('il campo password è vuoto all\'apertura, non precompilato', valore === '');
+  await ctx.close();
+}
+
+/* ── Il logo della console: si carica, si vede ovunque, sopravvive ──────── */
+
+{
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  await page.addInitScript(archivioApp);
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForTimeout(9000);
+
+  const senzaLogo = await page.evaluate(() => ({
+    loginBox: (document.getElementById('lc-logo-box') || {}).innerHTML || '',
+  }));
+  dico('senza logo caricato si vede l\'icona predefinita', senzaLogo.loginBox.includes('🎨'));
+
+  await page.fill('#l-user', 'superadmin');
+  await page.fill('#l-pass', 'Amministra2026');
+  await page.click('button:has-text("Accedi")');
+  await page.waitForTimeout(900);
+  await page.fill('#fl-pwd1', 'Amministra2026');
+  await page.fill('#fl-pwd2', 'Amministra2026');
+  await page.click('button:has-text("Imposta Password e Accedi")');
+  await page.waitForTimeout(1500);
+
+  /* Un file che non è un'immagine viene rifiutato. */
+  const fileRifiutato = await page.evaluate(() => {
+    const bytes = new TextEncoder().encode('non è un\'immagine');
+    const file = new File([bytes], 'nota.txt', { type: 'text/plain' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const input = document.querySelector('input[type=file][accept*="image"]');
+    if (!input) return { inputAssente: true };
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return { inputAssente: false, salvato: !!localStorage.getItem('ingly_admin_logo') };
+  });
+  dico('un file che non è un\'immagine viene rifiutato', fileRifiutato.salvato === false);
+
+  /* Un PNG vero: si carica, e compare in tutti i punti dichiarati. */
+  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const dopoCarico = await page.evaluate(async (b64) => {
+    const bytes = atob(b64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const file = new File([arr], 'logo.png', { type: 'image/png' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const input = document.querySelector('input[type=file][accept*="image"]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 500));
+    const g = (id) => { const e = document.getElementById(id); return e ? e.innerHTML : ''; };
+    return { topbar: g('tb-logo-box'), anteprima: g('logo-settings-preview') };
+  }, pngBase64);
+  dico('caricato, compare subito nell\'intestazione', dopoCarico.topbar.includes('<img'));
+  dico('e nell\'anteprima delle impostazioni', dopoCarico.anteprima.includes('<img'));
+
+  /* Un'altra pagina, un altro accesso: il logo è già lì, prima ancora di
+     entrare — perché non vive nella sessione, vive nel browser. */
+  const page2 = await ctx.newPage();
+  page2.on('dialog', (d) => d.accept().catch(() => {}));
+  await page2.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page2.waitForTimeout(9000);
+  const primaDiAccedere = await page2.evaluate(() => ({
+    loginBox: (document.getElementById('lc-logo-box') || {}).innerHTML || '',
+    schermataVisibile: getComputedStyle(document.getElementById('login-screen')).display,
+  }));
+  dico('il logo si vede nella schermata di accesso, prima del login',
+    primaDiAccedere.loginBox.includes('<img') && primaDiAccedere.schermataVisibile !== 'none');
+
+  /* Si torna all'icona predefinita: sparisce ovunque, e l'archivio è pulito. */
+  const dopoRimozione = await page2.evaluate(async () => {
+    document.getElementById('l-user').value = 'superadmin';
+    document.getElementById('l-pass').value = 'Amministra2026';
+    await doLogin();
+    await new Promise((r) => setTimeout(r, 1000));
+    nav('cloud-settings');
+    await new Promise((r) => setTimeout(r, 400));
+    removeAdminLogo();
+    await new Promise((r) => setTimeout(r, 300));
+    const g = (id) => { const e = document.getElementById(id); return e ? e.innerHTML : ''; };
+    return { topbar: g('tb-logo-box'), anteprima: g('logo-settings-preview'),
+      storage: localStorage.getItem('ingly_admin_logo') };
+  });
+  dico('«torna all\'icona predefinita» toglie l\'immagine dall\'intestazione',
+    dopoRimozione.topbar.includes('🎨') && !dopoRimozione.topbar.includes('<img'));
+  dico('e dall\'anteprima', dopoRimozione.anteprima.includes('🎨'));
+  dico('e libera l\'archivio', dopoRimozione.storage === null);
+
+  await ctx.close();
+}
+
 console.log('\nCONSOLE AMMINISTRAZIONE · ACCESSO\n');
 const problemi = [];
 for (const p of passi) {

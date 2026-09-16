@@ -258,6 +258,94 @@ function _recordLoginSuccess(){
 }
 
 
+/* ─── LOGO DELLA CONSOLE ──────────────────────────────────────────
+   Vive per conto suo, in `localStorage['ingly_admin_logo']`: NON nell'
+   archivio condiviso con l'applicazione (`ingly_saas_db`). È una scelta
+   di questa singola installazione della console, non un dato di chi la
+   usa — mescolarlo coi dati condivisi lo esporrebbe agli stessi rischi
+   che il reset dell'accesso admin aveva prima di essere corretto. */
+var LOGO_KEY = 'ingly_admin_logo';
+
+function _logoDataUri(){
+  try { return localStorage.getItem(LOGO_KEY) || null; }
+  catch(e){ return null; }
+}
+
+/** Il contenuto del riquadro: un'immagine se c'è un logo, l'icona altrimenti. */
+function _logoBoxInnerHTML(px, fontPx){
+  var uri = _logoDataUri();
+  if(uri){
+    return '<img src="' + uri + '" alt="Logo" style="width:100%;height:100%;object-fit:contain">';
+  }
+  return '🎨';
+}
+
+/** Riscrive ogni punto dello schermo in cui il logo compare, con lo stesso dato. */
+function _applyLogoBranding(){
+  try{
+    var loginBox = document.getElementById('lc-logo-box');
+    if(loginBox) loginBox.innerHTML = _logoBoxInnerHTML(56, 26);
+    var tbBox = document.getElementById('tb-logo-box');
+    if(tbBox) tbBox.innerHTML = _logoBoxInnerHTML(28, 14);
+    var previewBox = document.getElementById('logo-settings-preview');
+    if(previewBox) previewBox.innerHTML = _logoBoxInnerHTML(56, 26);
+    var stato = document.getElementById('logo-settings-stato');
+    if(stato){
+      stato.textContent = _logoDataUri()
+        ? 'Il tuo logo è attivo nella schermata di accesso e nell\'intestazione.'
+        : 'Nessun logo caricato: si vede l\'icona predefinita.';
+    }
+  }catch(e){}
+}
+
+/* Un file troppo grande dentro `localStorage` (limite tipico 5-10 MB per
+   origine, condiviso con l'archivio dell'applicazione) rischia di far fallire
+   la prossima scrittura di qualcun altro. 800 KB è ampio per un logo — un PNG
+   o SVG curato pesa una frazione di questo — e resta un margine di sicurezza
+   sull'archivio condiviso. */
+var LOGO_MAX_BYTES = 800 * 1024;
+
+function uploadAdminLogo(input){
+  var file = input && input.files && input.files[0];
+  if(!file) return;
+  if(!/^image\//.test(file.type)){
+    toast('Scegli un file immagine (PNG, JPG, SVG o WebP)', 'error');
+    input.value = '';
+    return;
+  }
+  if(file.size > LOGO_MAX_BYTES){
+    toast('Il file è troppo grande (' + Math.round(file.size/1024) + ' KB, massimo '
+      + Math.round(LOGO_MAX_BYTES/1024) + ' KB). Prova a comprimerlo.', 'error');
+    input.value = '';
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(){
+    try{
+      localStorage.setItem(LOGO_KEY, String(reader.result));
+      _applyLogoBranding();
+      addAuditLog('logo_updated', 'Logo della console aggiornato', 'Admin: ' + (_me ? _me.name : '—'), _me ? _me.id : '—');
+      toast('Logo caricato', 'success');
+    }catch(e){
+      /* `localStorage` pieno o non disponibile: si dice, non si finge che
+         sia andata. */
+      toast('Non è stato possibile salvare il logo: ' + (e && e.message), 'error');
+    }
+    input.value = '';
+  };
+  reader.onerror = function(){
+    toast('Non è stato possibile leggere il file', 'error');
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeAdminLogo(){
+  try{ localStorage.removeItem(LOGO_KEY); }catch(e){}
+  _applyLogoBranding();
+  toast('Tornato all\'icona predefinita', 'info');
+}
+
 /* ─── RESET ACCESSO ADMIN ────────────────────────────────────────
    Cancellava `DB_KEY` — che È `ingly_saas_db`, la stessa chiave usata
    dall'applicazione — quindi «problemi ad accedere all'admin» finiva
@@ -435,7 +523,7 @@ function _showFirstLoginSetup(adm){
   document.getElementById('login-screen').innerHTML = `
     <div class="lc">
       <div class="lc-logo">
-        <div style="width:56px;height:56px;background:linear-gradient(135deg,var(--accent),var(--acc2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">🎨</div>
+        <div style="width:56px;height:56px;background:linear-gradient(135deg,var(--accent),var(--acc2));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;overflow:hidden">${_logoBoxInnerHTML(56,26)}</div>
         <div style="font-size:22px;font-weight:900;letter-spacing:-.02em">INGLY <span style="color:var(--acc3)">OS</span></div>
         <div style="font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:3px">Primo accesso</div>
       </div>
@@ -3392,14 +3480,19 @@ upgradePlan = function(id){
 
 document.addEventListener('DOMContentLoaded', function() {
   try {
-    // Pre-fill via JS (browsers ignore value="" on type=password)
+    /* Questo campo veniva precompilato con la stringa 'admin' — la stessa
+       password del bypass rimosso altrove nel file, rientrata da qui. Chi non
+       cancellava il campo per intero prima di scrivere la propria password
+       inviava 'admin' più quello che aveva digitato, e il login falliva senza
+       che il motivo fosse leggibile da uno screenshot: sembrava una password
+       sbagliata, era un campo mai stato vuoto. */
     var passEl = document.getElementById('l-pass');
     var userEl = document.getElementById('l-user');
-    if (passEl) passEl.value = 'admin';
     if (userEl && !userEl.value) userEl.value = 'superadmin';
     if (passEl) passEl.addEventListener('keydown', function(e) { if(e.key==='Enter') doLogin(); });
     _db = dbLoad();
-    if (userEl) userEl.focus();
+    _applyLogoBranding();
+    if (passEl) passEl.focus();
   } catch(e) {
     console.error('[AdminPanel] DOMContentLoaded error:', e);
   }
