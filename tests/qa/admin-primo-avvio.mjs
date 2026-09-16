@@ -71,15 +71,21 @@ const validazioni = await page.evaluate(async () => {
     emailStorta: (await S.crea(Object.assign({}, base, { email: 'non-una-email', password: 'Laboratorio2026' }))).motivo,
     passwordDebole: (await S.crea(Object.assign({}, base, { password: 'abc' }))).motivo,
     nonCoincidono: (await S.crea(Object.assign({}, base, { password: 'Laboratorio2026', conferma: 'Laboratorio2027' }))).motivo,
-    senzaLab: (await S.crea({ email: 'g@belice.it', password: 'Laboratorio2026', laboratorio: '' })).motivo,
+    /* La validazione riporta TUTTI gli errori insieme, ognuno col suo campo:
+       chi compila vede che cosa correggere invece di scoprirlo un pezzo per
+       volta. `motivo` è il primo, quindi qui si guardano i campi. */
+    senzaLab: await S.crea({ email: 'g@belice.it', password: 'Laboratorio2026', laboratorio: '' }),
     ancoraVuoto: S.serve().serve,
   };
 });
+validazioni.senzaLabCampi = (validazioni.senzaLab.errori || []).map((x) => x.campo);
 dico('un\'email storta viene rifiutata: «' + validazioni.emailStorta + '»',
   /email non valid/i.test(validazioni.emailStorta || ''));
 dico('una password debole dice che cosa manca', /almeno 8|almeno un numero/i.test(validazioni.passwordDebole));
 dico('due password diverse non passano', /non coincidono/i.test(validazioni.nonCoincidono));
-dico('un laboratorio senza nome non passa', /nome al tuo laboratorio/i.test(validazioni.senzaLab));
+dico('un laboratorio senza nome non passa',
+  validazioni.senzaLab.ok === false && validazioni.senzaLabCampi.includes('laboratorio'),
+  validazioni.senzaLabCampi.join('|'));
 dico('e dopo quattro rifiuti l\'archivio è ancora vuoto', validazioni.ancoraVuoto === true);
 
 /* La creazione vera. */
