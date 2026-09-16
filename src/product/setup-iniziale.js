@@ -37,8 +37,6 @@
   var CHIAVE_DB = 'ingly_saas_db';
 
   function I() { return global.InglyIdentita; }
-  function A() { return global.InglyAbbonamento; }
-  function P() { return global.InglyPiani; }
 
   function leggiDB() {
     try {
@@ -73,64 +71,32 @@
    */
   async function crea(dati) {
     var d = dati || {};
-    var i = I(); var a = A();
-    if (!i) return { ok: false, motivo: 'modulo identità non disponibile' };
+    var C = global.InglyAccount;
+    if (!C) return { ok: false, motivo: 'modulo account non disponibile' };
 
+    /* L'unicità la ricontrolla `InglyAccount.crea`, ma qui serve la regola
+       in più: questa schermata vale solo sull'archivio vuoto. */
     var stato = serve();
     if (!stato.serve) return { ok: false, motivo: stato.motivo };
 
-    var email = i.normalizzaEmail(d.email);
-    if (!i.emailValida(email)) return { ok: false, motivo: 'Indirizzo email non valido', campo: 'email' };
-
-    var forza = i.robustezza(d.password);
-    if (!forza.ok) {
-      return { ok: false, motivo: 'La password deve avere: ' + forza.problemi.join(', '),
-        campo: 'password' };
-    }
-    if (d.conferma != null && d.password !== d.conferma) {
-      return { ok: false, motivo: 'Le due password non coincidono', campo: 'conferma' };
-    }
-
-    var nomeLab = String(d.laboratorio || '').trim();
-    if (!nomeLab) return { ok: false, motivo: 'Dai un nome al tuo laboratorio', campo: 'laboratorio' };
-
-    var hash;
-    try { hash = await i.cifra(d.password); }
-    catch (e) { return { ok: false, motivo: 'Non è stato possibile proteggere la password: ' + (e && e.message) }; }
-
-    var adesso = new Date().toISOString();
-    var idUtente = 'usr_' + Date.now().toString(36);
-    var idTenant = 'ws_' + Date.now().toString(36);
-
-    /* Il proprietario dell'installazione non e' in prova. */
-    var abbonamento = a
-      ? Object.assign(a.creaAttivo(d.piano || 'business', 'yearly', { tenant_id: idTenant }), {
-        provider: null, provider_subscription_id: null, note: 'installazione locale',
-      })
-      : null;
-
-    var utente = {
-      id: idUtente, user_id: idUtente,
-      email: email,
-      nome: String(d.nome || '').trim() || nomeLab,
-      labName: nomeLab,
-      status: 'active', active: true,
-      tenant_id: idTenant,
+    /* Il proprietario dell'installazione non è in prova: abbonamento pieno,
+       ruolo `owner`. La prova di 14 giorni è il percorso di chi si registra
+       per valutare il prodotto — sono due storie diverse. */
+    return C.crea({
+      nome: String(d.nome || '').trim() || String(d.laboratorio || '').trim(),
+      laboratorio: d.laboratorio,
+      email: d.email,
+      password: d.password,
+      conferma: d.conferma,
+      termini: true,
+    }, {
       ruolo: 'owner',
-      password_hash: hash,
-      created_at: adesso,
-      _proprietario: true,
-    };
-
-    var db = leggiDB() || {};
-    db.users = [utente];
-    db.tenants = [{ id: idTenant, nome: nomeLab, owner_id: idUtente, created_at: adesso }];
-    db.subscriptions = abbonamento ? [abbonamento] : [];
-
-    try { global.localStorage.setItem(CHIAVE_DB, JSON.stringify(db)); }
-    catch (e) { return { ok: false, motivo: 'Non è stato possibile salvare: ' + (e && e.message) }; }
-
-    return { ok: true, utente: utente, tenant: db.tenants[0], abbonamento: abbonamento };
+      prova: false,
+      piano: d.piano || 'business',
+      intervallo: 'yearly',
+      richiediTermini: false,
+      proprietario: true,
+    });
   }
 
   /* ── La schermata ─────────────────────────────────────────────────────── */
@@ -199,41 +165,71 @@
     return e ? e.value : '';
   }
 
+  var ETICHETTA = 'Crea l\u2019account e entra';
+
+  /**
+   * Il pulsante attraversa tre stati e **torna sempre** a uno stabile:
+   * il `finally` è la riga che impedisce il blocco su «Creazione in corso…».
+   */
   async function invia() {
     var err = document.getElementById('su-err');
     var btn = document.getElementById('su-submit');
-    if (err) err.style.display = 'none';
+    if (err) { err.textContent = ''; err.style.display = 'none'; }
+    /* Doppio clic: il secondo non fa niente. */
+    if (btn && btn.disabled) return { ok: false, motivo: 'Creazione già in corso', inCorso: true };
     if (btn) { btn.disabled = true; btn.textContent = 'Creazione in corso…'; }
 
-    var esito = await crea({
-      laboratorio: _val('su-lab'),
-      nome: _val('su-nome'),
-      email: _val('su-email'),
-      password: _val('su-pass'),
-      conferma: _val('su-conf'),
+    ['su-lab', 'su-nome', 'su-email', 'su-pass', 'su-conf'].forEach(function (id) {
+      var e = document.getElementById(id);
+      if (e) e.removeAttribute('aria-invalid');
     });
 
-    if (!esito.ok) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Crea l’account e entra'; }
-      if (err) { err.textContent = esito.motivo; err.style.display = 'block'; }
-      var campo = esito.campo && document.getElementById('su-' + (
+    var esito;
+    var entrato = false;
+    try {
+      esito = await crea({
+        laboratorio: _val('su-lab'),
+        nome: _val('su-nome'),
+        email: _val('su-email'),
+        password: _val('su-pass'),
+        conferma: _val('su-conf'),
+      });
+
+      if (esito && esito.ok) {
+        if (btn) btn.textContent = 'Account creato';
+        /* La sessione esiste già: applicarla direttamente evita di tornare
+           su un modulo di accesso che questa schermata ha sostituito. */
+        var G = global.SaaSGate;
+        if (G && typeof G.avviaSessione === 'function') {
+          var a = G.avviaSessione(esito.sessione);
+          entrato = !!(a && a.ok);
+        }
+        if (!entrato) {
+          /* Nessuna scorciatoia silenziosa: l'account c'è, lo si dice. */
+          esito.entrato = false;
+          if (err) {
+            err.textContent = 'Account creato. Ricarica la pagina per entrare.';
+            err.style.display = 'block';
+          }
+        } else {
+          esito.entrato = true;
+        }
+        return esito;
+      }
+
+      if (err) { err.textContent = (esito && esito.motivo) || 'Creazione non riuscita'; err.style.display = 'block'; }
+      var campo = esito && esito.campo && document.getElementById('su-' + (
         esito.campo === 'laboratorio' ? 'lab' : esito.campo === 'conferma' ? 'conf' : esito.campo));
       if (campo) { campo.setAttribute('aria-invalid', 'true'); campo.focus(); }
       return esito;
+    } catch (e) {
+      if (err) { err.textContent = 'Creazione non riuscita: ' + (e && e.message); err.style.display = 'block'; }
+      return { ok: false, motivo: String(e && e.message) };
+    } finally {
+      /* Se si è entrati la schermata non esiste più; altrimenti il pulsante
+         deve tornare utilizzabile, sempre, qualunque cosa sia successa. */
+      if (btn && !entrato) { btn.disabled = false; btn.textContent = ETICHETTA; }
     }
-
-    /* Account creato: si entra subito, passando dal percorso di accesso
-       normale — cosi' la sessione nasce come tutte le altre. */
-    var G = global.SaaSGate;
-    if (G && typeof G.showLogin === 'function') {
-      G.showLogin();
-      var u = document.getElementById('gate-user');
-      var p = document.getElementById('gate-pass');
-      if (u) u.value = esito.utente.email;
-      if (p) p.value = _val('su-pass');
-      if (typeof G.login === 'function') await G.login();
-    }
-    return esito;
   }
 
   global.InglyPrimoAvvio = {

@@ -117,6 +117,7 @@ export const PRODUCT_FILES = [
   'subscription.js',
   'entitlements.js',
   'auth-identity.js',
+  'account-service.js',
   'saas-view.js',
   'setup-iniziale.js',
   'admin-view.js',

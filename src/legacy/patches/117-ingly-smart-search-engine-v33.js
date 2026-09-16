@@ -1166,6 +1166,24 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       this._applySession();
     },
 
+    /* Entrare senza passare dal modulo di accesso.
+       La registrazione costruisce gia' una sessione verificata: rimandarla
+       al form significava riempire campi che in quel momento non esistono
+       piu' — ed e' cosi' che il pulsante restava «Creazione in corso...»
+       per sempre. Qui la sessione si applica direttamente. */
+    avviaSessione: function(session){
+      if(!session || !session.user_id) return { ok:false, motivo:'sessione assente' };
+      if(!session.labName) session.labName = session.nome || session.email || 'Laboratorio';
+      saveSession(session);
+      this._session = session;
+      this._hideGate();
+      this._applySession();
+      try{
+        document.dispatchEvent(new CustomEvent('ingly:login', { detail: session }));
+      }catch(e){}
+      return { ok:true, sessione: session };
+    },
+
     logout: function(){
       clearSession();
       this._session = null;
