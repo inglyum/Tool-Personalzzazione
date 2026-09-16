@@ -94,7 +94,16 @@ leggevano `undefined` e proseguivano.
 | `npm test` | **2050 PASS, 0 FAIL** |
 | `npm run build` | `dist/INGLY-OS.html` 11,10 MB · `dist/INGLY-CLOUD-ADMIN.html` 0,94 MB |
 | `tests/qa/ciclo-account.mjs` | **76 controlli in browser, 0 errori JavaScript** |
-| Regressione QA completa | 77 suite Playwright |
+| Regressione QA completa | **77 suite Playwright, 77 OK, 0 FAIL** |
+
+La regressione è stata eseguita due volte. Il primo giro dava 75/77: un rosso
+era una mia assertion invecchiata (cercava un messaggio preciso, mentre la
+validazione adesso riporta tutti gli errori insieme e `motivo` è il primo dei
+due); l'altro era `quoter3d-calcoli`, che passa due volte di fila in
+isolamento e falliva solo perché stavo compilando e girando altri test sulla
+stessa macchina — contesa di CPU contro i tempi di avvio dell'applicazione,
+non un difetto del prodotto. Il secondo giro, con la macchina libera e un solo
+build, è **77 su 77**.
 
 Test di unità aggiunti in questo mandato: 125.
 
