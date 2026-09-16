@@ -162,6 +162,98 @@
   function getUsage(c) { return Object.assign({}, (c && c.utilizzo) || _contesto.utilizzo || {}); }
   function getRemaining(chiave, c) { return limit(chiave, c).rimanente; }
 
+  /* ── Dalle sezioni dell'applicazione alle funzioni del listino ────────── */
+
+  /**
+   * La barra laterale ragiona per famiglie (`core`, `ai`, `market`, `laser`…);
+   * il listino ragiona per funzioni vendute. Sono due vocabolari diversi, ed è
+   * giusto che lo siano: uno descrive com'è fatta l'applicazione, l'altro che
+   * cosa si paga. Questa tabella è il punto — l'unico — in cui si toccano.
+   *
+   * `null` vuol dire «non è una funzione che si vende a parte»: dashboard,
+   * clienti, ordini, impostazioni. Bloccarle non venderebbe un piano, renderebbe
+   * il prodotto inutilizzabile.
+   */
+  var FAMIGLIE = {
+    core: null,
+    quotes: 'quotes',
+    laser: 'smart_quoter',
+    print3d: 'smart_quoter',
+    dtf: 'smart_quoter',
+    ai: 'ai',
+    market: 'analytics_advanced',
+    analytics: 'analytics_advanced',
+    multiuser: 'advanced_roles',
+  };
+
+  /* Le sezioni che il listino vende esplicitamente, e che nella barra
+     laterale vivono sotto `core`. Senza questa lista, comprare Premium non
+     darebbe niente di visibile. */
+  var SEZIONI = {
+    production: 'production', mes: 'production', produzione: 'production',
+    work_center: 'operations', operations: 'operations',
+    equipment: 'machines', machines: 'machines',
+    items: 'inventory', materials: 'inventory', magazzino: 'inventory',
+    components: 'inventory', paints: 'inventory', gadgets: 'inventory',
+    stockalert: 'inventory', barcode: 'inventory',
+    consuntivo: 'actual_costs', scostamento: 'actual_costs',
+    redditivita: 'profitability', profitscope: 'profitability',
+    payment_schedule: 'payments', recurring: 'payments', incassi: 'payments',
+    team: 'advanced_roles', bu: 'advanced_roles',
+
+    /* Le sezioni che vivono sotto una famiglia a pagamento. Sono scritte per
+       esteso perché la barra laterale non è disponibile a chi fa la domanda:
+       `funzioneDiSezione('ai')` riceve una stringa, non l'oggetto del nav-map.
+       `tests/saas-piani.test.mjs` verifica che questa lista resti allineata a
+       quella vera — se qualcuno aggiunge una sezione AI e si dimentica di
+       metterla qui, il test lo dice. */
+    lasercalc: 'smart_quoter', laser_b2b: 'smart_quoter', laserresources: 'smart_quoter',
+    print3d: 'smart_quoter', apparel: 'smart_quoter',
+
+    product_builder: 'quotes', quoter: 'quotes', quoteintel: 'quotes',
+
+    ai: 'ai', aicoach: 'ai', bizai: 'ai', decision: 'ai', strategy: 'ai', clientintel: 'ai',
+    leadscorer: 'ai', clv: 'ai', growthengine: 'ai', smartnotif: 'ai', replyai: 'ai',
+    photostudio: 'ai',
+
+    intel: 'analytics_advanced', marketintel: 'analytics_advanced',
+    market_agent: 'analytics_advanced', live_intel: 'analytics_advanced',
+    product_hunter: 'analytics_advanced', trendscanner: 'analytics_advanced',
+    price_radar: 'analytics_advanced', dynamicprice: 'analytics_advanced',
+    competitors: 'analytics_advanced', competitormon: 'analytics_advanced',
+    supplierintel: 'analytics_advanced', demand_map: 'analytics_advanced',
+    opportunity: 'analytics_advanced', forecaster: 'analytics_advanced',
+    contentperf: 'analytics_advanced', etsyai: 'analytics_advanced',
+    etsy_pulse: 'analytics_advanced', etsy_seo_wizard: 'analytics_advanced',
+    analytics: 'analytics_advanced', profitscope: 'analytics_advanced',
+  };
+
+  /**
+   * Quale funzione del listino serve per questa sezione. `null` = nessuna.
+   * @param sezione id della sezione, oppure `{ id, feature }` del nav-map
+   */
+  function funzioneDiSezione(sezione) {
+    var id = (sezione && sezione.id) || String(sezione || '');
+    if (!id) return null;
+    if (Object.prototype.hasOwnProperty.call(SEZIONI, id)) return SEZIONI[id];
+    var fam = sezione && sezione.feature;
+    if (fam && Object.prototype.hasOwnProperty.call(FAMIGLIE, fam)) return FAMIGLIE[fam];
+    /* Sezione che il listino non ha mai dichiarato di vendere: resta aperta.
+       È una scelta, non una dimenticanza — i diritti sono un confine
+       commerciale, non di sicurezza, e bloccare una sezione che nessuno ha
+       messo a listino romperebbe l'ERP senza vendere niente. */
+    return null;
+  }
+
+  /** La domanda che fa la barra laterale a ogni voce. */
+  function puoSezione(sezione, c) {
+    var f = funzioneDiSezione(sezione);
+    if (!f) return { ok: true, funzione: null, motivo: null };
+    var e = can(f, c);
+    return { ok: e.ok, funzione: f, motivo: e.motivo,
+      pianoRichiesto: e.pianoRichiesto || null };
+  }
+
   /** Tutte le funzioni, con il loro esito: serve alla schermata abbonamento. */
   function tutte(c) {
     var cat = C();
@@ -186,5 +278,9 @@
     getUsage: getUsage,
     getRemaining: getRemaining,
     tutte: tutte,
+    FAMIGLIE: FAMIGLIE,
+    SEZIONI: SEZIONI,
+    funzioneDiSezione: funzioneDiSezione,
+    puoSezione: puoSezione,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

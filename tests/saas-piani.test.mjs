@@ -245,3 +245,66 @@ test('il contesto si può impostare una volta e riusare', () => {
   E.usaContesto(null);
   assert.equal(E.can('production').ok, false, 'senza contesto non si concede');
 });
+
+/* ── Dalle sezioni dell'applicazione alle funzioni del listino ──────────── */
+
+test('ogni famiglia della barra laterale ha una funzione del listino, o un «null» dichiarato', async () => {
+  const { allItems } = await import('../src/app-shell/nav-map.js');
+  const famiglie = [...new Set(allItems().map((i) => i.feature).filter(Boolean))];
+  const mancanti = famiglie.filter((f) => !(f in E.FAMIGLIE));
+  assert.deepEqual(mancanti, [], 'famiglie senza corrispondenza: ' + mancanti.join(', '));
+});
+
+test('ogni funzione a cui una sezione rimanda esiste nel catalogo', () => {
+  const dichiarate = [...Object.values(E.FAMIGLIE), ...Object.values(E.SEZIONI)].filter(Boolean);
+  const ignote = [...new Set(dichiarate)].filter((f) => !P.FUNZIONI.some((x) => x.id === f));
+  assert.deepEqual(ignote, [], 'funzioni inventate: ' + ignote.join(', '));
+});
+
+test('le sezioni di base restano aperte a tutti i piani', () => {
+  for (const sec of ['dashboard', 'clienti', 'gestione_ordini', 'settings', 'catalog']) {
+    assert.equal(E.funzioneDiSezione(sec), null, sec + ' è diventata a pagamento');
+  }
+});
+
+test('le sezioni che il listino vende sono davvero chiuse a chi non le ha', () => {
+  const standard = { abbonamento: S.creaAttivo('standard', 'monthly', { tenant_id: 'ws' }) };
+  for (const [sec, f] of [['production', 'production'], ['items', 'inventory'],
+    ['ai', 'ai'], ['redditivita', 'profitability'], ['team', 'advanced_roles']]) {
+    const r = E.puoSezione(sec, standard);
+    assert.equal(r.funzione, f, sec + ' non rimanda a ' + f);
+    assert.equal(r.ok, false, sec + ' è aperta anche al piano Standard');
+    assert.ok(r.pianoRichiesto, sec + ' non dice quale piano serve');
+  }
+});
+
+test('lo stesso elenco è aperto a chi ha il piano giusto', () => {
+  const business = { abbonamento: S.creaAttivo('business', 'yearly', { tenant_id: 'ws' }) };
+  for (const sec of ['production', 'items', 'ai', 'redditivita', 'team']) {
+    assert.equal(E.puoSezione(sec, business).ok, true, sec + ' è chiusa al piano Business');
+  }
+});
+
+test('una sezione che il listino non conosce resta aperta, e si sa perché', () => {
+  const standard = { abbonamento: S.creaAttivo('standard', 'monthly', { tenant_id: 'ws' }) };
+  const r = E.puoSezione('sezione_mai_dichiarata', standard);
+  assert.equal(r.ok, true);
+  assert.equal(r.funzione, null);
+});
+
+test('il nav-map può essere interrogato con l\'oggetto intero, non solo con l\'id', () => {
+  assert.equal(E.funzioneDiSezione({ id: 'aicoach', feature: 'ai' }), 'ai');
+  assert.equal(E.funzioneDiSezione({ id: 'clienti', feature: 'core' }), null);
+  /* La tabella per sezione vince su quella per famiglia: `items` sta sotto
+     `core` nella barra laterale, ma il magazzino è una funzione venduta. */
+  assert.equal(E.funzioneDiSezione({ id: 'items', feature: 'core' }), 'inventory');
+});
+
+test('la tabella delle sezioni resta allineata alla barra laterale', async () => {
+  const { allItems } = await import('../src/app-shell/nav-map.js');
+  const scoperte = allItems()
+    .filter((i) => E.FAMIGLIE[i.feature] && !(i.id in E.SEZIONI))
+    .map((i) => i.id + ' (' + i.feature + ')');
+  assert.deepEqual(scoperte, [],
+    'sezioni di una famiglia a pagamento che la tabella non elenca: ' + scoperte.join(', '));
+});

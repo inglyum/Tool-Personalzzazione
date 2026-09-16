@@ -806,6 +806,13 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
     if(!session) return false;
     var E = window.InglyEntitlements;
     if(E && typeof E.can === 'function'){
+      /* `moduleId` puo' essere una sezione dell'applicazione (`items`,
+         `production`) o una funzione del listino (`inventory`). La tabella che
+         le mette in corrispondenza sta negli entitlement, in un posto solo. */
+      if(typeof E.puoSezione === 'function'){
+        var f = E.funzioneDiSezione(moduleId);
+        if(f) return E.can(f).ok;
+      }
       var e = E.can(moduleId);
       /* Una funzione che il catalogo non conosce non e' una funzione a
          pagamento: e' una sezione dell'applicazione fuori dal listino, e
@@ -1045,35 +1052,59 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
   };
 
   // ── UPGRADE MODAL ──────────────────────────────────────────────
-  function showUpgradeModal(sectionName, plan){
-    var planColors = {starter:'#06b6d4', pro:'#6366f1', business:'#f59e0b', enterprise:'#a855f7'};
-    var nextMap = {starter:'Pro', pro:'Business', business:'Enterprise', enterprise:'Enterprise'};
-    var nextKeyMap = {starter:'pro', pro:'business', business:'enterprise', enterprise:'enterprise'};
-    var nextPlan = nextMap[plan] || 'Pro';
-    var nextKey = nextKeyMap[plan] || 'pro';
+  /* Diceva «il tuo piano STARTER non include questo modulo» e proponeva di
+     passare a «Pro»: due piani che nel listino non esistono piu'. Era un
+     secondo catalogo, scritto a mano, disallineato dal primo. Adesso il piano
+     che serve lo dice il catalogo, e il pulsante porta al listino vero. */
+  function _escM(v){
+    return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function showUpgradeModal(sectionName, sezione){
+    if(document.getElementById('saas-upgrade-modal')) return;
+    var E = window.InglyEntitlements;
+    var P = window.InglyPiani;
+    var richiesto = null, funzione = null;
+    try{
+      if(E && typeof E.puoSezione === 'function'){
+        var r = E.puoSezione(sezione || sectionName);
+        funzione = r.funzione;
+        richiesto = r.pianoRichiesto || null;
+      }
+    }catch(e){}
+    var etichettaFunzione = (P && funzione && P.funzione)
+      ? ((P.funzione(funzione) || {}).label || funzione) : null;
+
+    var spiega = richiesto
+      ? 'Questa sezione fa parte del piano <strong style="color:#818cf8">'
+        + _escM(richiesto.nome) + '</strong>.'
+      : 'Questa sezione non è compresa nel tuo piano attuale.';
+
     var modal = document.createElement('div');
     modal.id = 'saas-upgrade-modal';
     modal.style.cssText = 'position:fixed;inset:0;z-index:99990;background:#000c;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Inter,system-ui,sans-serif';
-    modal.innerHTML = `
-      <div style="background:#111115;border:1px solid #2a2a35;border-radius:16px;max-width:420px;width:100%;padding:28px;text-align:center;animation:gateSlide .2s ease">
-        <div style="font-size:40px;margin-bottom:12px">🔒</div>
-        <div style="font-size:17px;font-weight:800;color:#e8e8f0;margin-bottom:8px">${sectionName || 'Questa sezione'} non è inclusa</div>
-        <div style="font-size:13px;color:#6b6b88;line-height:1.6;margin-bottom:20px">
-          Il tuo piano <strong style="color:${planColors[plan]||'#888'}">${(plan||'').toUpperCase()}</strong> non include questo modulo.<br>
-          Chiedi all'amministratore di aggiornare la tua licenza al piano <strong style="color:#6366f1">${nextPlan}</strong> o di abilitare questo modulo specifico.
-        </div>
-        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <button onclick="InglyBilling.subscribe('${nextKey}')"
-            style="padding:10px 20px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px">
-            💳 Abbonati a ${nextPlan}
-          </button>
-          <button onclick="document.getElementById('saas-upgrade-modal').remove();App.navigate('dashboard')"
-            style="padding:10px 20px;background:transparent;color:#818cf8;border:1px solid #2a2a35;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px">
-            ← Dashboard
-          </button>
-        </div>
-      </div>`;
-    modal.addEventListener('click', function(e){ if(e.target===modal){ modal.remove(); App.navigate('dashboard'); }});
+    modal.innerHTML =
+      '<div style="background:#111115;border:1px solid #2a2a35;border-radius:16px;max-width:420px;width:100%;padding:28px;text-align:center">'
+      + '<div style="font-size:17px;font-weight:800;color:#e8e8f0;margin-bottom:10px">'
+      + _escM(sectionName || 'Questa sezione') + ' non è inclusa</div>'
+      + '<div style="font-size:13px;color:#8a8aa8;line-height:1.6;margin-bottom:20px">'
+      + spiega
+      + (etichettaFunzione ? '<br>Funzione: <strong>' + _escM(etichettaFunzione) + '</strong>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+      + '<button onclick="document.getElementById(\'saas-upgrade-modal\').remove();'
+      + 'if(window.InglyLancio)InglyLancio.vaiAiPrezzi();" '
+      + 'style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px">'
+      + 'Vedi i piani</button>'
+      + '<button onclick="document.getElementById(\'saas-upgrade-modal\').remove();App.navigate(\'dashboard\')" '
+      + 'style="padding:10px 20px;background:transparent;color:#818cf8;border:1px solid #2a2a35;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px">'
+      + '← Dashboard</button>'
+      + '</div></div>';
+    modal.addEventListener('click', function(e){
+      if(e.target===modal){ modal.remove(); if(window.App && App.navigate) App.navigate('dashboard'); }
+    });
     document.body.appendChild(modal);
   }
 
@@ -1192,6 +1223,36 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
        per sempre. Qui la sessione si applica direttamente. */
     _ridisegnaGate: ridisegnaGate,
 
+    /* Che piano si ha e quanto manca alla scadenza si legge DALL'ABBONAMENTO.
+       La barra di sessione e l'intestazione lo leggevano da `session.plan` e
+       `session.expiresAt`: campi che la sessione non porta piu' — quindi
+       mostravano «BASE» a tutti e non avvisavano mai della prova in scadenza.
+       Rimetterli nella sessione sarebbe rimettere un piano modificabile a
+       mano; quindi si legge di qui, una volta sola. */
+    statoAbbonamento: function(session){
+      try{
+        var A = window.InglyAbbonamento, P = window.InglyPiani;
+        var s = session || this._session;
+        if(!A || !s || !s.tenant_id) return null;
+        var db = getDB();
+        var sub = (db.subscriptions || []).filter(function(x){
+          return x && String(x.tenant_id || '') === String(s.tenant_id);
+        })[0] || null;
+        if(!sub) return null;
+        var st = A.stato(sub);
+        var piano = P ? P.piano(st.piano) : null;
+        return {
+          id: st.piano || null,
+          etichetta: piano ? piano.nome : (st.piano || '\u2014'),
+          stato: st.stato,
+          statoLabel: st.info ? st.info.label : '',
+          giorni: st.giorniRimasti,
+          inScadenza: !!st.inScadenza,
+          accesso: !!st.accesso,
+        };
+      }catch(e){ return null; }
+    },
+
     avviaSessione: function(session){
       if(!session || !session.user_id) return { ok:false, motivo:'sessione assente' };
       if(!session.labName) session.labName = session.nome || session.email || 'Laboratorio';
@@ -1272,10 +1333,17 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       var bar = document.getElementById('saas-session-bar');
       bar.style.display = 'flex';
       document.getElementById('ssb-lab').textContent  = '🎨 ' + session.labName;
-      document.getElementById('ssb-plan').textContent = (session.plan || 'base').toUpperCase();
-      if(session.expiresAt){
-        var days = Math.ceil((new Date(session.expiresAt) - new Date()) / 86400000);
-        document.getElementById('ssb-exp').textContent = days <= 7 ? '⏳ Scade tra '+days+'gg' : '';
+      var ab = this.statoAbbonamento(session);
+      document.getElementById('ssb-plan').textContent = ab ? ab.etichetta.toUpperCase() : '—';
+      var exp = document.getElementById('ssb-exp');
+      if(exp){
+        /* Si avvisa quando serve avvisare: una prova che sta finendo, o un
+           abbonamento che non e' piu' buono. Non tutti i giorni. */
+        exp.textContent = !ab ? ''
+          : (!ab.accesso ? '⚠ ' + ab.statoLabel
+            : (ab.inScadenza && ab.giorni != null
+              ? '⏳ ' + (ab.stato === 'trial' ? 'Prova' : 'Scade') + ' fra ' + ab.giorni + 'gg'
+              : ''));
       }
       document.body.classList.add('saas-active');
 
@@ -1288,19 +1356,21 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
     _lockNavItems: function(){
       var session = this._session;
       if(!session) return;
-      var mods = session.modules;
-      if(!mods || mods[0] === '*') return; // premium → tutto sbloccato
+      /* Leggeva `session.modules`, che la sessione non porta piu': `mods` era
+         sempre `undefined`, la funzione usciva subito e NESSUNA voce veniva
+         mai bloccata. Un listino con tre piani, e tutti vedevano tutto. */
+      var puo = function(sec){ return userCanAccess(session, sec); };
 
       document.querySelectorAll('.nav-item[data-section]').forEach(function(el){
         var sec = el.getAttribute('data-section');
-        if(sec && !mods.includes(sec)){
+        if(sec && !puo(sec)){
           el.classList.add('saas-locked');
           // Remove onclick to prevent navigation
           el._origOnclick = el.onclick;
           el.onclick = function(e){
             e.preventDefault(); e.stopPropagation();
             var name = el.textContent.trim().replace(/[🔒✅⚠️⏳]/g,'').trim();
-            showUpgradeModal(name, session.plan);
+            showUpgradeModal(name, sec);
           };
         } else {
           el.classList.remove('saas-locked');
@@ -1312,21 +1382,19 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
     _hookNavigate: function(){
       var session = this._session;
       if(!session || !window.App || !App.navigate) return;
-      var mods = session.modules;
-      if(!mods || mods[0] === '*') return;
       if(App._saasGateHooked) return;
       App._saasGateHooked = true;
 
       var _origNav = App.navigate.bind(App);
       App.navigate = function(section){
-        // Always allow dashboard and settings
-        var always = ['dashboard', 'settings', 'backup'];
-        if(always.includes(section) || mods.includes(section)){
+        /* Nascondere la voce di menu non e' la protezione: chi conosce il nome
+           della sezione ci arriva lo stesso. Il controllo sta qui. */
+        var always = ['dashboard', 'settings', 'backup', 'prezzi', 'abbonamento', 'sicurezza'];
+        var s = window.SaaSGate._session;
+        if(always.indexOf(section) >= 0 || userCanAccess(s, section)){
           return _origNav(section);
-        } else {
-          // Show upgrade modal
-          showUpgradeModal(section, session.plan);
         }
+        showUpgradeModal(section, section);
       };
     },
 
@@ -2881,24 +2949,23 @@ body.saas-active main {
 
   /* ── BUILD HEADER HTML ────────────────────────────────────── */
   function buildHeader(session) {
-    var plan = (session.plan || 'starter').toLowerCase();
-    var planLabel = { starter:'Starter', pro:'Pro', business:'Business', enterprise:'Enterprise', lifetime:'Lifetime' }[plan] || plan.toUpperCase();
+    /* Il piano lo dice l'abbonamento. La tabella di etichette che stava qui
+       elencava piani che non esistono piu' nel listino (starter, pro,
+       lifetime): un secondo catalogo, disallineato dal primo. */
+    var ab = (window.SaaSGate && window.SaaSGate.statoAbbonamento)
+      ? window.SaaSGate.statoAbbonamento(session) : null;
+    var plan = (ab && ab.id) || 'nessuno';
+    var planLabel = ab ? ab.etichetta : '—';
     var labName  = session.labName || session.username || 'INGLY OS';
     var username = session.username || '';
     var initials = (labName || username).substring(0,2).toUpperCase().replace(/[^A-Z]/g,'') || 'IN';
 
-    var days = null;
-    var dotClass = '_eh-status-dot';
+    var days = ab ? ab.giorni : null;
     var expiryHtml = '';
-    if (session.expiresAt && plan !== 'lifetime') {
-      days = Math.ceil((new Date(session.expiresAt) - new Date()) / 86400000);
-      if (days <= 7) {
-        dotClass += ' warn';
-        expiryHtml = '<span class="_eh-expiry">&#9201; ' + days + 'gg</span>';
-      } else if (days < 0) {
-        dotClass += ' error';
-        expiryHtml = '<span class="_eh-expiry" style="color:#fca5a5">Scaduta</span>';
-      }
+    if (ab && !ab.accesso) {
+      expiryHtml = '<span class="_eh-expiry" style="color:#fca5a5">' + planLabel + ' non attivo</span>';
+    } else if (ab && ab.inScadenza && days != null) {
+      expiryHtml = '<span class="_eh-expiry">&#9201; ' + days + 'gg</span>';
     }
 
     var wl = WL;
@@ -2907,7 +2974,8 @@ body.saas-active main {
     return (
       /* LEFT */
       '<div class="_eh-left">' +
-        '<div class="_eh-status-dot ' + (days && days < 0 ? 'error' : days && days <= 7 ? 'warn' : '') + '"></div>' +
+        '<div class="_eh-status-dot ' + ((ab && !ab.accesso) ? 'error'
+          : ((ab && ab.inScadenza) ? 'warn' : '')) + '"></div>' +
         (wl.logo ? '<img id="_eh_logo_img" class="_eh-logo" src="' + wl.logo + '" style="display:block">' :
                    '<img id="_eh_logo_img" class="_eh-logo">') +
         '<span id="_eh_company_name" class="_eh-brand-name">' + companyName + '</span>' +
