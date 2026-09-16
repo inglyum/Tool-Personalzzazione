@@ -943,8 +943,8 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
   bar.innerHTML = `
     <span>🎨</span>
     <span id="ssb-lab">INGLY OS</span>
-    <span class="sb-plan" id="ssb-plan">—</span>
-    <span id="ssb-exp" style="color:#fde68a"></span>
+    <span class="sb-plan" id="ssb-plan" data-ingly-piano>—</span>
+    <span id="ssb-exp" style="color:#fde68a" data-ingly-scadenza></span>
     <span class="sb-logout" onclick="SaaSGate.logout()">↩ Esci</span>
   `;
   document.body.insertBefore(bar, document.body.firstChild);
@@ -1322,6 +1322,29 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
             ? window.InglyUtilizzo.corrente() : {},
         });
       }catch(e){ console.warn('[SaaSGate] diritti non applicati:', e && e.message); }
+      /* Cambiati i diritti, cambia anche quello che si legge sullo schermo:
+         lasciarli disallineati e' il modo piu' rapido per far dubitare del
+         prodotto chi ha appena pagato. */
+      try{ this._aggiornaPiano(); }catch(e){}
+    },
+
+    /* Un posto solo che scrive il piano e la scadenza, ovunque siano mostrati:
+       la barra di sessione, l'intestazione, e qualunque cosa si aggiunga
+       domani dichiarando `data-ingly-piano`. */
+    _aggiornaPiano: function(session){
+      if(typeof document === 'undefined') return;
+      var ab = this.statoAbbonamento(session || this._session);
+      var testo = ab ? String(ab.etichetta).toUpperCase() : '—';
+      /* Si avvisa quando serve avvisare: una prova che sta finendo, o un
+         abbonamento che non e' piu' buono. Non tutti i giorni. */
+      var scadenza = !ab ? ''
+        : (!ab.accesso ? '\u26a0 ' + ab.statoLabel
+          : (ab.inScadenza && ab.giorni != null
+            ? '\u23f3 ' + (ab.stato === 'trial' ? 'Prova' : 'Scade') + ' fra ' + ab.giorni + 'gg'
+            : ''));
+      document.querySelectorAll('[data-ingly-piano]').forEach(function(el){ el.textContent = testo; });
+      document.querySelectorAll('[data-ingly-scadenza]').forEach(function(el){ el.textContent = scadenza; });
+      return ab;
     },
 
     _applySession: function(){
@@ -1333,18 +1356,7 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       var bar = document.getElementById('saas-session-bar');
       bar.style.display = 'flex';
       document.getElementById('ssb-lab').textContent  = '🎨 ' + session.labName;
-      var ab = this.statoAbbonamento(session);
-      document.getElementById('ssb-plan').textContent = ab ? ab.etichetta.toUpperCase() : '—';
-      var exp = document.getElementById('ssb-exp');
-      if(exp){
-        /* Si avvisa quando serve avvisare: una prova che sta finendo, o un
-           abbonamento che non e' piu' buono. Non tutti i giorni. */
-        exp.textContent = !ab ? ''
-          : (!ab.accesso ? '⚠ ' + ab.statoLabel
-            : (ab.inScadenza && ab.giorni != null
-              ? '⏳ ' + (ab.stato === 'trial' ? 'Prova' : 'Scade') + ' fra ' + ab.giorni + 'gg'
-              : ''));
-      }
+      this._aggiornaPiano(session);
       document.body.classList.add('saas-active');
 
       // Wait for INGLY to fully init then apply locks
@@ -2979,9 +2991,14 @@ body.saas-active main {
         (wl.logo ? '<img id="_eh_logo_img" class="_eh-logo" src="' + wl.logo + '" style="display:block">' :
                    '<img id="_eh_logo_img" class="_eh-logo">') +
         '<span id="_eh_company_name" class="_eh-brand-name">' + companyName + '</span>' +
-        '<span class="_eh-plan-badge ' + plan + '" id="ssb-plan">' + planLabel + '</span>' +
+        /* Questi due elementi avevano gli stessi `id` della barra di
+           sessione: `getElementById` restituisce il primo, quindi uno dei due
+           non si aggiornava mai e l'altro riceveva il testo sbagliato. Due
+           elementi, un nome: il difetto di sempre, in versione DOM. */
+        '<span class="_eh-plan-badge ' + plan + '" id="_eh_plan_badge" data-ingly-piano>'
+          + planLabel + '</span>' +
         expiryHtml +
-        '<span id="ssb-exp"></span>' +
+        '<span id="_eh_exp" data-ingly-scadenza></span>' +
       '</div>' +
 
       /* CENTER */
@@ -3225,6 +3242,11 @@ body.saas-active main {
         if (bar) {
           bar.innerHTML = buildHeader(session);
           bar.style.display = 'flex';
+          /* L'intestazione SOSTITUISCE il contenuto della barra di sessione,
+             quindi ricostruisce anche il riquadro del piano — e lo fa DOPO che
+             `_applySession` l'aveva appena scritto. Senza questa riga vince
+             l'ultimo che disegna, e si vede il piano di prima. */
+          if (window.SaaSGate._aggiornaPiano) window.SaaSGate._aggiornaPiano(session);
         }
 
         /* Apply white label */
@@ -3246,6 +3268,7 @@ body.saas-active main {
         if (bar) {
           bar.innerHTML = buildHeader(s);
           bar.style.display = 'flex';
+          if (window.SaaSGate._aggiornaPiano) window.SaaSGate._aggiornaPiano(s);
         }
         _applyWhiteLabel();
         setTimeout(hookNavigate, 500);

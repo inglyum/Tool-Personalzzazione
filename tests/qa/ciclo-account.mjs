@@ -356,6 +356,63 @@ dico('la schermata mostra le postazioni aperte', admin.mostraPostazioni);
 dico('la schermata mostra l\'attività recente', admin.mostraAttivita);
 dico('la schermata non stampa hash di password', admin.nienteHash);
 
+/* ── 11 · I diritti del piano si applicano davvero ──────────────────────── */
+
+const diritti = await page.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('ingly_saas_db'));
+  const orig = JSON.stringify(db.subscriptions);
+  const A = window.InglyAbbonamento;
+  const s = window.SaaSGate._session;
+
+  const misura = (piano) => {
+    const d = JSON.parse(localStorage.getItem('ingly_saas_db'));
+    d.subscriptions = [A.creaAttivo(piano, 'monthly', { tenant_id: s.tenant_id })];
+    localStorage.setItem('ingly_saas_db', JSON.stringify(d));
+    window.SaaSGate._applicaDiritti();
+    return {
+      piano,
+      badge: [...document.querySelectorAll('[data-ingly-piano]')].map((e) => e.textContent),
+      produzione: window.SaaSGate.canAccess('production'),
+      magazzino: window.SaaSGate.canAccess('items'),
+      ai: window.SaaSGate.canAccess('ai'),
+      clienti: window.SaaSGate.canAccess('clienti'),
+      dashboard: window.SaaSGate.canAccess('dashboard'),
+      preventivi: window.SaaSGate.canAccess('quoter'),
+    };
+  };
+
+  const standard = misura('standard');
+  const business = misura('business');
+  window.SaaSGate._applySession();
+  const leggi = () => [...document.querySelectorAll('[data-ingly-piano]')].map((e) => e.textContent);
+  const barraBusiness = leggi();
+
+  db.subscriptions = JSON.parse(orig);
+  localStorage.setItem('ingly_saas_db', JSON.stringify(db));
+  window.SaaSGate._applySession();
+  const barraProva = leggi();
+  const scadenza = [...document.querySelectorAll('[data-ingly-scadenza]')].map((e) => e.textContent);
+
+  return { standard, business, barraBusiness, barraProva, scadenza };
+});
+dico('col piano Standard la Produzione è chiusa', diritti.standard.produzione === false);
+dico('col piano Standard il Magazzino è chiuso', diritti.standard.magazzino === false);
+dico('col piano Standard gli strumenti AI sono chiusi', diritti.standard.ai === false);
+dico('ma Clienti, Dashboard e Preventivi restano aperti',
+  diritti.standard.clienti && diritti.standard.dashboard && diritti.standard.preventivi);
+dico('col piano Business tutto è aperto',
+  diritti.business.produzione && diritti.business.magazzino && diritti.business.ai);
+dico('il piano si legge da qualche parte sullo schermo', diritti.barraBusiness.length >= 1,
+  diritti.barraBusiness.length + ' punti');
+dico('ogni punto mostra il piano vero, non «BASE»',
+  diritti.barraBusiness.every((t) => t === 'BUSINESS'), diritti.barraBusiness.join(' | '));
+/* Questo account nasce dal primo avvio di un'installazione propria: non è un
+   cliente in prova, è il proprietario, e riceve l'abbonamento pieno. */
+dico('rimesso l\'abbonamento originale, ogni punto torna a dirlo',
+  diritti.barraProva.every((t) => t === 'BUSINESS'), diritti.barraProva.join(' | '));
+dico('la scadenza è coerente ovunque',
+  diritti.scadenza.every((t) => t === '' || /Prova fra/.test(t)), diritti.scadenza.join(' | '));
+
 /* ── Esito ──────────────────────────────────────────────────────────────── */
 
 console.log('\nCICLO DI VITA DELL\'ACCOUNT · REGISTRAZIONE, POSTAZIONE, BLOCCO, RIENTRO\n');
