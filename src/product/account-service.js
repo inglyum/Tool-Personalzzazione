@@ -171,6 +171,16 @@
         fase('unicita', false);
         return { ok: false, motivo: 'Esiste già un account con questa email', campo: 'email', fasi: fasi };
       }
+      /* Lo username esiste perché l'accesso storico lo accetta al posto
+         dell'email. Finché quel percorso c'è, due account non possono
+         averlo uguale: sarebbero due persone dietro la stessa chiave. */
+      var username = String(dati.username || '').trim() || null;
+      if (username && db.users.some(function (u) {
+        return String(u.username || '').toLowerCase() === username.toLowerCase();
+      })) {
+        fase('unicita', false);
+        return { ok: false, motivo: 'Questo nome utente è già in uso', campo: 'username', fasi: fasi };
+      }
       fase('unicita');
 
       /* 3 · Identità — la password diventa un hash, e basta */
@@ -190,6 +200,7 @@
       var utente = {
         id: idUtente, user_id: idUtente,
         email: v.email,
+        username: username,
         nome: String(dati.nome || '').trim(),
         labName: String(dati.laboratorio || '').trim(),
         status: o.stato || 'active',
@@ -344,6 +355,25 @@
 
   /* ── Modifiche ────────────────────────────────────────────────────────── */
 
+  /* La forma di una sessione di dispositivo revocata la decide
+     `InglyDispositivi`: scriverne una seconda qui significherebbe avere due
+     idee di «revocata» e scoprire la differenza il giorno in cui una delle
+     due non viene letta. Questa funzione esiste perché la scrittura di
+     `InglyAccount` resta una sola, quindi non può delegare al modulo che
+     scrive per conto proprio — ma il record che produce è identico. */
+  function _revocaDispositivi(db, userId, motivo, adesso) {
+    var n = 0;
+    (db.device_sessions || []).forEach(function (d) {
+      if (!d || String(d.user_id || '') !== String(userId)) return;
+      if (d.active === false || d.revoked_at) return;
+      d.active = false;
+      d.revoked_at = adesso;
+      d.revoked_reason = motivo;
+      n++;
+    });
+    return n;
+  }
+
   function _registra(db, voce) {
     db.audit_log = (db.audit_log || []).concat([Object.assign({
       id: _id('aud'), at: new Date().toISOString(), result: 'ok',
@@ -370,13 +400,7 @@
     /* Un account che non può più entrare non deve restare connesso altrove:
        le sue sessioni di dispositivo si revocano. */
     if (nuovo !== 'active') {
-      (db.device_sessions || []).forEach(function (d) {
-        if (String(d.user_id) === String(userId) && !d.revoked_at) {
-          d.revoked_at = u.updated_at;
-          d.status = 'revoked';
-          d.revoke_reason = 'account_' + nuovo;
-        }
-      });
+      _revocaDispositivi(db, userId, 'account ' + nuovo, u.updated_at);
     }
 
     _registra(db, {
@@ -411,13 +435,7 @@
 
     /* Cambiare password chiude le altre sessioni: è il motivo per cui la si
        cambia quando si teme che qualcuno la conosca. */
-    (db.device_sessions || []).forEach(function (d) {
-      if (String(d.user_id) === String(userId) && !d.revoked_at) {
-        d.revoked_at = u.password_changed_at;
-        d.status = 'revoked';
-        d.revoke_reason = 'password_changed';
-      }
-    });
+    _revocaDispositivi(db, userId, 'password cambiata', u.password_changed_at);
 
     _registra(db, { actor: userId, tenant_id: u.tenant_id,
       action: 'account.password_changed', target: userId, metadata: {} });
@@ -438,12 +456,7 @@
     if (!u) return { ok: false, motivo: 'Account non trovato' };
     u.password_hash = await i.cifra(nuova);
     u.password_changed_at = new Date().toISOString();
-    (db.device_sessions || []).forEach(function (d) {
-      if (String(d.user_id) === String(userId) && !d.revoked_at) {
-        d.revoked_at = u.password_changed_at; d.status = 'revoked';
-        d.revoke_reason = 'password_reset';
-      }
-    });
+    _revocaDispositivi(db, userId, 'password reimpostata', u.password_changed_at);
     _registra(db, { actor: c.actor || 'admin', tenant_id: u.tenant_id,
       action: 'account.password_reset', target: userId, metadata: {} });
     var w = scrivi(db);

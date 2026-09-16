@@ -995,18 +995,26 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
      sostituisce solo l'aspetto: i campi conservano gli stessi `id`, quindi la
      logica qui sotto — quella appena messa in sicurezza — non cambia. Se il
      modulo non c'e', resta la schermata di prima: nessuna pagina bianca. */
-  (function ridisegna(tentativi){
+  /* Com'e' fatta la schermata di accesso lo decide un posto solo. Prima
+     questa costruzione viveva qui e basta: chi usciva dopo il primo avvio si
+     ritrovava davanti al modulo di CREAZIONE dell'account — senza campi per
+     accedere, e senza modo di rientrare. */
+  function ridisegnaGate(){
+    var fatto = false;
     try{
-      if(window.InglyLancio && window.InglyLancio.disegnaAccesso()){
-        /* Archivio senza utenti: non si chiede di accedere, si chiede di
-           creare l'account amministratore. E' il percorso che sostituisce la
-           credenziale scritta nel codice. */
-        try{
-          if(window.InglyPrimoAvvio) window.InglyPrimoAvvio.disegna();
-        }catch(e2){ console.warn('[SaaSGate] primo avvio:', e2 && e2.message); }
-        return;
-      }
-    }catch(e){ console.warn('[SaaSGate] aspetto non applicato:', e && e.message); return; }
+      fatto = !!(window.InglyLancio && window.InglyLancio.disegnaAccesso());
+    }catch(e){ console.warn('[SaaSGate] aspetto non applicato:', e && e.message); }
+    /* Archivio senza utenti: non si chiede di accedere, si chiede di creare
+       l'account amministratore. Appena un utente esiste, `disegna()` non fa
+       piu' niente e resta la schermata di accesso normale. */
+    try{
+      if(window.InglyPrimoAvvio) window.InglyPrimoAvvio.disegna();
+    }catch(e2){ console.warn('[SaaSGate] primo avvio:', e2 && e2.message); }
+    return fatto;
+  }
+
+  (function ridisegna(tentativi){
+    if(ridisegnaGate()) return;
     if((tentativi||0) < 40) setTimeout(function(){ ridisegna((tentativi||0)+1); }, 150);
   })(0);
 
@@ -1151,19 +1159,30 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
 
       /* La sessione porta chi sei. Non che cosa puoi fare: niente `plan`,
          niente `modules`, niente `expiresAt` di licenza. */
-      var session = I.creaSessione({
-        id: user.id || user.user_id,
-        email: user.email,
-        nome: user.nome || user.labName || null,
-        tenant_id: user.tenant_id || null,
-        ruolo: user.ruolo || 'owner',
-      }, { modalita: 'locale' });
-      session.labName = user.labName || user.nome || user.email;
+      var gate = this;
+      chiediPostazione(user, errEl, function(postazione){
+        var session = I.creaSessione({
+          id: user.id || user.user_id,
+          email: user.email,
+          nome: user.nome || user.labName || null,
+          tenant_id: user.tenant_id || null,
+          ruolo: user.ruolo || 'owner',
+        }, { modalita: 'locale' });
+        session.labName = user.labName || user.nome || user.email;
+        if(postazione) session.device_id = postazione.device_id;
 
-      saveSession(session);
-      this._session = session;
-      this._hideGate();
-      this._applySession();
+        btn.disabled = false;
+        btn.innerHTML = 'Accedi';
+        saveSession(session);
+        gate._session = session;
+        gate._hideGate();
+        gate._applySession();
+        if(window.InglyGuardia) window.InglyGuardia.avvia({});
+      }, function(msg){
+        btn.disabled = false;
+        btn.innerHTML = 'Accedi';
+        if(msg){ errEl.textContent = msg; errEl.style.display='block'; }
+      });
     },
 
     /* Entrare senza passare dal modulo di accesso.
@@ -1171,6 +1190,8 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
        al form significava riempire campi che in quel momento non esistono
        piu' — ed e' cosi' che il pulsante restava «Creazione in corso...»
        per sempre. Qui la sessione si applica direttamente. */
+    _ridisegnaGate: ridisegnaGate,
+
     avviaSessione: function(session){
       if(!session || !session.user_id) return { ok:false, motivo:'sessione assente' };
       if(!session.labName) session.labName = session.nome || session.email || 'Laboratorio';
@@ -1181,10 +1202,20 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       try{
         document.dispatchEvent(new CustomEvent('ingly:login', { detail: session }));
       }catch(e){}
+      if(window.InglyGuardia) window.InglyGuardia.avvia({});
       return { ok:true, sessione: session };
     },
 
     logout: function(){
+      /* Uscire libera la postazione: altrimenti il proprio computer resterebbe
+         a occupare il posto fino alla scadenza per inattivita'. */
+      try{
+        var s = this._session;
+        if(s && window.InglyDispositivi && s.device_id){
+          window.InglyDispositivi.revoca(s.device_id, 'uscita volontaria', { attore: s.user_id });
+        }
+      }catch(e){}
+      try{ if(window.InglyGuardia) window.InglyGuardia.ferma(); }catch(e){}
       clearSession();
       this._session = null;
       document.getElementById('saas-session-bar').style.display = 'none';
@@ -1195,6 +1226,11 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
     },
 
     _showGate: function(){
+      /* Si ridisegna prima di mostrare: il contenuto del riquadro puo' essere
+         stato sostituito dalla schermata di primo avvio o da quella di
+         blocco, e mostrarlo com'e' rimasto significa mostrare una schermata
+         da cui non si entra. */
+      ridisegnaGate();
       document.getElementById('saas-gate').style.display = 'flex';
       // Prevent INGLY from initializing if no session
       window._SAAS_GATE_BLOCKING = true;
@@ -1549,6 +1585,67 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   window.InglyCloudAdmin = window.InglyCloud;
 
   /* ── 5. Core login ── */
+  /* ── 5a. La postazione ──
+     Un abbonamento, una postazione. Il secondo dispositivo non viene
+     respinto: gli si dice da dove e' aperta l'altra sessione e lo si lascia
+     scegliere. Respingere sarebbe la via piu' breve per chiudere fuori il
+     legittimo proprietario, che ha solo lasciato un browser aperto altrove. */
+  function _escHtml(v){
+    return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function _quando(iso){
+    var t = Date.parse(String(iso||''));
+    if(!isFinite(t)) return '';
+    var m = Math.round((Date.now()-t)/60000);
+    if(m < 1) return 'proprio ora';
+    if(m < 60) return m + ' minuti fa';
+    var h = Math.round(m/60);
+    return h < 24 ? (h + ' ore fa') : (Math.round(h/24) + ' giorni fa');
+  }
+
+  /**
+   * @param procedi  chiamata con la sessione di dispositivo (o null) quando
+   *                 la postazione e' assegnata
+   * @param rinuncia chiamata se non si entra: deve riportare il modulo a uno
+   *                 stato utilizzabile — nessun pulsante lasciato spento
+   */
+  function chiediPostazione(user, errEl, procedi, rinuncia){
+    var D = window.InglyDispositivi;
+    if(!D){ procedi(null); return; }
+
+    var r = D.registra(user, {});
+    if(r && r.ok){ procedi(r.sessione); return; }
+
+    if(!r || !r.conflitto){
+      /* Non e' un conflitto: e' un archivio che non si riesce a leggere o a
+         scrivere. Chi non sa non apre, e lo dice. */
+      rinuncia((r && r.motivo) || 'Non e\u2019 stato possibile registrare questo dispositivo');
+      return;
+    }
+
+    var occupata = (r.occupate && r.occupate[0]) || {};
+    var visto = _quando(occupata.last_seen);
+    window.SaaSGate._subentra = function(){
+      var t = D.subentra(user, {});
+      if(!t || !t.ok){ rinuncia((t && t.motivo) || 'Non e\u2019 stato possibile subentrare'); return; }
+      procedi(t.sessione);
+    };
+    window.SaaSGate._rinunciaPostazione = function(){ rinuncia(''); };
+
+    errEl.innerHTML =
+      '<strong>' + _escHtml(r.motivo) + '</strong><br>'
+      + 'Aperto su <em>' + _escHtml(occupata.etichetta || 'un altro dispositivo') + '</em>'
+      + (visto ? ' — visto ' + _escHtml(visto) : '') + '.<br>'
+      + '<button type="button" class="gate-btn" style="margin-top:10px" '
+      + 'onclick="SaaSGate._subentra()">Entra qui e chiudi l\u2019altra sessione</button> '
+      + '<button type="button" class="gate-btn" style="margin-top:10px;background:none;border:1px solid currentColor" '
+      + 'onclick="SaaSGate._rinunciaPostazione()">Annulla</button>';
+    errEl.style.display = 'block';
+  }
+
   function doLogin(username, password, errEl, btn) {
     errEl.style.display = 'none';
     if (!username || !password) {
@@ -1580,6 +1677,19 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     }
 
     function success(user) {
+      /* La postazione si chiede PRIMA di dichiarare l'accesso riuscito: dire
+         «sei dentro» e poi scoprire che il posto e' occupato sarebbe due
+         messaggi contraddittori nello stesso secondo. */
+      chiediPostazione(user, errEl, function(postazione){
+        _successo(user, postazione);
+      }, function(msg){
+        resetBtn();
+        if(msg){ errEl.textContent = msg; errEl.style.display='block'; }
+        else { errEl.textContent=''; errEl.style.display='none'; }
+      });
+    }
+
+    function _successo(user, postazione) {
       resetBtn();
       sessionStorage.removeItem(bfKey);
       /* Si aggiorna soltanto la data di accesso. Prima questa riga rimandava al
@@ -1606,6 +1716,7 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
 
       /* Comodita' di visualizzazione, non un diritto. */
       session.labName = user.lab_name || user.labName || user.company || user.email;
+      if(postazione) session.device_id = postazione.device_id;
 
       /* La sessione non contiene: la password, il suo hash, il piano, i
          moduli, la scadenza della licenza. Chi apre `sessionStorage` vede chi
@@ -1615,6 +1726,7 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       window.SaaSGate._hideGate();
       window.SaaSGate._applySession();
       startMonitor(session);
+      if(window.InglyGuardia) window.InglyGuardia.avvia({});
     }
 
     /* Questo era il **secondo** percorso di accesso, con lo stesso confronto in
@@ -1702,7 +1814,6 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   /* ── 5b. Registrazione self-service + trial 14 giorni ──
      Crea un utente (piano Pro in prova) su Supabase (RLS aperta) e in locale,
      poi effettua il login. Nessun backend necessario. */
-  function _regUid(){ return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
   function doRegister(){
     var lab = (document.getElementById('reg-lab').value||'').trim();
     var user = (document.getElementById('reg-user').value||'').trim();
@@ -1719,70 +1830,47 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     var db = loadDB() || {users:[]}; db.users = db.users || [];
     if(db.users.some(function(u){ return u.username===user; })){ err.textContent='Username già in uso'; err.style.display='block'; return; }
     btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Creazione...';
-    function finish(){
-      // login automatico riusando doLogin
-      var gu=document.getElementById('gate-user'), gp=document.getElementById('gate-pass');
-      if(gu&&gp){ gu.value=user; gp.value=pass; }
-      SaaSGate.showLogin();
-      window.SaaSGate.login();
-    }
+
+    var ETICHETTA_REG = 'Crea account e prova gratis';
+    function riattiva(){ btn.disabled=false; btn.innerHTML=ETICHETTA_REG; }
+    function ferma(msg){ riattiva(); err.textContent=msg; err.style.display='block'; }
+
+    /* La registrazione passa da `InglyAccount`: una sola scrittura, una sola
+       idea di che cosa sia un account. Prima costruiva l'utente qui, e poi
+       rientrava dal modulo di accesso riempiendo i campi a mano — che e' il
+       percorso in cui il pulsante restava «Creazione...» per sempre. */
     function create(){
-      /* La password non viene mai memorizzata ne' trasmessa in chiaro. Prima
-         questa funzione scriveva `passwordHash: pass` — cioe' la password —
-         e poi la mandava al cloud con `sbUpsert(u)`. Due copie in chiaro, una
-         locale e una remota, per ogni account creato. */
-      var I = window.InglyIdentita;
-      var A = window.InglyAbbonamento;
-      if(!I){
-        btn.disabled=false; btn.innerHTML='Crea account e prova gratis';
-        err.textContent='Servizio di registrazione non disponibile. Ricarica la pagina.';
-        err.style.display='block'; return;
-      }
+      var C = window.InglyAccount;
+      if(!C){ ferma('Servizio di registrazione non disponibile. Ricarica la pagina.'); return; }
 
-      var forza = I.robustezza(pass);
-      if(!forza.ok){
-        btn.disabled=false; btn.innerHTML='Crea account e prova gratis';
-        err.textContent='Password troppo debole: ' + forza.problemi.join(', ');
-        err.style.display='block'; return;
-      }
-
-      I.cifra(pass).then(function(hash){
-        var tenantId = 'ws_' + _regUid();
-        /* Il workspace nasce con la sua prova. Piano e durata li dice il
-           catalogo: non sono scritti qui. */
-        var abbonamento = A ? A.creaTrial({ tenant_id: tenantId }) : null;
-
-        var u={ id:_regUid(), user_id:_regUid(), username:user, email:email, labName:lab,
-          nome: lab,
-          status:'active', active:true,
-          tenant_id: tenantId, ruolo:'owner',
-          password_hash: hash,
-          created_at: new Date().toISOString() };
-
-        db.users.unshift(u);
-        db.tenants = db.tenants || [];
-        db.tenants.unshift({ id: tenantId, nome: lab, owner_id: u.id,
-          created_at: new Date().toISOString() });
-        db.subscriptions = db.subscriptions || [];
-        if(abbonamento) db.subscriptions.unshift(abbonamento);
-
-        try{ localStorage.setItem('ingly_saas_db', JSON.stringify(db)); }catch(e){}
+      C.crea({
+        nome: lab, laboratorio: lab, username: user, email: email,
+        password: pass, conferma: pass, termini: true,
+      }, { ruolo: 'owner', prova: true }).then(function(r){
+        if(!r || !r.ok){ ferma((r && r.motivo) || 'Registrazione non riuscita'); return; }
 
         /* Sul cloud va l'account **senza** la password: l'autenticazione
            remota sara' di Supabase Auth, che le password se le tiene lui. */
         try{
           if(typeof sbUpsert==='function'){
-            var senzaSegreti = Object.assign({}, u);
+            var senzaSegreti = Object.assign({}, r.utente);
             delete senzaSegreti.password_hash;
             delete senzaSegreti.passwordHash;
             sbUpsert(senzaSegreti);
           }
         }catch(e){}
-        setTimeout(finish, 400);
+
+        btn.innerHTML = 'Account creato';
+        var a = window.SaaSGate.avviaSessione(r.sessione);
+        if(!a || !a.ok){
+          /* L'account c'e'. Tacere qui vorrebbe dire lasciare qualcuno davanti
+             a un pulsante che non fa piu' niente. */
+          ferma('Account creato. Ricarica la pagina per entrare.');
+          return;
+        }
+        if(typeof startMonitor==='function') startMonitor(r.sessione);
       }).catch(function(e){
-        btn.disabled=false; btn.innerHTML='Crea account e prova gratis';
-        err.textContent='Registrazione non riuscita. Riprova.';
-        err.style.display='block';
+        ferma('Registrazione non riuscita. Riprova.');
         console.warn('[SaaSGate] registrazione:', e && e.message);
       });
     }
@@ -1795,57 +1883,44 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     } else { create(); }
   }
 
-  /* ── 6. Monitor sessione (30s) ── */
-  var _monitorTimer = null;
+  /* ── 6. Monitor sessione ──
+     Questo monitor aveva una sua idea di «sessione ancora valida», diversa da
+     tutte le altre: leggeva `session.userId` (campo che non esiste piu',
+     quindi non trovava mai l'utente e non controllava niente), confrontava
+     hash di password e — soprattutto — riscriveva `plan` e `modules` DENTRO
+     la sessione. Oggi una sessione che porta i diritti viene considerata
+     manomessa: il monitor avrebbe buttato fuori l'utente da solo, al primo
+     giro, senza che nessuno capisse perche'.
 
+     La domanda «questa persona puo' stare qui?» la fa `InglyGuardia`, una
+     volta sola. Qui resta l'avvio e l'arresto, perche' il resto del file li
+     chiama. */
   function startMonitor(session) {
-    stopMonitor();
-    _monitorTimer = setInterval(function() { checkSession(session); }, 30000);
+    if (window.InglyGuardia) return window.InglyGuardia.avvia({});
+    return { ok: false, motivo: 'guardia non disponibile' };
   }
 
   function stopMonitor() {
-    if (_monitorTimer) { clearInterval(_monitorTimer); _monitorTimer = null; }
+    if (window.InglyGuardia) return window.InglyGuardia.ferma();
+    return { ok: false };
   }
 
   function checkSession(session) {
-    function processUser(user) {
-      if (!user) return;
-      if (user.status === 'banned' || user.status === 'suspended') {
-        stopMonitor(); showRevoked(user.status); return;
-      }
-      var hash = user.passwordHash || user.password_hash || '';
-      if (hash && session.passwordHash && hash !== session.passwordHash) {
-        stopMonitor(); showPwdChanged(); return;
-      }
-      var expiry = user.expiresAt || user.expires_at;
-      if (user.status !== 'lifetime' && expiry && new Date(expiry) < new Date()) {
-        stopMonitor(); showExpired(expiry); return;
-      }
-      var newPlan = user.plan || user.plan_id;
-      if (newPlan && newPlan !== session.plan) {
-        session.plan = newPlan;
-        var mods = user.modules || user.modules_json;
-        if (typeof mods === 'string') { try { mods = JSON.parse(mods); } catch(e) { mods = null; } }
-        session.modules = mods || getModules(newPlan);
-        if (user.expiresAt || user.expires_at) session.expiresAt = user.expiresAt || user.expires_at;
-        try { sessionStorage.setItem('ingly_saas_session', JSON.stringify(session)); } catch(e) {}
-        window.SaaSGate._session = session;
-        if (window.SaaSGate._lockNavItems) SaaSGate._lockNavItems();
-        showBanner('Piano aggiornato: ' + newPlan.toUpperCase(), '#10b981');
-      }
+    var G = window.InglyGuardia;
+    if (!G) return;
+    var esito = G.applica({
+      sessione: session || (window.SaaSGate && window.SaaSGate._session),
+      agisci: false,
+    });
+    if (esito.azione === 'entra') return;
+    stopMonitor();
+    if (esito.causa === 'account') {
+      var st = esito.account && esito.account.stato;
+      showRevoked(st === 'banned' ? 'banned' : 'suspended');
+      return;
     }
-
-    if (sbConfigured()) {
-      sbGet(session.username).then(processUser).catch(function() {
-        var db = loadDB();
-        var u = (db && db.users || []).find(function(x) { return x.id === session.userId; });
-        processUser(u);
-      });
-    } else {
-      var db = loadDB();
-      var u = (db && db.users || []).find(function(x) { return x.id === session.userId; });
-      processUser(u);
-    }
+    if (esito.azione === 'blocco') { G.mostraBlocco(esito); return; }
+    G.esci(esito.messaggio);
   }
 
   /* ── 7. Realtime Sync (BroadcastChannel) ── */
@@ -1869,20 +1944,17 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       } else if (cmd.type === 'password_reset') {
         showPwdChanged();
         setTimeout(function() { if (SaaSGate.logout) SaaSGate.logout(); }, 3000);
-      } else if (cmd.type === 'license_renewal') {
-        if (cmd.newExpiry) s.expiresAt = cmd.newExpiry;
-        try { sessionStorage.setItem('ingly_saas_session', JSON.stringify(s)); } catch(e) {}
-        showBanner('Licenza rinnovata!', '#10b981');
-      } else if (cmd.type === 'plan_change') {
-        if (cmd.newPlan) {
-          s.plan = cmd.newPlan;
-          s.modules = cmd.modules || getModules(cmd.newPlan);
-          if (cmd.expiresAt) s.expiresAt = cmd.expiresAt;
-          try { sessionStorage.setItem('ingly_saas_session', JSON.stringify(s)); } catch(e) {}
-          window.SaaSGate._session = s;
-          if (window.SaaSGate._lockNavItems) SaaSGate._lockNavItems();
-          showBanner('Piano aggiornato: ' + cmd.newPlan.toUpperCase(), '#10b981');
-        }
+      } else if (cmd.type === 'license_renewal' || cmd.type === 'plan_change') {
+        /* Queste due righe scrivevano `plan`, `modules` ed `expiresAt` DENTRO
+           la sessione. Una sessione che porta i diritti e' oggi una sessione
+           manomessa: il comando dell'amministratore avrebbe fatto uscire
+           l'utente invece di aggiornargli il piano. I diritti si rileggono
+           dall'abbonamento, che e' l'unico posto in cui vivono. */
+        if (window.SaaSGate._applicaDiritti) window.SaaSGate._applicaDiritti();
+        if (window.SaaSGate._lockNavItems) SaaSGate._lockNavItems();
+        showBanner(cmd.type === 'plan_change'
+          ? ('Piano aggiornato: ' + String(cmd.newPlan || '').toUpperCase())
+          : 'Abbonamento rinnovato', '#10b981');
       }
     } catch(e) {}
   }
@@ -1902,14 +1974,22 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   }, 3000);
 
   /* ── 8. Export guard ── */
+  /* Leggeva `s.status` e `s.expiresAt` dalla sessione: campi che la sessione
+     non porta piu'. Il risultato era un guardiano che rispondeva sempre di si',
+     cioe' nessun guardiano. La domanda la fa la guardia. */
   function checkExport() {
+    var G = window.InglyGuardia;
     var s = window.SaaSGate && window.SaaSGate._session;
     if (!s) return true;
-    if (s.status === 'suspended' || s.status === 'banned') { showRevoked(s.status); return false; }
-    if (s.status !== 'lifetime' && s.expiresAt && new Date(s.expiresAt) < new Date()) {
-      showExpired(s.expiresAt); return false;
+    if (!G) return true;
+    var esito = G.controlla(s, {});
+    if (esito.azione === 'entra') return true;
+    if (esito.causa === 'account') {
+      showRevoked((esito.account && esito.account.stato) === 'banned' ? 'banned' : 'suspended');
+    } else {
+      G.mostraBlocco(esito);
     }
-    return true;
+    return false;
   }
 
   function guardExports() {
@@ -2029,12 +2109,17 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       /* Registrazione self-service + toggle login/registrazione */
       window.SaaSGate.register = doRegister;
       window.SaaSGate.showRegister = function(){
+        if(window.SaaSGate._ridisegnaGate) window.SaaSGate._ridisegnaGate();
         var l=document.getElementById('gate-login'), r=document.getElementById('gate-register');
         if(l) l.style.display='none'; if(r) r.style.display='block';
         var t=document.getElementById('gf-title'), s=document.getElementById('gf-sub');
         if(t) t.textContent='Prova gratis 14 giorni'; if(s) s.textContent='Crea il tuo account INGLY — nessuna carta richiesta';
       };
+      /* Non basta cambiare `display`: il riquadro puo' contenere tutt'altro.
+         Chiamare questa funzione deve SEMPRE portare a un modulo di accesso
+         utilizzabile, non a quello che era rimasto sullo schermo. */
       window.SaaSGate.showLogin = function(){
+        if(window.SaaSGate._ridisegnaGate) window.SaaSGate._ridisegnaGate();
         var l=document.getElementById('gate-login'), r=document.getElementById('gate-register');
         if(r) r.style.display='none'; if(l) l.style.display='block';
         var t=document.getElementById('gf-title'), s=document.getElementById('gf-sub');
