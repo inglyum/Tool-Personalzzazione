@@ -258,11 +258,42 @@ function _recordLoginSuccess(){
 }
 
 
-/* ─── RESET DB EMERGENZA ─────────────────────────────────────── */
+/* ─── RESET ACCESSO ADMIN ────────────────────────────────────────
+   Cancellava `DB_KEY` — che È `ingly_saas_db`, la stessa chiave usata
+   dall'applicazione — quindi «problemi ad accedere all'admin» finiva
+   per cancellare anche l'account, il workspace e l'abbonamento di chi
+   stava usando INGLY OS in quello stesso browser. Il pulsante che
+   doveva risolvere un blocco ne creava uno peggiore.
+
+   Questo pannello CONDIVIDE l'archivio con l'applicazione: si legge,
+   si azzera solo la parte che appartiene alla console — amministratori,
+   il loro log, le loro sessioni — e si riscrive lo stesso oggetto. Mai
+   una `removeItem` sulla chiave intera. */
 function resetAdminDB(){
-  if(!confirm('ATTENZIONE: questo cancellerà tutti i dati e ricrea il database con le credenziali predefinite.\n\nProcedere?')) return;
-  localStorage.removeItem(DB_KEY);
-  localStorage.removeItem('ingly_saas_db');
+  if(!confirm(
+    'Questo azzera l\'accesso alla console admin: amministratori, log e sessioni admin.\n' +
+    'I dati dell\'applicazione (account, workspace, abbonamento) restano intatti: ' +
+    'condividono lo stesso archivio e non vengono toccati.\n\nProcedere?'
+  )) return;
+
+  var db = dbLoad();
+  db.admins = [{
+    id:'adm-0001', username:'superadmin', email:'superadmin@ingly.io',
+    role:'superadmin', name:'Super Admin', passwordHash:null,
+    lastLogin:null, active:true, mustChangePassword:true
+  }];
+  db.auditLog = [{
+    id:'log-0001', ts:new Date().toISOString(),
+    action:'admin_access_reset', detail:'Accesso amministratore azzerato dal pannello',
+    user:'system', admin:'system', ip:'localhost',
+    browser:'Admin Panel', country:'IT', severity:'medium'
+  }];
+  db.sessions = [];
+  db.secEvents = [];
+  db.notifications = [];
+  db.blockedIPs = [];
+  dbSave(db);
+
   localStorage.removeItem('ingly_enterprise_v2');
   _loginAttempts.count = 0;
   _loginAttempts.blockedUntil = 0;

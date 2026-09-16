@@ -269,6 +269,70 @@ const archivioApp = () => {
   await ctx.close();
 }
 
+/* ── «Problemi di accesso? Reset database»: DEVE azzerare solo l'admin ─────
+   Difetto misurato: il pulsante offerto a chi non riesce a entrare
+   cancellava `DB_KEY`, che è la STESSA chiave dell'applicazione
+   (`ingly_saas_db`). Un pulsante pensato per sbloccare la console
+   distruggeva l'account, il workspace e l'abbonamento di chi la stava
+   usando in quello stesso browser — perché `file://` condivide un'unica
+   origine fra tutti i file locali, e con essa lo `localStorage`. */
+
+{
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await ctx.newPage();
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  await page.addInitScript(archivioApp);
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForTimeout(9000);
+
+  const prima = await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    return { utenti: (db.users || []).length, workspace: (db.tenants || []).length,
+      abbonamenti: (db.subscriptions || []).length, admins: (db.admins || []).length };
+  });
+
+  /* Il vero pulsante, il vero clic — non una simulazione della funzione. */
+  await page.click('button:has-text("Reset database")');
+  await page.waitForTimeout(1200);
+
+  const dopo = await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+    const a = (db.admins || [])[0] || {};
+    return {
+      utenti: (db.users || []).length, workspace: (db.tenants || []).length,
+      abbonamenti: (db.subscriptions || []).length,
+      admins: (db.admins || []).length,
+      adminSenzaPassword: a.passwordHash === null,
+      chiedePrimoAccesso: document.body.innerText.includes('Nessuna password è preconfigurata'),
+    };
+  });
+  dico('prima del reset: l\'app ha già account, workspace e abbonamento',
+    prima.utenti === 1 && prima.workspace === 1 && prima.abbonamenti === 1);
+  dico('«Reset database» NON cancella l\'account dell\'applicazione ('
+    + dopo.utenti + ')', dopo.utenti === 1);
+  dico('né il workspace (' + dopo.workspace + ')', dopo.workspace === 1);
+  dico('né l\'abbonamento (' + dopo.abbonamenti + ')', dopo.abbonamenti === 1);
+  dico('e azzera davvero l\'accesso admin: un solo amministratore, senza password',
+    dopo.admins === 1 && dopo.adminSenzaPassword);
+  dico('la schermata torna al primo accesso, pronta per una password nuova',
+    dopo.chiedePrimoAccesso);
+
+  /* E il prodotto, riaperto, vede ancora il proprio account. */
+  const pOS = await ctx.newPage();
+  pOS.on('dialog', (d) => d.accept().catch(() => {}));
+  await pOS.goto('file://' + path.resolve('dist/INGLY-OS.html'), { waitUntil: 'load', timeout: 120000 });
+  await pOS.waitForTimeout(16000);
+  const lato_os = await pOS.evaluate(() => ({
+    utenti: (JSON.parse(localStorage.getItem('ingly_saas_db') || '{}').users || []).length,
+    chiedeDiCreare: !!document.getElementById('su-submit'),
+  }));
+  dico('e dal lato dell\'applicazione l\'account è ancora lì (' + lato_os.utenti + ')',
+    lato_os.utenti === 1);
+  dico('non ripropone la creazione dell\'account', lato_os.chiedeDiCreare === false);
+
+  await ctx.close();
+}
+
 console.log('\nCONSOLE AMMINISTRAZIONE · ACCESSO\n');
 const problemi = [];
 for (const p of passi) {
