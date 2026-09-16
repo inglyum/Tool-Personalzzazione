@@ -390,15 +390,46 @@
     _intervallo = (v === 'yearly') ? 'yearly' : 'monthly';
     if (_ultimoHostPrezzi) renderPrezzi(_ultimoHostPrezzi, { intervallo: _intervallo });
   }
-  function scegli(planId, intervallo) {
-    if (typeof global.toast === 'function') {
-      var c = P();
-      var p = c && c.piano(planId);
-      global.toast('Piano ' + (p ? p.nome : planId) + ' · '
-        + (intervallo === 'yearly' ? 'annuale' : 'mensile')
-        + ': completa l’attivazione dalla sezione Abbonamento.', 'info', 7000);
+  function _avvisa(msg, tipo, ms) {
+    if (typeof global.toast === 'function') global.toast(msg, tipo || 'info', ms || 7000);
+  }
+
+  function _tenant() {
+    var s = (global.SaaSGate && global.SaaSGate._session) || null;
+    if (!s) {
+      try { s = JSON.parse(global.sessionStorage.getItem('ingly_saas_session') || 'null'); }
+      catch (e) { s = null; }
     }
-    if (global.App && typeof global.App.navigate === 'function') global.App.navigate('abbonamento');
+    return s ? s.tenant_id : null;
+  }
+
+  function _ridisegnaAbbonamento() {
+    if (typeof document === 'undefined') return;
+    var h = document.getElementById('view-abbonamento')
+      || document.querySelector('[data-sezione="abbonamento"]');
+    if (!h) return;
+    var corpo = h.lastElementChild || h;
+    renderAbbonamento(corpo, E() ? E().contesto() : null);
+  }
+
+  /**
+   * Scegliere un piano non lo attiva: manda a pagarlo. Attivarlo da qui
+   * vorrebbe dire regalarlo a chiunque apra la console del browser.
+   */
+  function scegli(planId, intervallo) {
+    var F = global.InglyFatturazione;
+    if (!F) { _avvisa('Servizio di pagamento non disponibile.', 'error'); return { ok: false }; }
+    var r = F.cambiaPiano(_tenant(), planId, intervallo || 'monthly', {});
+    if (r.ok && r.via === 'fornitore') {
+      _avvisa('Ti abbiamo aperto la pagina di pagamento. L’abbonamento si attiva '
+        + 'appena il pagamento risulta.', 'info', 9000);
+    } else if (r.ok) {
+      _avvisa('Il cambio di piano sarà applicato al prossimo rinnovo.', 'success', 8000);
+      _ridisegnaAbbonamento();
+    } else {
+      _avvisa(r.motivo, 'info', 12000);
+    }
+    return r;
   }
 
   /* ── Il centro abbonamento ────────────────────────────────────────────── */
@@ -462,7 +493,14 @@
       + '<button class="ly-btn" onclick="InglyLancio.vaiAiPrezzi()">Cambia piano</button>'
       + (s.stato === 'active' || s.stato === 'trial'
         ? '<button class="ly-btn ghost" onclick="InglyLancio.disdici()">Disdici</button>' : '')
+      + (s.stato === 'cancelled'
+        ? '<button class="ly-btn ghost" onclick="InglyLancio.riattiva()">Riattiva</button>' : '')
       + '</div>'
+      + (ctx && ctx.abbonamento && ctx.abbonamento.pending_plan_id
+        ? '<p class="ly-note">Al prossimo rinnovo passerai al piano '
+          + esc((c.piano(ctx.abbonamento.pending_plan_id) || {}).nome
+            || ctx.abbonamento.pending_plan_id) + '.</p>'
+        : '')
       + '<h3 style="font:700 15px var(--font-sans,system-ui);color:var(--text,#f3f4f6);margin:0 0 12px">Cosa è incluso</h3>'
       + '<ul class="ly-feats" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));display:grid">'
       + e.tutte(ctx).map(function (f) {
@@ -476,9 +514,24 @@
     if (global.App && typeof global.App.navigate === 'function') global.App.navigate('prezzi');
   }
   function disdici() {
-    if (typeof global.toast === 'function') {
-      global.toast('Per disdire scrivi a inglydesign@gmail.com: l’accesso resta fino alla fine del periodo pagato.', 'info', 8000);
-    }
+    var F = global.InglyFatturazione;
+    if (!F) { _avvisa('Servizio non disponibile.', 'error'); return { ok: false }; }
+    var r = F.disdici(_tenant(), { attore: 'utente' });
+    _avvisa(r.ok
+      ? 'Abbonamento disdetto. L’accesso resta fino alla fine del periodo già pagato.'
+      : r.motivo, r.ok ? 'success' : 'error', 9000);
+    if (r.ok) _ridisegnaAbbonamento();
+    return r;
+  }
+
+  /** Ripensarci prima della scadenza: il periodo è già pagato, non si ripaga. */
+  function riattiva() {
+    var F = global.InglyFatturazione;
+    if (!F) { _avvisa('Servizio non disponibile.', 'error'); return { ok: false }; }
+    var r = F.riattiva(_tenant(), { attore: 'utente' });
+    _avvisa(r.ok ? 'Abbonamento riattivato.' : r.motivo, r.ok ? 'success' : 'error', 9000);
+    if (r.ok) _ridisegnaAbbonamento();
+    return r;
   }
 
   /* ── Il blocco di una funzione ────────────────────────────────────────── */
@@ -522,6 +575,7 @@
     renderAbbonamento: renderAbbonamento,
     vaiAiPrezzi: vaiAiPrezzi,
     disdici: disdici,
+    riattiva: riattiva,
     blocco: blocco,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

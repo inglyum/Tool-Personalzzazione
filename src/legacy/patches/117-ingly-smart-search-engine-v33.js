@@ -2311,50 +2311,31 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       return;
     }
 
-    /* 4. Piano cambiato → aggiorna moduli in tempo reale */
+    /* 4. Piano cambiato → si rileggono i diritti, non si riscrive la sessione.
+       Queste righe scrivevano `plan`, `modules` ed `expiresAt` DENTRO la
+       sessione, e la salvavano in `sessionStorage`. Due conseguenze: chi
+       apriva la console poteva cambiarsi il piano modificando una stringa, e
+       — da quando una sessione con i diritti dentro e' considerata manomessa —
+       il messaggio dal cloud avrebbe fatto uscire l'utente invece di
+       aggiornargli il piano. I diritti vivono nell'abbonamento, e si
+       rileggono di li'. */
     var newPlan = user.plan_id || user.plan;
-    if (newPlan && newPlan !== s.plan) {
-      s.plan = newPlan;
-      var mods = user.modules_json;
-      if (typeof mods === 'string') {
-        try { mods = JSON.parse(mods); } catch(e) { mods = null; }
+    if (newPlan) {
+      if (window.SaaSGate && window.SaaSGate._applicaDiritti) {
+        window.SaaSGate._applicaDiritti();
       }
-      s.modules = mods || _defaultModules(newPlan);
-      if (exp) s.expiresAt = exp;
-      try {
-        sessionStorage.setItem('ingly_saas_session', JSON.stringify(s));
-      } catch(e) {}
-      if (window.SaaSGate) window.SaaSGate._session = s;
-
-      /* P1: Applica il lock moduli immediatamente */
       if (window.SaaSGate && window.SaaSGate._lockNavItems) {
         SaaSGate._lockNavItems();
       }
-      _banner('Piano aggiornato: ' + newPlan.toUpperCase(), '#10b981');
-    }
-
-    /* 5. Scadenza aggiornata (rinnovo) */
-    if (exp && exp !== s.expiresAt) {
-      s.expiresAt = exp;
-      try {
-        sessionStorage.setItem('ingly_saas_session', JSON.stringify(s));
-      } catch(e) {}
-      _banner('Licenza rinnovata!', '#10b981');
+      _banner('Piano aggiornato: ' + String(newPlan).toUpperCase(), '#10b981');
     }
   }
 
-  /* ── P1: DEFAULT MODULES BY PLAN ─────────────────────────── */
-  function _defaultModules(plan) {
-    var STARTER = ['dashboard','quoter','quick_quote','sales','gestione_ordini',
-      'clienti','clients','items','magazzino','catalog','listino','suppliers',
-      'finance','prima_nota','fiscal','taxcalendar','payment_schedule',
-      'fixed_costs','kpi','reports','backup','settings','lab_setup',
-      'history','goals','weeklyreport','monthly_report','timetracker'];
-    if (plan === 'enterprise') return ['*'];
-    if (plan === 'starter') return STARTER;
-    /* pro/business: all of starter + extras */
-    return null; /* SaaSGate uses its own PLAN_MODULES as fallback */
-  }
+  /* La tabella `_defaultModules` stava qui: una seconda lista di che cosa
+     comprende ogni piano, accanto a quella del catalogo. Non ha piu'
+     chiamanti — i diritti li dice `InglyEntitlements` leggendo
+     `InglyPiani` — e lasciarla sarebbe stato lasciare pronta la prossima
+     divergenza fra due listini. */
 
   /* ── P1: SYNC MODULES_JSON TO SUPABASE WHEN PLAN CHANGES ─── */
   function syncModulesToCloud(userId, modules) {

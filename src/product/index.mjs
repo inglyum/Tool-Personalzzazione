@@ -116,6 +116,7 @@ export const PRODUCT_FILES = [
   'plan-catalog.js',
   'subscription.js',
   'entitlements.js',
+  'billing.js',
   'auth-identity.js',
   'device-sessions.js',
   'account-service.js',

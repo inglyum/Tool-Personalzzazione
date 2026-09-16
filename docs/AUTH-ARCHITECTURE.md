@@ -58,3 +58,27 @@ Durata 12 ore, 30 giorni con «resta connesso». Sempre una fine.
 
 `active` · `pending_verification` · `suspended` · `banned` · `deleted`.
 Ognuno con un messaggio per l'utente, senza dettagli tecnici.
+
+---
+
+# Aggiornamento — la guardia e le postazioni
+
+`InglyGuardia` (`src/product/auth-guard.js`) è adesso l'unico posto in cui si
+risponde a «questa persona può stare qui?». Prima quella domanda si faceva in
+punti diversi con risposte diverse; tre di quei punti erano rotti e non se ne
+era accorto nessuno:
+
+- il **monitor di sessione** leggeva `session.userId` — campo che non esiste
+  più — quindi non trovava mai l'utente e non controllava niente; e quando
+  trovava qualcosa scriveva `plan` e `modules` **dentro** la sessione, che con
+  la validazione nuova è una sessione manomessa: il monitor avrebbe fatto
+  uscire l'utente da solo;
+- i comandi `plan_change` e `license_renewal` dell'amministratore facevano la
+  stessa cosa;
+- `checkExport` leggeva `s.status` e `s.expiresAt`, campi che la sessione non
+  porta più: rispondeva sempre di sì. Un guardiano che dice sempre di sì non è
+  un guardiano.
+
+Tutti e tre passano ora da `InglyGuardia`. Il dettaglio completo del ciclo di
+vita, delle tre azioni (`entra` / `esci` / `blocco`) e della policy a una
+postazione sta in `ACCOUNT-LIFECYCLE.md`.
