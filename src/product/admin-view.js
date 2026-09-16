@@ -37,6 +37,8 @@
   function A() { return global.InglyAbbonamento; }
   function P() { return global.InglyPiani; }
   function L() { return global.InglyLancio; }
+  function C() { return global.InglyAccount; }
+  function D() { return global.InglyDispositivi; }
 
   function esc(v) {
     return String(v == null ? '' : v)
@@ -152,26 +154,20 @@
       }
     }
 
-    var hash;
-    try { hash = await i.cifra(d.password); }
-    catch (e) { return { ok: false, motivo: 'Non è stato possibile proteggere la password' }; }
-
-    var id = 'usr_' + Date.now().toString(36);
-    var nuovo = {
-      id: id, user_id: id,
-      email: email,
-      nome: String(d.nome || '').trim() || email,
-      status: 'active', active: true,
-      tenant_id: s.tenant_id,
-      ruolo: ruolo,
-      password_hash: hash,
-      created_at: new Date().toISOString(),
-      created_by: s.user_id || null,
-    };
-    db.users.push(nuovo);
-    var w = scriviDB(db);
-    if (!w.ok) return { ok: false, motivo: 'Non è stato possibile salvare: ' + w.motivo };
-    return { ok: true, utente: nuovo };
+    /* Come si costruisce un account lo sa `InglyAccount`, e lo sa in un posto
+       solo. Qui restano i permessi, l'isolamento del workspace e il limite del
+       piano: le domande che solo l'amministrazione puo' porsi. */
+    var C_ = C();
+    if (!C_) return { ok: false, motivo: 'modulo account non disponibile' };
+    var esito = await C_.crea({
+      nome: d.nome, laboratorio: d.nome || email, email: email,
+      password: d.password, conferma: d.password, termini: true,
+    }, {
+      ruolo: ruolo, tenant_id: s.tenant_id, dispositivo: false,
+      attore: s.user_id || null, richiediTermini: false,
+    });
+    if (!esito.ok) return esito;
+    return { ok: true, utente: esito.utente };
   }
 
   function abbonamentoDi(tenantId) {
@@ -221,11 +217,12 @@
     }
     if (u.ruolo === 'owner') return { ok: false, motivo: 'Il proprietario non si può sospendere' };
     if (String(u.id) === String(s.user_id)) return { ok: false, motivo: 'Non puoi sospendere te stesso' };
-    u.status = stato;
-    u.active = stato === 'active';
-    u.updated_at = new Date().toISOString();
-    var w = scriviDB(db);
-    return w.ok ? { ok: true, utente: u } : { ok: false, motivo: w.motivo };
+    /* Il cambio di stato lo esegue `InglyAccount`: e' lui a sapere che una
+       sospensione chiude anche le postazioni aperte e va scritta in audit.
+       Ripeterlo qui voleva dire avere due sospensioni diverse. */
+    var C_ = C();
+    if (!C_) return { ok: false, motivo: 'modulo account non disponibile' };
+    return C_.cambiaStato(userId, stato, { actor: s.user_id || null, motivo: c.motivo || null });
   }
 
   /** Reimposta la password di una persona del workspace. */
@@ -244,10 +241,53 @@
     if (String(u.tenant_id || '') !== String(s.tenant_id || '')) {
       return { ok: false, motivo: 'Utente di un altro workspace' };
     }
-    u.password_hash = await i.cifra(password);
-    u.updated_at = new Date().toISOString();
-    var w = scriviDB(db);
-    return w.ok ? { ok: true } : { ok: false, motivo: w.motivo };
+    var C_ = C();
+    if (!C_) return { ok: false, motivo: 'modulo account non disponibile' };
+    /* Reimpostare una password chiude le sessioni aperte: e' il motivo per cui
+       la si reimposta. Chi lo sa e' `InglyAccount`. */
+    return C_.reimpostaPassword(userId, password, { actor: s.user_id || null });
+  }
+
+  /* ── Postazioni e attività ────────────────────────────────────────────── */
+
+  /** Le postazioni aperte dalle persone di questo workspace. */
+  function postazioni(tenantId) {
+    var d = D();
+    if (!d) return [];
+    var miei = utenti(tenantId).map(function (u) { return String(u.id); });
+    return d.tutte(null).filter(function (x) {
+      return miei.indexOf(String(x.user_id || '')) >= 0;
+    });
+  }
+
+  /** Che cosa è successo in questo workspace, dal più recente. */
+  function attivita(tenantId, quante) {
+    var c = C();
+    if (!c) return [];
+    return c.audit({ tenant_id: tenantId }).slice().reverse().slice(0, quante || 12);
+  }
+
+  var ETICHETTE_AZIONE = {
+    'account.created': 'Account creato',
+    'account.status_changed': 'Stato dell\u2019account cambiato',
+    'account.password_changed': 'Password cambiata',
+    'account.password_reset': 'Password reimpostata',
+    'device.registered': 'Nuova postazione',
+    'device.revoked': 'Postazione chiusa',
+    'device.revoked_others': 'Subentro da un altro dispositivo',
+    'device.revoked_all': 'Postazioni chiuse',
+  };
+
+  function _quando(iso) {
+    var t = Date.parse(String(iso || ''));
+    if (!isFinite(t)) return '—';
+    var m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return 'ora';
+    if (m < 60) return m + ' min fa';
+    var h = Math.round(m / 60);
+    if (h < 24) return h + (h === 1 ? ' ora fa' : ' ore fa');
+    var g = Math.round(h / 24);
+    return g + (g === 1 ? ' giorno fa' : ' giorni fa');
   }
 
   /* ── La schermata ─────────────────────────────────────────────────────── */
@@ -305,13 +345,50 @@
         + '<td style="padding:10px 12px;font-size:13px;color:'
         + (sospeso ? 'var(--amber-400,#fbbf24)' : 'var(--green,#22c55e)') + '">'
         + (sospeso ? 'Sospeso' : 'Attivo') + (io ? ' · tu' : '') + '</td>'
-        + '<td style="padding:10px 12px;text-align:right">'
+        + '<td style="padding:10px 12px;text-align:right;white-space:nowrap">'
+        + '<input id="ad-pwd-' + esc(u.id) + '" type="password" autocomplete="new-password" '
+        + 'placeholder="Nuova password" aria-label="Nuova password per ' + esc(u.email) + '" '
+        + 'style="width:150px;height:32px;background:var(--bg-card2,#1c2331);color:var(--text,#f3f4f6);'
+        + 'border:1px solid var(--border,#374151);border-radius:8px;padding:0 9px;font-size:13px">'
+        + ' <button class="ly-btn ghost" style="height:32px;padding:0 12px;font-size:13px" '
+        + 'onclick="InglyAmministrazione.azionePassword(\'' + esc(u.id) + '\')">Reimposta</button>'
         + (u.ruolo === 'owner' || io ? ''
-          : '<button class="ly-btn ghost" style="height:32px;padding:0 12px;font-size:13px" '
+          : ' <button class="ly-btn ghost" style="height:32px;padding:0 12px;font-size:13px" '
             + 'onclick="InglyAmministrazione.azioneStato(\'' + esc(u.id) + '\',\''
             + (sospeso ? 'active' : 'suspended') + '\')">'
             + (sospeso ? 'Riattiva' : 'Sospendi') + '</button>')
         + '</td></tr>';
+    }).join('');
+
+    var nomeDi = function (id) {
+      var u = elenco.filter(function (x) { return String(x.id) === String(id); })[0];
+      return u ? (u.nome || u.email) : (id ? String(id) : '—');
+    };
+
+    var righePostazioni = postazioni(s.tenant_id).slice().reverse().slice(0, 20).map(function (d) {
+      var viva = d.active !== false && !d.revoked_at;
+      return '<tr' + (viva ? '' : ' style="opacity:.55"') + '>'
+        + '<td style="padding:10px 12px">' + esc(nomeDi(d.user_id)) + '</td>'
+        + '<td style="padding:10px 12px">' + esc(d.etichetta || d.device_id)
+        + (d.corrente ? ' <small style="color:var(--text-muted,#9ca3af)">· questo</small>' : '') + '</td>'
+        + '<td style="padding:10px 12px;font-size:13px;color:var(--text-muted,#9ca3af)">'
+        + esc(_quando(d.last_seen)) + '</td>'
+        + '<td style="padding:10px 12px;font-size:13px;color:'
+        + (viva ? 'var(--green,#22c55e)' : 'var(--text-muted,#9ca3af)') + '">'
+        + (viva ? 'Aperta' : 'Chiusa') + '</td>'
+        + '<td style="padding:10px 12px;text-align:right">'
+        + (viva ? '<button class="ly-btn ghost" style="height:32px;padding:0 12px;font-size:13px" '
+          + 'onclick="InglyAmministrazione.azioneRevoca(\'' + esc(d.device_id) + '\')">Chiudi</button>' : '')
+        + '</td></tr>';
+    }).join('');
+
+    var righeAttivita = attivita(s.tenant_id, 15).map(function (v) {
+      return '<tr>'
+        + '<td style="padding:10px 12px;font-size:13px;color:var(--text-muted,#9ca3af);white-space:nowrap">'
+        + esc(_quando(v.at)) + '</td>'
+        + '<td style="padding:10px 12px">' + esc(ETICHETTE_AZIONE[v.action] || v.action) + '</td>'
+        + '<td style="padding:10px 12px;font-size:13px;color:var(--text-muted,#9ca3af)">'
+        + esc(nomeDi(v.target)) + '</td></tr>';
     }).join('');
 
     host.innerHTML = '<div class="ly ly-wrap">'
@@ -356,6 +433,31 @@
       + '</div>'
       + '<button class="ly-btn" style="margin-top:6px" onclick="InglyAmministrazione.azioneCrea()">Aggiungi</button>'
       + '<div class="ly-err" id="ad-err" role="alert" aria-live="polite"></div>'
+
+      + '<h3 style="font:700 15px var(--font-sans,system-ui);color:var(--text,#f3f4f6);margin:26px 0 12px">Postazioni aperte</h3>'
+      + '<p style="font:400 13px/1.6 var(--font-sans,system-ui);color:var(--text-muted,#9ca3af);margin:0 0 12px">'
+      + 'Un abbonamento, una postazione per persona. Chiudere una postazione riporta '
+      + 'quel dispositivo alla schermata di accesso.</p>'
+      + '<div style="overflow-x:auto;border:1px solid var(--border,#374151);border-radius:14px;margin-bottom:24px">'
+      + '<table style="width:100%;border-collapse:collapse;font-size:14px">'
+      + '<thead><tr style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;'
+      + 'color:var(--text-muted,#6b7280);text-align:left">'
+      + '<th style="padding:10px 12px">Persona</th><th style="padding:10px 12px">Dispositivo</th>'
+      + '<th style="padding:10px 12px">Vista</th><th style="padding:10px 12px">Stato</th><th></th></tr></thead>'
+      + '<tbody>' + (righePostazioni || '<tr><td colspan="5" style="padding:16px;'
+        + 'color:var(--text-muted,#9ca3af)">Nessuna postazione registrata.</td></tr>')
+      + '</tbody></table></div>'
+
+      + '<h3 style="font:700 15px var(--font-sans,system-ui);color:var(--text,#f3f4f6);margin:0 0 12px">Attività recente</h3>'
+      + '<div style="overflow-x:auto;border:1px solid var(--border,#374151);border-radius:14px;margin-bottom:24px">'
+      + '<table style="width:100%;border-collapse:collapse;font-size:14px">'
+      + '<thead><tr style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;'
+      + 'color:var(--text-muted,#6b7280);text-align:left">'
+      + '<th style="padding:10px 12px">Quando</th><th style="padding:10px 12px">Cosa</th>'
+      + '<th style="padding:10px 12px">Su chi</th></tr></thead>'
+      + '<tbody>' + (righeAttivita || '<tr><td colspan="3" style="padding:16px;'
+        + 'color:var(--text-muted,#9ca3af)">Ancora niente da mostrare.</td></tr>')
+      + '</tbody></table></div>'
 
       + '<h3 style="font:700 15px var(--font-sans,system-ui);color:var(--text,#f3f4f6);margin:26px 0 12px">Cosa può fare ogni ruolo</h3>'
       + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">'
@@ -403,6 +505,36 @@
     _ridisegna();
     return e;
   }
+  /**
+   * Reimposta la password di una persona. La nuova password NON si mostra in
+   * un avviso e non si scrive in archivio in chiaro: si consegna a voce, e
+   * chi la riceve la cambia. Mostrarla in un toast vorrebbe dire lasciarla
+   * sullo schermo di chiunque passi.
+   */
+  async function azionePassword(id) {
+    var campo = document.getElementById('ad-pwd-' + id);
+    var nuova = campo ? campo.value : '';
+    if (!nuova) { _avvisa('Scrivi la nuova password', 'error'); if (campo) campo.focus(); return; }
+    var e = await reimpostaPassword(id, nuova);
+    if (campo) campo.value = '';
+    _avvisa(e.ok ? 'Password reimpostata. Le sessioni aperte sono state chiuse.' : e.motivo,
+      e.ok ? 'success' : 'error');
+    if (e.ok) _ridisegna();
+    return e;
+  }
+
+  /** Chiude una postazione aperta. Chi la usava torna alla schermata di accesso. */
+  function azioneRevoca(deviceId) {
+    var d = D();
+    if (!d) { _avvisa('Modulo dispositivi non disponibile', 'error'); return; }
+    var s = sessione();
+    if (!s || !puoAmministrare(s.ruolo)) { _avvisa('Non hai i permessi', 'error'); return; }
+    var e = d.revoca(deviceId, 'chiusa dall\u2019amministratore', { attore: s.user_id });
+    _avvisa(e.ok ? 'Postazione chiusa' : e.motivo, e.ok ? 'success' : 'error');
+    _ridisegna();
+    return e;
+  }
+
   function azioneStato(id, stato) {
     var e = cambiaStato(id, stato);
     _avvisa(e.ok ? (stato === 'active' ? 'Utente riattivato' : 'Utente sospeso') : e.motivo,
@@ -428,5 +560,9 @@
     azioneCrea: azioneCrea,
     azioneRuolo: azioneRuolo,
     azioneStato: azioneStato,
+    azionePassword: azionePassword,
+    azioneRevoca: azioneRevoca,
+    postazioni: postazioni,
+    attivita: attivita,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

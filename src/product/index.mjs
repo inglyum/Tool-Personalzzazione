@@ -123,6 +123,7 @@ export const PRODUCT_FILES = [
   'auth-guard.js',
   'setup-iniziale.js',
   'admin-view.js',
+  'sicurezza-view.js',
   'saas-sezioni.js',
   /* Preventivato contro reale: puro, non recupera niente. */
   'scostamento.js',

@@ -194,7 +194,14 @@
 
       var adesso = new Date().toISOString();
       var idUtente = _id('usr');
-      var idTenant = _id('ws');
+      /* Un `tenant_id` passato da fuori vuol dire: questa persona entra in un
+         workspace che esiste gia'. E' il caso dell'amministratore che aggiunge
+         un collega — non nasce un secondo laboratorio, e non nasce un secondo
+         abbonamento. Senza questa strada l'amministrazione avrebbe dovuto
+         costruirsi un utente per conto suo, che e' esattamente la seconda
+         implementazione da cui nascono le divergenze. */
+      var esistente = o.tenant_id ? String(o.tenant_id) : null;
+      var idTenant = esistente || _id('ws');
 
       /* 4 · Profilo */
       var utente = {
@@ -214,12 +221,24 @@
       fase('profilo');
 
       /* 5 · Workspace */
-      var tenant = {
-        id: idTenant, nome: utente.labName, owner_id: idUtente,
-        settore: dati.settore || null, paese: dati.paese || 'IT', valuta: dati.valuta || 'EUR',
-        created_at: adesso,
-      };
-      fase('workspace');
+      var tenant = null;
+      if (esistente) {
+        tenant = (db.tenants || []).filter(function (t) {
+          return String(t.id) === esistente;
+        })[0] || null;
+        if (!tenant) {
+          fase('workspace', false, 'workspace inesistente');
+          return { ok: false, motivo: 'Il workspace indicato non esiste', fasi: fasi };
+        }
+        fase('workspace', true, 'esistente');
+      } else {
+        tenant = {
+          id: idTenant, nome: utente.labName, owner_id: idUtente,
+          settore: dati.settore || null, paese: dati.paese || 'IT', valuta: dati.valuta || 'EUR',
+          created_at: adesso,
+        };
+        fase('workspace');
+      }
 
       /* 6 · Appartenenza e ruolo */
       var membership = {
@@ -231,17 +250,26 @@
       /* 7 · Abbonamento — prova o attivo, secondo chi sta creando */
       var a = A();
       var abbonamento = null;
-      if (a) {
+      if (esistente) {
+        /* L'abbonamento e' del workspace, non della persona: chi entra in un
+           workspace che ne ha gia' uno non ne riceve un secondo. */
+        abbonamento = (db.subscriptions || []).filter(function (x) {
+          return String(x.tenant_id || '') === esistente;
+        })[0] || null;
+        fase('abbonamento', true, 'del workspace');
+      } else if (a) {
         abbonamento = (o.prova === false)
           ? a.creaAttivo(o.piano || 'business', o.intervallo || 'yearly', { tenant_id: idTenant })
           : a.creaTrial({ tenant_id: idTenant });
+        fase('abbonamento', !!abbonamento, abbonamento ? abbonamento.status : 'non creato');
+      } else {
+        fase('abbonamento', false, 'modulo assente');
       }
-      fase('abbonamento', !!abbonamento, abbonamento ? abbonamento.status : 'modulo assente');
 
       /* 8 · Sessione di dispositivo, se la policy è attiva */
       var dispositivo = null;
       var dd = D();
-      if (dd && o.dispositivo !== false) {
+      if (dd && o.dispositivo !== false && !esistente) {
         dispositivo = dd.creaSessione({ user_id: idUtente, tenant_id: idTenant });
         fase('dispositivo', !!dispositivo, dispositivo ? dispositivo.device_id : 'non registrato');
       } else {
@@ -255,14 +283,16 @@
          cambiato niente, quindi un errore prima di questa riga non lascia
          account a metà. */
       db.users.push(utente);
-      db.tenants = (db.tenants || []).concat([tenant]);
+      db.tenants = db.tenants || [];
+      if (!esistente) db.tenants = db.tenants.concat([tenant]);
       db.memberships = (db.memberships || []).concat([membership]);
-      if (abbonamento) db.subscriptions = (db.subscriptions || []).concat([abbonamento]);
+      if (abbonamento && !esistente) db.subscriptions = (db.subscriptions || []).concat([abbonamento]);
       if (dispositivo) db.device_sessions = (db.device_sessions || []).concat([dispositivo]);
       db.audit_log = (db.audit_log || []).concat([{
-        id: _id('aud'), at: adesso, actor: idUtente, tenant_id: idTenant,
+        id: _id('aud'), at: adesso, actor: o.attore || idUtente, tenant_id: idTenant,
         action: 'account.created', target: idUtente, result: 'ok',
-        metadata: { ruolo: utente.ruolo, piano: abbonamento ? abbonamento.plan_id : null },
+        metadata: { ruolo: utente.ruolo, piano: abbonamento ? abbonamento.plan_id : null,
+          workspace: esistente ? 'esistente' : 'nuovo', attore: o.attore || idUtente },
       }]);
 
       var w = scrivi(db);

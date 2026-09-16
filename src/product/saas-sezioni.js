@@ -31,6 +31,8 @@
       sottotitolo: 'Scegli il piano che fa crescere il tuo laboratorio', soloAdmin: false },
     { id: 'abbonamento', titolo: 'Abbonamento',
       sottotitolo: 'Piano, stato, utilizzo', soloAdmin: false },
+    { id: 'sicurezza', titolo: 'Sicurezza',
+      sottotitolo: 'La tua password e le postazioni da cui sei connesso', soloAdmin: false },
   ];
 
   function sessione() {
@@ -86,6 +88,9 @@
         if (!global.InglyLancio) throw new Error('modulo lancio non caricato');
         var E = global.InglyEntitlements;
         global.InglyLancio.renderAbbonamento(corpo, E ? E.contesto() : null);
+      } else if (id === 'sicurezza') {
+        if (!global.InglySicurezza) throw new Error('modulo sicurezza non caricato');
+        global.InglySicurezza.render(corpo);
       }
     } catch (e) {
       /* Una sezione che non si disegna lo dice: una schermata vuota lascia

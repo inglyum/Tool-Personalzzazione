@@ -280,6 +280,82 @@ const dopoRicarica = await page.evaluate(() => ({
 dico('l\'account sopravvive alla ricarica', dopoRicarica.utenti === 1, 'utenti=' + dopoRicarica.utenti);
 dico('la schermata di primo avvio NON si ripresenta', dopoRicarica.setup === false);
 
+/* ── 9 · Sicurezza: la password la cambia chi la possiede ──────────────── */
+
+const sicurezza = await page.evaluate(async () => {
+  const host = document.createElement('div');
+  host.id = 'view-sicurezza';
+  document.body.appendChild(host);
+  window.InglySicurezza.render(host);
+  const campi = ['sic-attuale', 'sic-nuova', 'sic-conferma', 'sic-submit']
+    .filter((id) => !!document.getElementById(id));
+  const parlaDelRecupero = /servizio di posta/i.test(host.textContent);
+
+  document.getElementById('sic-attuale').value = 'Laboratorio2026';
+  document.getElementById('sic-nuova').value = 'Bottega2027';
+  document.getElementById('sic-conferma').value = 'Bottega2027';
+  const e = await window.InglySicurezza.cambia();
+  const btn = document.getElementById('sic-submit');
+  return {
+    campi: campi.length,
+    parlaDelRecupero,
+    cambiata: !!(e && e.ok),
+    motivo: (e && e.motivo) || null,
+    bottone: btn ? btn.disabled : null,
+    etichetta: btn ? btn.textContent : null,
+    mostraDispositivi: /Dove sei connesso/.test(host.textContent),
+  };
+});
+dico('la sezione Sicurezza ha i suoi campi', sicurezza.campi === 4, 'campi=' + sicurezza.campi);
+dico('dice la verità sul recupero password', sicurezza.parlaDelRecupero);
+dico('mostra da dove si è connessi', sicurezza.mostraDispositivi);
+dico('la password si cambia dalla propria sezione', sicurezza.cambiata, sicurezza.motivo);
+dico('il pulsante non resta spento dopo il cambio', sicurezza.bottone === false,
+  String(sicurezza.etichetta));
+
+const dopoCambio = await page.evaluate(async () => {
+  const sbagliata = await window.InglyAccount.cambiaPassword(
+    window.SaaSGate._session.user_id, 'Laboratorio2026', 'Altra2028aa');
+  return {
+    vecchiaRifiutata: sbagliata.ok === false,
+    archivioPulito: !(localStorage.getItem('ingly_saas_db') || '').includes('Bottega2027'),
+  };
+});
+dico('la password vecchia non vale più', dopoCambio.vecchiaRifiutata);
+dico('la password nuova non compare in archivio', dopoCambio.archivioPulito);
+
+/* ── 10 · Amministrazione: persone, postazioni, attività ────────────────── */
+
+const admin = await page.evaluate(async () => {
+  const host = document.createElement('div');
+  host.id = 'view-amministrazione';
+  document.body.appendChild(host);
+  const nuovo = await window.InglyAmministrazione.creaUtente({
+    nome: 'Rosa', email: 'rosa@belice.it', password: 'Laboratorio2026', ruolo: 'operator',
+  });
+  window.InglyAmministrazione.render(host);
+  const db = JSON.parse(localStorage.getItem('ingly_saas_db'));
+  const t = host.textContent;
+  return {
+    aggiunta: !!nuovo.ok, motivo: nuovo.motivo || null,
+    stessoWorkspace: nuovo.ok && nuovo.utente.tenant_id === window.SaaSGate._session.tenant_id,
+    workspaceUnici: new Set((db.tenants || []).map((x) => x.id)).size,
+    abbonamenti: (db.subscriptions || []).length,
+    mostraPersone: /Rosa/.test(t),
+    mostraPostazioni: /Postazioni aperte/.test(t),
+    mostraAttivita: /Attività recente/.test(t),
+    nienteHash: !/pbkdf2/.test(host.innerHTML),
+  };
+});
+dico('l\'amministratore aggiunge una persona', admin.aggiunta, admin.motivo);
+dico('la persona entra nello stesso workspace', admin.stessoWorkspace);
+dico('non nasce un secondo workspace', admin.workspaceUnici === 1, 'workspace=' + admin.workspaceUnici);
+dico('non nasce un secondo abbonamento', admin.abbonamenti === 1, 'abbonamenti=' + admin.abbonamenti);
+dico('la schermata elenca le persone', admin.mostraPersone);
+dico('la schermata mostra le postazioni aperte', admin.mostraPostazioni);
+dico('la schermata mostra l\'attività recente', admin.mostraAttivita);
+dico('la schermata non stampa hash di password', admin.nienteHash);
+
 /* ── Esito ──────────────────────────────────────────────────────────────── */
 
 console.log('\nCICLO DI VITA DELL\'ACCOUNT · REGISTRAZIONE, POSTAZIONE, BLOCCO, RIENTRO\n');
