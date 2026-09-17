@@ -1584,16 +1584,26 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   }
 
   /* ── 4. Supabase Cloud (account online, condiviso con l'Admin) ──
-     Progetto INGLY di default così gli account creati dal pannello Admin sono
-     riconosciuti al login su qualunque dispositivo (login → prova cloud, poi
-     fallback localStorage). L'utente può puntare a un altro progetto salvando
-     le proprie credenziali (Impostazioni → Cloud Sync), che hanno la
-     precedenza. La anon key è pubblica per definizione (protetta da RLS lato
-     Supabase); NON è un segreto e coincide con quella già usata dall'Admin. */
-  var _SB_DEFAULT_URL = 'https://dhfuokioyuytbxxgoilp.supabase.co';
-  var _SB_DEFAULT_KEY = 'sb_publishable_IcqOjv4qBkY3utNgmqNi7Q_oGntPKbY';
-  var _sbUrl = localStorage.getItem('ingly_supabase_url') || _SB_DEFAULT_URL;
-  var _sbKey = localStorage.getItem('ingly_supabase_anon_key') || _SB_DEFAULT_KEY;
+     SEC-005: qui c'era un progetto Supabase di default (URL + anon key)
+     scritto nel sorgente, quindi presente in OGNI copia distribuita di
+     questo file — login e registrazione lo usavano sempre, senza che
+     nessuna installazione lo avesse scelto o configurato. Una anon key è
+     pubblica per definizione, ma solo se protetta da RLS: qui sotto, alla
+     registrazione, il commento diceva letteralmente «RLS aperta». Significa
+     che chiunque avesse mai aperto questo file poteva leggere e scrivere le
+     righe di TUTTI i laboratori nello stesso progetto condiviso — email,
+     hash password, piano, stato, scadenza — con una richiesta `fetch`
+     qualunque, bypassando il pagamento esattamente allo stesso modo che
+     questo intervento doveva impedire, ma lato cloud invece che locale.
+     Il progetto di default dell'Admin, per di più, era un secondo progetto
+     Supabase diverso da questo: un'installazione con Cloud Sync attivo per
+     default aveva Admin e prodotto che scrivevano su due database diversi,
+     motivo credibile per cui un utente creato da Admin risultava introvabile
+     al login. Ora il cloud sync è disattivato finché non viene configurato
+     esplicitamente (Impostazioni → Cloud Sync, con lo stesso progetto sui
+     due lati) — nessun default nascosto, nessuna chiamata implicita. */
+  var _sbUrl = localStorage.getItem('ingly_supabase_url') || '';
+  var _sbKey = localStorage.getItem('ingly_supabase_anon_key') || '';
 
   function sbConfigured() { return !!(_sbUrl && _sbKey); }
 
@@ -1805,6 +1815,11 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       window.SaaSGate._session = session;
       window.SaaSGate._hideGate();
       window.SaaSGate._applySession();
+      /* Questo percorso (login) e `avviaSessione` (primo avvio/registrazione)
+         sono due modi diversi di aprire una sessione, e solo uno dei due
+         annunciava `ingly:login`: chi ascoltava quell'evento — l'onboarding
+         dell'app, per esempio — non si accorgeva mai di un accesso normale. */
+      try { document.dispatchEvent(new CustomEvent('ingly:login', { detail: session })); } catch(e) {}
       startMonitor(session);
       if(window.InglyGuardia) window.InglyGuardia.avvia({});
     }
@@ -1892,8 +1907,10 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   }
 
   /* ── 5b. Registrazione self-service + trial 14 giorni ──
-     Crea un utente (piano Pro in prova) su Supabase (RLS aperta) e in locale,
-     poi effettua il login. Nessun backend necessario. */
+     Crea un utente (piano Pro in prova) in locale e, solo se questa
+     installazione ha configurato esplicitamente il proprio Cloud Sync,
+     anche sul progetto Supabase indicato — mai su un progetto di default:
+     vedi il commento su SEC-005 al punto 4. */
   function doRegister(){
     var lab = (document.getElementById('reg-lab').value||'').trim();
     var user = (document.getElementById('reg-user').value||'').trim();
@@ -3407,8 +3424,14 @@ body.saas-active main {
   window.InglyEmail = {
     configure: saveEmailJSConfig,
     send: sendTransactionalEmail,
-    welcome:  function(to, name, user, pwd) { return sendTransactionalEmail(to, name, 'welcome', {username:user, password:pwd}); },
-    resetPwd: function(to, name, pwd)       { return sendTransactionalEmail(to, name, 'reset_pwd', {password:pwd}); },
+    /* SEC-007: questi due modelli ricevevano la password in chiaro come
+       variabile del template email — mai inviarla per email è una regola
+       che non ammette eccezioni "solo per questo caso". La password, se
+       generata dall'amministrazione, si mostra una volta sola nella sua
+       interfaccia (vedi doCreateUser/resetPassword): il canale email non la
+       vede più. */
+    welcome:  function(to, name, user) { return sendTransactionalEmail(to, name, 'welcome', {username:user}); },
+    resetPwd: function(to, name)       { return sendTransactionalEmail(to, name, 'reset_pwd', {}); },
     expiry:   function(to, name, date)      { return sendTransactionalEmail(to, name, 'expiry', {date:date}); },
     renewed:  function(to, name, date)      { return sendTransactionalEmail(to, name, 'renewed', {date:date}); },
     suspended:function(to, name)            { return sendTransactionalEmail(to, name, 'suspended', {}); },

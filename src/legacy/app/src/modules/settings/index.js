@@ -4960,6 +4960,16 @@ const Wizard={
   shouldShow(){return!localStorage.getItem(this._KEY);},
   start(){
     if(!this.shouldShow())return;
+    /* L'onboarding è per chi è già entrato. Il suo overlay ha z-index più
+       alto di quello del gate SaaS (#saas-gate: 9999 — questo: 99999): se
+       parte prima che ci sia una sessione, copre login e registrazione e
+       nessuno dei due resta cliccabile. Non ci si fida di un solo evento —
+       due percorsi diversi aprivano una sessione, e non tutti e due la
+       annunciavano — quindi si verifica la sessione stessa, riprovando. */
+    if(window.SaaSGate && !window.SaaSGate._session){
+      setTimeout(()=>this.start(), 1000);
+      return;
+    }
     const ov=document.getElementById('wizard-overlay');
     if(ov){ov.style.display='block';document.body.style.overflow='hidden';}
     this._step=1;this.render();

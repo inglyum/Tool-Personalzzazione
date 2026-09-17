@@ -392,10 +392,20 @@ function resetAdminDB(){
 /* ─── INGLYCLOUD ADMIN INTEGRATION ──────────────────────────────
    Admin Panel scrive su Supabase quando configurato.
    Fallback automatico su localStorage se non configurato.
-─────────────────────────────────────────────────────────────── */
+   SEC-005: questo oggetto aveva un progetto Supabase di default (URL + anon
+   key) scritto nel sorgente — e diverso dal progetto di default che aveva
+   il prodotto (117-ingly-smart-search-engine-v33.js). Un'installazione con
+   Cloud Sync non configurato esplicitamente aveva quindi Admin e prodotto
+   che scrivevano su DUE database diversi per default: un utente creato da
+   qui non compariva al login del prodotto, che guardava altrove. Il
+   secondo problema, più grave, è che quel progetto di default aveva RLS
+   aperta secondo il commento che accompagnava la registrazione lato
+   prodotto — quindi il default esponeva dati reali di ogni laboratorio a
+   chiunque avesse mai aperto uno dei due file. Ora entrambi richiedono una
+   configurazione esplicita e devono puntare allo stesso progetto. */
 var InglyCloudAdmin = {
-  _url: localStorage.getItem('ingly_supabase_url') || 'https://efphymfbjaxbtuujcgvr.supabase.co',
-  _key: localStorage.getItem('ingly_supabase_anon_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmcGh5bWZiamF4YnR1dWpjZ3ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyOTgyNTcsImV4cCI6MjA5Nzg3NDI1N30.s5vwCaNobMT9uHFsnn5wNM0ODeLOk1f1JGHNTo3dSOc',
+  _url: localStorage.getItem('ingly_supabase_url') || '',
+  _key: localStorage.getItem('ingly_supabase_anon_key') || '',
 
   isConfigured: function() {
     return !!(this._url && this._key);
@@ -1333,20 +1343,17 @@ async function doSaveUser(id){
   // Cambio password opzionale
   const newPwd = document.getElementById('eu-newpwd') && document.getElementById('eu-newpwd').value.trim();
   if(newPwd){
-    /* Qui bastavano 4 caratteri: ora si applicano gli stessi requisiti degli
-       admin (8 caratteri, maiuscola, minuscola, numero).
-
-       La password resta però **in chiaro**, e non è una dimenticanza. Il campo
-       si chiama `passwordHash` ma l'intera catena delle credenziali cliente lo
-       tratta come testo: il login lato INGLY OS confronta
-       `user.passwordHash !== password` (patch 117), e la mail di reset spedisce
-       al cliente il valore letto dal database. Cifrarlo solo qui chiuderebbe
-       fuori ogni cliente a cui un admin cambia la password, e gli spedirebbe un
-       hash al posto delle credenziali. Si chiude quando esiste il backend, e si
-       chiude su tutta la catena insieme — vedi `docs/SECURITY.md` A4. */
+    /* SEC-006: questo commento diceva che il login lato INGLY OS confronta
+       `user.passwordHash !== password` in chiaro (patch 117) — non è più
+       vero. Da quando quel percorso usa `InglyIdentita.verifica()` (hash
+       PBKDF2), una password salvata qui in chiaro non fa più accedere
+       nessuno: `verifica()` non trova il prefisso `pbkdf2$`, la tratta come
+       credenziale storica e la rifiuta. Si cifra con `InglyAdminAuth.hash`,
+       la stessa funzione già usata per gli amministratori di questa
+       console — un solo formato, non due. */
     const problem = InglyAdminAuth.validate(newPwd);
     if(problem){ toast(problem,'error'); return; }
-    u.passwordHash = newPwd;
+    u.passwordHash = await InglyAdminAuth.hash(newPwd);
     u.passwordChangedAt = new Date().toISOString();
     u.passwordResets = (u.passwordResets||0) + 1;
     // Notifica realtime al Tool
@@ -1419,10 +1426,10 @@ function doRenew(id){
   renderUsers();
 }
 
-function resetPassword(id,name){
+async function resetPassword(id,name){
   const pwd=genPwd();
   const u=(_db.users||[]).find(x=>x.id===id); if(!u) return;
-  u.passwordHash=pwd;  // SALVA NUOVA PASSWORD
+  u.passwordHash=await InglyAdminAuth.hash(pwd);  // SEC-006: hash, non testo — vedi doCreateUser
   u.passwordResets=(u.passwordResets||0)+1;
   u.passwordChangedAt=new Date().toISOString();
   u.active=true; // riattiva nel caso fosse disattivo
@@ -1556,7 +1563,43 @@ function openNewUserModal(){
   `);
 }
 
-function doCreateUser(){
+/* SEC-006: qui `passwordHash` riceveva la password generata in chiaro
+   (`passwordHash:pwd`), mentre il login lato prodotto (patch 117,
+   `InglyIdentita.verifica`) confronta quel campo come un hash PBKDF2 nel
+   formato `pbkdf2$<iterazioni>$<sale>$<chiave>`. Un utente creato da qui non
+   poteva mai accedere: `verifica()` non trova il prefisso `pbkdf2$`, tratta
+   il valore come credenziale storica da migrare e rifiuta comunque, perché
+   il confronto in chiaro non è mai stato ripristinato. `InglyAdminAuth.hash`
+   produce esattamente quel formato — è la stessa funzione già usata per le
+   password degli amministratori di questa console — quindi si riusa qui
+   invece di scriverne una seconda. `doCreateUser` diventa `async` di
+   conseguenza; la password in chiaro (`pwd`) resta solo in memoria per
+   mostrarla una volta all'amministratore, non viene più salvata. */
+/* SEC-008: `doLogin` (patch 117) verifica la sessione con
+   `InglyIdentita.sessioneValida()`, che rifiuta qualunque sessione priva di
+   `tenant_id` («sessione senza workspace») — verificato passo per passo con
+   una console reale: password corretta, sessione creata, e subito dopo
+   respinta con lo stesso messaggio generico usato per «nessuna sessione»,
+   perché il codice riunisce i due casi sotto lo stesso testo. Un utente
+   creato da qui non aveva mai un `tenant_id`: nasceva solo nell'elenco
+   `_db.users`, senza workspace, appartenenza o abbonamento — esattamente
+   ciò che il mandato vieta («NON creare soltanto un record locale»). Questa
+   funzione crea anche gli stessi tre oggetti che crea `InglyAccount.crea()`
+   per la registrazione self-service (workspace, appartenenza, abbonamento),
+   con la stessa forma, cosicché il login e la guardia del prodotto li
+   riconoscano.
+
+   Il catalogo piani di questa console (`PLANS_CFG`: starter/pro/business/
+   enterprise, con un elenco moduli proprio) non è lo stesso catalogo
+   `InglyPiani` del prodotto (standard/premium/business, entitlement
+   calcolati dall'abbonamento). Unificarli è un intervento più grande di
+   questo fix — tocca il pricing e le demo di tutta questa console — quindi
+   qui si mappa solo l'id verso il piano reale più vicino, cosicché
+   l'abbonamento creato sia autorevole e gli entitlement del prodotto
+   corrispondano a un piano che esiste davvero: */
+var MAPPA_PIANO_CANONICO = { starter:'standard', pro:'premium', business:'business', enterprise:'business' };
+
+async function doCreateUser(){
   const nome=document.getElementById('nu-nome').value.trim();
   const cognome=document.getElementById('nu-cognome').value.trim();
   const username=document.getElementById('nu-username').value.trim();
@@ -1566,29 +1609,61 @@ function doCreateUser(){
   if(_db.users.find(u=>u.username===username)){toast('Username già in uso','error');return;}
   if(_db.users.find(u=>u.email===email)){toast('Email già in uso','error');return;}
   const pwd=genPwd();
+  const passwordHash=await InglyAdminAuth.hash(pwd);
   const plan=document.getElementById('nu-plan').value;
   const status=document.getElementById('nu-status').value;
   const expVal=document.getElementById('nu-exp').value;
+  const now=new Date();
+  const nowISO=now.toISOString();
+  const userId='u-'+String(_db.users.length+1).padStart(4,'0');
+  const tenantId='ws-'+userId;
+  const scadenzaISO = expVal ? new Date(expVal).toISOString()
+    : (status==='lifetime' ? null : new Date(Date.now()+30*86400000).toISOString());
   const user={
-    id:'u-'+String(_db.users.length+1).padStart(4,'0'),
+    id:userId,
     nome,cognome,username,email,
+    tenant_id:tenantId, ruolo:'owner',
     phone:document.getElementById('nu-phone').value,
     company:document.getElementById('nu-company').value,
     piva:document.getElementById('nu-piva').value,
     plan,status,
     active: (status==='active'||status==='trial'||status==='lifetime'), // SaaSGate compat
-    createdAt:new Date().toISOString(),
-    expiresAt:expVal?new Date(expVal).toISOString():(status==='lifetime'?null:new Date(Date.now()+30*86400000).toISOString()),
+    createdAt:nowISO,
+    expiresAt:scadenzaISO,
     lastLogin:null,lastLoginIp:'—',lastLoginBrowser:'—',lastLoginOs:'—',lastLoginCountry:'—',
-    passwordChangedAt:new Date().toISOString(),passwordResets:0,
+    passwordChangedAt:nowISO,passwordResets:0,
     mfaEnabled:false,storage_used:0,modules:PLANS_CFG[plan].modules,
     notes:document.getElementById('nu-notes').value,
     avatarInitials:(nome[0]+cognome[0]).toUpperCase(),
     loginCount:0,projects:0,aiUsage:0,
     payment_method:'stripe',payment_status:'pending',
-    passwordHash:pwd,
+    passwordHash,
+  };
+  const tenant={
+    id:tenantId, nome:user.company||`${nome} ${cognome}`, owner_id:userId,
+    settore:null, paese:'IT', valuta:'EUR', created_at:nowISO,
+  };
+  const membership={
+    id:'mb-'+userId, user_id:userId, tenant_id:tenantId, ruolo:'owner', created_at:nowISO,
+  };
+  const pianoCanonico = MAPPA_PIANO_CANONICO[plan] || 'standard';
+  const subscription={
+    id:'sub-'+userId, tenant_id:tenantId, plan_id:pianoCanonico,
+    billing_interval: status==='lifetime' ? null : 'monthly', price_id:null,
+    status: status==='trial' ? 'trial' : (status==='lifetime' ? 'active' : status),
+    trial_start: status==='trial' ? nowISO : null,
+    trial_end: status==='trial' ? scadenzaISO : null,
+    current_period_start: nowISO,
+    current_period_end: status==='lifetime'
+      ? new Date(now.getFullYear()+100, now.getMonth(), now.getDate()).toISOString()
+      : scadenzaISO,
+    cancel_at_period_end:false, cancelled_at:null, suspended_at:null, past_due_since:null,
+    provider:null, provider_subscription_id:null, created_at:nowISO, updated_at:nowISO,
   };
   _db.users.push(user);
+  _db.tenants=(_db.tenants||[]).concat([tenant]);
+  _db.memberships=(_db.memberships||[]).concat([membership]);
+  _db.subscriptions=(_db.subscriptions||[]).concat([subscription]);
   dbSave(_db);
   // Sync su Supabase cloud se configurato
   InglyCloudAdmin.syncUser(user).catch(function() {});
@@ -4391,8 +4466,10 @@ function doForceLogout(id, name) {
           var newest = users[users.length-1];
           if (!newest || !newest.email) return;
           if (window.InglyEmail) {
+            /* SEC-007: mai la password (né il suo hash) nell'email — vedi
+               InglyEmail.welcome in 117-ingly-smart-search-engine-v33.js. */
             InglyEmail.welcome(newest.email, newest.nome+' '+newest.cognome,
-              newest.username, newest.passwordHash)
+              newest.username)
               .then(function(ok) {
                 if (ok) toast('📧 Email di benvenuto inviata a '+newest.email, 'info');
               });
@@ -4407,7 +4484,8 @@ function doForceLogout(id, name) {
           _origReset(id, name);
           var u = (_db.users||[]).find(function(x){ return x.id===id; });
           if (u && u.email && window.InglyEmail) {
-            InglyEmail.resetPwd(u.email, name, u.passwordHash)
+            /* SEC-007: idem — nessuna password né hash nell'email. */
+            InglyEmail.resetPwd(u.email, name)
               .then(function(ok) {
                 if (ok) toast('📧 Email reset password inviata a '+u.email, 'info');
               });
