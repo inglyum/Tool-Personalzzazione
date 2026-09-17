@@ -2029,7 +2029,16 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       if (!cmd || !cmd.type) return;
       var s = window.SaaSGate && window.SaaSGate._session;
       if (!s) return;
-      var mine = !cmd.userId || s.userId === cmd.userId || s.id === cmd.userId;
+      /* SEC-009: la sessione porta `user_id` (InglyIdentita.creaSessione),
+         non `userId` né `id` — questo controllo confrontava campi che la
+         sessione non ha mai avuto, quindi `mine` era sempre falso e ogni
+         comando dell'amministratore (force logout, suspend, ban, rinnovo,
+         cambio piano) veniva ricevuto e scartato in silenzio. Verificato
+         inviando un force_logout reale a un utente con sessione attiva:
+         il comando arrivava (visibile in `ingly_pending_commands`), la
+         sessione restava aperta. */
+      var idSessione = (window.InglyIdentita && window.InglyIdentita.idUtente(s)) || s.user_id;
+      var mine = !cmd.userId || idSessione === cmd.userId;
       if (!mine) return;
       if (cmd.type === 'force_logout') {
         showBanner('Sessione terminata dall\'amministratore', '#f59e0b');
@@ -2305,6 +2314,14 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
   var _sessionRef = null;
 
   function startRealtimeSync(session) {
+    /* Cloud Sync §4/§23: `_applySession` (dopo ogni login) e il controllo
+       «già connesso» al caricamento della pagina possono entrambi chiamare
+       questa funzione per la stessa sessione, senza che nessuno dei due sia
+       un errore da solo — è la combinazione a produrre un secondo
+       WebSocket e un secondo timer di polling, mai chiusi, per la stessa
+       sottoscrizione. Si chiude sempre quanto già aperto prima di aprirne
+       uno nuovo: idempotente, non «se manca aprilo». */
+    stopSync();
     _sessionRef = session;
     if (!sbOk()) return;
 
@@ -2319,6 +2336,10 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       _ws = new WebSocket(wsUrl);
 
       _ws.onopen = function() {
+        /* SEC-009 stessa classe: `session.userId` non esiste — il filtro
+           diventava `id=eq.undefined` e questa sottoscrizione non ha mai
+           potuto ricevere l'evento giusto. */
+        var idSessione = (window.InglyIdentita && window.InglyIdentita.idUtente(session)) || session.user_id;
         _ws.send(JSON.stringify({
           topic: 'realtime:public:ingly_users',
           event: 'phx_join',
@@ -2328,7 +2349,7 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'ingly_users',
-                filter: 'id=eq.' + session.userId
+                filter: 'id=eq.' + idSessione
               }]
             }
           },
@@ -2367,7 +2388,11 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     if (_pollTimer) clearInterval(_pollTimer);
     _pollTimer = setInterval(function() {
       if (!session) return;
-      sbFetchUser(session.username).then(function(user) {
+      /* SEC-009 stessa classe: la sessione non ha `.username` (solo
+         `.email`) — la ricerca cercava sempre l'utente letterale
+         "undefined" e non trovava mai niente. */
+      var emailSessione = (window.InglyIdentita && window.InglyIdentita.emailSessione(session)) || session.email;
+      sbFetchUser(emailSessione).then(function(user) {
         if (user) applyCloudUpdate(user, session);
       });
     }, 30000);
@@ -2392,9 +2417,19 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       return;
     }
 
-    /* 2. Password cambiata → logout in 3s */
+    /* 2. Password cambiata → logout in 3s.
+       SEC-009 stessa classe: confrontava `newHash` con `s.passwordHash`, un
+       campo che la sessione non ha mai avuto — per costruzione, non per
+       errore («la sessione non contiene: la password, il suo hash...»).
+       Il confronto era quindi sempre falso e questo ramo non scattava mai.
+       Il valore giusto con cui confrontare è quello salvato in locale per
+       questo utente, non un campo di sessione che non deve esistere. */
     var newHash = user.password_hash || user.passwordHash;
-    if (newHash && s.passwordHash && newHash !== s.passwordHash) {
+    var idSessioneUpdate = (window.InglyIdentita && window.InglyIdentita.idUtente(s)) || s.user_id;
+    var localUser = window.InglyAccount && window.InglyAccount.perId
+      ? window.InglyAccount.perId(idSessioneUpdate) : null;
+    var hashLocale = localUser && (localUser.password_hash || localUser.passwordHash);
+    if (newHash && hashLocale && newHash !== hashLocale) {
       stopSync();
       _showPwdChanged();
       return;

@@ -216,6 +216,20 @@
     return { ok: true, motivo: null, scadeFra: scade - ora };
   }
 
+  /* ── Accessor canonici (SEC-009) ─────────────────────────────────────────
+     Il difetto ricorrente non era in un punto solo: era ogni modulo che
+     rileggeva la sessione con un nome di campo suo — `s.userId`, `s.id`,
+     `session.username` — nessuno dei quali la sessione ha mai avuto
+     (`creaSessione` sopra dichiara la forma vera). Force logout, i comandi
+     dell'amministratore, il canale realtime e il polling di ripiego erano
+     rotti allo stesso modo, in punti diversi del codice. Questi accessor
+     non aggiungono niente alla sessione: dicono, in un solo posto, come si
+     legge quello che c'è già. */
+  function idUtente(s) { return (s && s.user_id) || null; }
+  function emailSessione(s) { return (s && s.email) || null; }
+  function tenantId(s) { return (s && s.tenant_id) || null; }
+  function deviceId(s) { return (s && s.device_id) || null; }
+
   /* ── Stati dell'account ───────────────────────────────────────────────── */
 
   var STATI_ACCOUNT = ['active', 'pending_verification', 'suspended', 'banned', 'deleted'];
@@ -253,5 +267,9 @@
     creaSessione: creaSessione,
     sessioneValida: sessioneValida,
     statoAccount: statoAccount,
+    idUtente: idUtente,
+    emailSessione: emailSessione,
+    tenantId: tenantId,
+    deviceId: deviceId,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

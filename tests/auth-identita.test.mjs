@@ -146,3 +146,46 @@ test('uno stato sconosciuto non diventa un permesso', () => {
   assert.equal(I.statoAccount({ status: 'qualcosa' }).stato, 'active');
   assert.equal(I.statoAccount({}).puoAccedere, true);
 });
+
+/* ── Accessor canonici (SEC-009) ─────────────────────────────────────────
+   `handleCmd`, il canale realtime e il polling di ripiego del Cloud Sync
+   leggevano `s.userId`, `s.id`, `session.username`, `s.passwordHash` —
+   nessuno di questi esiste sulla sessione vera. Ogni comando
+   dell'amministratore e ogni evento dal cloud venivano scartati in
+   silenzio. Questi test tengono fermo che l'unico modo corretto di
+   leggere un campo di sessione è questo, non un accesso diretto scritto
+   di nuovo in ogni modulo. */
+
+test('idUtente legge lo stesso campo che creaSessione scrive', () => {
+  const s = I.creaSessione({ id: 'usr_1', email: 'a@b.it', tenant_id: 't1' });
+  assert.equal(I.idUtente(s), 'usr_1');
+  assert.equal(I.idUtente(s), s.user_id);
+});
+
+test('gli accessor non inventano campi che la sessione non ha', () => {
+  const s = I.creaSessione({ id: 'usr_1', email: 'a@b.it', tenant_id: 't1' });
+  assert.equal(s.userId, undefined, 'la sessione non deve avere userId');
+  assert.equal(s.id, undefined, 'la sessione non deve avere id');
+  assert.equal(s.username, undefined, 'la sessione non deve avere username');
+  assert.equal(s.passwordHash, undefined, 'la sessione non deve avere passwordHash');
+});
+
+test('gli accessor su una sessione assente non lanciano, rispondono null', () => {
+  assert.equal(I.idUtente(null), null);
+  assert.equal(I.emailSessione(undefined), null);
+  assert.equal(I.tenantId(null), null);
+  assert.equal(I.deviceId(null), null);
+});
+
+test('emailSessione e tenantId leggono i campi giusti', () => {
+  const s = I.creaSessione({ id: 'usr_2', email: 'Mario@Belice.IT', tenant_id: 'ws_9' }, { modalita: 'locale' });
+  assert.equal(I.emailSessione(s), 'mario@belice.it');
+  assert.equal(I.tenantId(s), 'ws_9');
+});
+
+test('deviceId legge il campo aggiunto dopo la registrazione della postazione', () => {
+  const s = I.creaSessione({ id: 'usr_3', email: 'a@b.it', tenant_id: 't1' });
+  assert.equal(I.deviceId(s), null, 'nessuna postazione ancora assegnata');
+  s.device_id = 'dev_abc';
+  assert.equal(I.deviceId(s), 'dev_abc');
+});
