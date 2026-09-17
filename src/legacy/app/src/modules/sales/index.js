@@ -3083,17 +3083,12 @@ const PaymentWizard = {
   _name() { return eid('q-name')?.value||'Ordine Ingly'; },
 
   stripe() {
-    const hasKey = !!(CloudSync.apiKey);
-    if (hasKey) {
-      // Already configured → proceed
-      const amt = this._amount();
-      if (!amt) { toast('Aggiungi almeno una voce al preventivo', 'warning'); return; }
-      CloudSync.createStripeLink(Quoter._lastSavedId||0, amt, this._name(), '')
-        .then(u=>{ if(u) window.open(u,'_blank'); })
-        .catch(e=>toast('Stripe: '+e.message,'warning'));
-      return;
-    }
-    // Wizard
+    /* Il link e' un dato del laboratorio, non un segreto: si salva così
+       com'è (localStorage), esattamente come lo username PayPal.me qui
+       sotto. Niente in questo percorso può muovere denaro da solo — apre
+       soltanto la pagina che il laboratorio ha già configurato su Stripe. */
+    const link = localStorage.getItem('ingly_stripe_paylink') || '';
+    if (link) { window.open(link, '_blank'); return; }
     this._showWizard('stripe');
   },
 
@@ -3106,31 +3101,41 @@ const PaymentWizard = {
   _showWizard(type, amt=0) {
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    /* Questo modulo chiedeva la Stripe SECRET KEY — non la publishable key,
+       quella che può stare nel browser: la chiave che può incassare, rimborsare
+       e leggere ogni pagamento del laboratorio — e la salvava per sempre,
+       in chiaro, in IndexedDB (`_saveStripe` → `settings.cloudSyncKey`).
+       Chiunque avesse accesso a quel computer, o leggesse l'IndexedDB da
+       DevTools, si trovava in mano l'intero conto Stripe di chi usa il
+       prodotto. Non esiste un modo sicuro di maneggiare una secret key nel
+       browser: l'unica correzione è non chiederla mai. Il link di pagamento
+       si crea da Stripe (o PayPal.me/Satispay) e si incolla qui — nessun
+       segreto attraversa questo modulo. */
     ov.innerHTML = type === 'stripe' ? `
       <div style="background:var(--bg-card);border:1px solid var(--border2);border-radius:16px;width:520px;max-width:96vw">
         <div style="padding:22px 24px 16px;border-bottom:1px solid var(--border)">
           <div style="font-size:17px;font-weight:800;color:#fff;display:flex;align-items:center;gap:10px">
             <span style="background:linear-gradient(135deg,#635bff,#0073e6);border-radius:8px;padding:6px 12px;font-size:13px">💳 Stripe</span>
-            Setup rapido pagamenti
+            Link di pagamento
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Ricevi pagamenti direttamente dai preventivi. Configura una volta, usa sempre.</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Incolla un link di pagamento Stripe: nessuna chiave segreta lascia mai il tuo account Stripe.</div>
         </div>
         <div style="padding:22px 24px">
           <div style="margin-bottom:16px">
-            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">1. Stripe Secret Key (inizia con sk_live_ o sk_test_)</label>
-            <input id="pwiz-sk" type="password" class="form-control" placeholder="sk_live_..." style="font-family:monospace">
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Link di pagamento Stripe</label>
+            <input id="pwiz-link" type="url" class="form-control" placeholder="https://buy.stripe.com/..." style="font-family:monospace">
           </div>
           <div style="background:#1e3a5f20;border:1px solid #3b82f640;border-radius:10px;padding:14px;margin-bottom:18px">
-            <div style="font-size:11px;color:#60a5fa;font-weight:700;margin-bottom:6px">📋 Come ottenere la chiave Stripe:</div>
+            <div style="font-size:11px;color:#60a5fa;font-weight:700;margin-bottom:6px">📋 Come crearlo su Stripe:</div>
             <div style="font-size:11px;color:#94a3b8;line-height:1.6">
-              1. Vai su <a href="https://dashboard.stripe.com/apikeys" target="_blank" style="color:#60a5fa">dashboard.stripe.com/apikeys</a><br>
-              2. Copia la <strong style="color:#fff">Secret key</strong><br>
-              3. Incollala qui sopra → potrai generare link pagamento direttamente dai preventivi
+              1. Vai su <a href="https://dashboard.stripe.com/payment-links" target="_blank" style="color:#60a5fa">dashboard.stripe.com/payment-links</a><br>
+              2. Crea un link di pagamento per l'importo (o a importo variabile)<br>
+              3. Incolla qui l'indirizzo — mai la chiave dell'account
             </div>
           </div>
           <div style="display:flex;gap:10px">
             <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:11px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text-muted);border-radius:8px;cursor:pointer">Annulla</button>
-            <button onclick="PaymentWizard._saveStripe(eid('pwiz-sk').value,this)" style="flex:2;padding:11px;background:linear-gradient(135deg,#635bff,#0073e6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700">💳 Salva e genera link</button>
+            <button onclick="PaymentWizard._saveStripeLink(eid('pwiz-link').value,this)" style="flex:2;padding:11px;background:linear-gradient(135deg,#635bff,#0073e6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700">💳 Salva e apri</button>
           </div>
           <div style="margin-top:12px;padding:10px;background:var(--bg-card2);border-radius:8px;border:1px solid var(--border)">
             <div style="font-size:11px;color:var(--text-muted);font-weight:700;margin-bottom:4px">🔗 Oppure: Link pagamento manuale PayPal.me / Satispay</div>
@@ -3168,20 +3173,15 @@ const PaymentWizard = {
     ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
   },
 
-  async _saveStripe(key, btn) {
-    if (!key || (!key.startsWith('sk_live_') && !key.startsWith('sk_test_'))) {
-      toast('Chiave Stripe non valida (deve iniziare con sk_live_ o sk_test_)', 'warning');
+  _saveStripeLink(link, btn) {
+    if (!link || !/^https:\/\//.test(link)) {
+      toast('Incolla un link che inizi con https://', 'warning');
       return;
     }
-    CloudSync.apiKey = key;
-    const settings = await IDB.get('settings','main').catch(()=>null)||{};
-    settings.cloudSyncKey = key;
-    if(!settings.key) settings.key='stripe_config';
-    await IDB.put('settings', settings);
-    toast('✅ Stripe configurato!', 'success');
+    localStorage.setItem('ingly_stripe_paylink', link);
+    toast('✅ Link salvato', 'success');
     btn.closest('[style*=fixed]').remove();
-    // Now generate the link
-    this.stripe();
+    window.open(link, '_blank');
   },
 
   _openPayPal(user, amt, btn) {

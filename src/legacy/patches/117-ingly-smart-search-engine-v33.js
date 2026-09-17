@@ -1134,7 +1134,7 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       var errEl    = document.getElementById('gate-err');
       var btn      = document.getElementById('gate-submit');
       errEl.style.display = 'none';
-      if(!username || !password){ errEl.textContent='Inserisci email e password'; errEl.style.display='block'; return; }
+      if(!username || !password){ errEl.textContent='Inserisci username o email, e la password'; errEl.style.display='block'; return; }
 
       var I = window.InglyIdentita;
       if(!I){ errEl.textContent='Servizio di accesso non disponibile. Ricarica la pagina.'; errEl.style.display='block'; return; }

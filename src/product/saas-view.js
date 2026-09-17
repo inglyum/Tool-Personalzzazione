@@ -229,9 +229,14 @@
       + '<div id="gate-login">'
       + '<h2 class="ly-h1" id="gf-title">Bentornato</h2>'
       + '<p class="ly-h2" id="gf-sub">Accedi al tuo workspace</p>'
-      + '<div class="ly-field"><label class="ly-label" for="gate-user">Email</label>'
-      + '<div class="ly-inputwrap"><input id="gate-user" type="email" autocomplete="username" '
-      + 'inputmode="email" placeholder="nome@laboratorio.it" aria-describedby="gate-err"></div></div>'
+      /* Il campo era `type="email"`: il browser applica la propria validazione
+         di formato email e mostra il campo come non valido appena qualcuno
+         scrive uno username. La logica sotto (SaaSGate.login/doLogin) accetta
+         da sempre sia l'username sia l'email — era solo il campo a
+         dichiarare, sbagliando, di accettarne una sola. */
+      + '<div class="ly-field"><label class="ly-label" for="gate-user">Username o email</label>'
+      + '<div class="ly-inputwrap"><input id="gate-user" type="text" autocomplete="username" '
+      + 'placeholder="Il tuo username o la tua email" aria-describedby="gate-err"></div></div>'
       + '<div class="ly-field"><label class="ly-label" for="gate-pass">Password</label>'
       + '<div class="ly-inputwrap"><input id="gate-pass" type="password" autocomplete="current-password" '
       + 'placeholder="La tua password" aria-describedby="gate-err" '

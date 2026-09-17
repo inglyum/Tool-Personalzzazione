@@ -4890,9 +4890,19 @@ function startExpiryCron() {
 }
 
 /* ── Stripe Config in Admin Panel ───────────────────────────── */
+/* Il webhook secret (whsec_...) NON ha mai avuto un motivo legittimo per
+   stare qui: un browser non riceve mai webhook, quindi non deve mai poterli
+   verificare. Il campo esisteva solo per essere scritto (nessun percorso lo
+   leggeva per firmare o validare nulla), ma un segreto capace di autenticare
+   chiamate Stripe non deve avere alcuna superficie client-side, nemmeno
+   morta. Va configurato come variabile d'ambiente server / secret della
+   Edge Function che riceve gli eventi Stripe. Ogni valore già salvato da
+   installazioni precedenti viene rimosso alla prima apertura di questa
+   pagina. */
 function renderStripeConfig() {
   var pg = eid('page-billing-expiration');
   if (!pg) return;
+  if (localStorage.getItem('ingly_stripe_wh')) localStorage.removeItem('ingly_stripe_wh');
   var stripeKey = localStorage.getItem('ingly_stripe_pk') || '';
   var existing  = pg.querySelector('._stripe_cfg_card');
   if (existing) return;
@@ -4908,8 +4918,11 @@ function renderStripeConfig() {
     '<div class="g2 mb-12">' +
       '<div class="form-group"><label>Stripe Publishable Key (pk_live_...)</label>' +
         '<input id="str-pk" value="' + stripeKey + '" placeholder="pk_live_..."></div>' +
-      '<div class="form-group"><label>Webhook Secret (whsec_...)</label>' +
-        '<input id="str-wh" value="' + (localStorage.getItem('ingly_stripe_wh')||'') + '" placeholder="whsec_..."></div>' +
+    '</div>' +
+    '<div class="alert a-orange mb-12" style="font-size:11px">' +
+      '<i class="fas fa-shield-alt"></i> Il <b>Webhook Secret</b> (whsec_...) e la <b>Secret Key</b> (sk_live_...) ' +
+      'non si configurano da qui: un browser non deve mai poterli leggere. Vanno impostati come secret ' +
+      'nell\'ambiente server o nella Edge Function che riceve gli eventi Stripe.' +
     '</div>' +
     '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Price IDs per piano</div>' +
     '<div class="g4 mb-12">' +
@@ -4928,9 +4941,7 @@ function renderStripeConfig() {
 
 function saveStripeConfig() {
   var pk = (eid('str-pk')||{value:''}).value.trim();
-  var wh = (eid('str-wh')||{value:''}).value.trim();
   localStorage.setItem('ingly_stripe_pk', pk);
-  if (wh) localStorage.setItem('ingly_stripe_wh', wh);
   ['starter','pro','business','enterprise'].forEach(function(p) {
     var v = (eid('str-price-'+p)||{value:''}).value.trim();
     if (v) localStorage.setItem('ingly_stripe_price_'+p, v);

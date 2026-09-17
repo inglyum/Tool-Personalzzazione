@@ -69,6 +69,24 @@ test('nessun token di accesso finisce in localStorage', () => {
   assert.deepEqual(c, []);
 });
 
+/* SEC-004: `PaymentWizard` chiedeva al laboratorio la Stripe Secret Key
+   reale e la salvava in chiaro in IndexedDB — una chiave capace di muovere
+   denaro del cliente, non del prodotto. Il campo è stato sostituito da un
+   link di pagamento pubblico (Stripe Payment Links), non sensibile. */
+test('nessun modulo chiede di incollare una Stripe secret key', () => {
+  const c = cerca(/placeholder\s*=\s*["']sk_(live|test)_/i);
+  assert.deepEqual(c, [], 'un campo che chiede sk_live_/sk_test_ chiede una chiave capace di muovere denaro del cliente');
+});
+
+/* Il pannello Stripe dell'amministrazione aveva un campo «Webhook Secret»
+   salvato in localStorage: nessun percorso lo leggeva per verificare una
+   firma, ma un segreto capace di autenticare chiamate Stripe non ha alcun
+   uso legittimo lato browser. Va nell'ambiente server / Edge Function. */
+test('nessun webhook secret Stripe viene scritto in localStorage', () => {
+  const c = cerca(/localStorage\.setItem\(\s*['"]ingly_stripe_wh['"]/i);
+  assert.deepEqual(c, []);
+});
+
 /* ── Porte di servizio ──────────────────────────────────────────────────── */
 
 test('nessuna credenziale predefinita, nessun bypass', () => {
