@@ -1035,17 +1035,26 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
     linkFor: function(plan){ return (_STRIPE_LINKS && _STRIPE_LINKS[plan]) || ''; },
     isConfigured: function(){ return !!(_STRIPE_LINKS && (_STRIPE_LINKS.pro || _STRIPE_LINKS.business || _STRIPE_LINKS.enterprise || _STRIPE_LINKS.starter)); },
     subscribe: function(plan){
+      /* SEC-009 stessa classe: leggeva `s.username`, campo che la sessione
+         non ha mai avuto — non dietro Cloud Sync, qui: ogni volta che un
+         utente clicca «Abbonati», sia nella mail di richiesta sia nel link
+         di pagamento Stripe. Il `client_reference_id` mandato a Stripe era
+         sempre vuoto — un pagamento reale sarebbe arrivato senza modo di
+         essere ricollegato all'account che l'ha avviato. */
       var s = window.SaaSGate && window.SaaSGate._session;
+      var I = window.InglyIdentita;
+      var idUtente = I ? I.idUtente(s) : (s && s.user_id);
+      var email = I ? I.emailSessione(s) : (s && s.email);
       var url = this.linkFor(plan);
       if(!url){
-        var body = encodeURIComponent('Vorrei attivare il piano ' + String(plan||'').toUpperCase() + '. Utente: ' + ((s&&s.username)||''));
+        var body = encodeURIComponent('Vorrei attivare il piano ' + String(plan||'').toUpperCase() + '. Utente: ' + (email || ''));
         window.open('mailto:inglydesign@gmail.com?subject=Abbonamento INGLY OS&body=' + body, '_blank');
         return;
       }
       try {
         var u = new URL(url);
-        if(s && s.username) u.searchParams.set('client_reference_id', s.username);
-        if(s && s.email) u.searchParams.set('prefilled_email', s.email);
+        if(idUtente) u.searchParams.set('client_reference_id', idUtente);
+        if(email) u.searchParams.set('prefilled_email', email);
         window.open(u.toString(), '_blank');
       } catch(e){ window.open(url, '_blank'); }
     }
@@ -1295,6 +1304,15 @@ console.log('[INGLY OS v33] ✅ SmartSearch · PWA · Roadmap overlay caricati')
       document.getElementById('saas-gate').style.display = 'flex';
       // Prevent INGLY from initializing if no session
       window._SAAS_GATE_BLOCKING = true;
+      /* L'onboarding dell'app (Wizard) può essere rimasto aperto dalla
+         sessione precedente: il suo overlay (z-index più alto del gate)
+         copriva login e registrazione della persona successiva —
+         riprodotto davvero facendo uscire un utente e provando a
+         registrarne un altro nello stesso browser. Chi esce, o viene fatto
+         uscire, non deve lasciare in giro la propria schermata di
+         benvenuto per chi entra dopo. */
+      var wo = document.getElementById('wizard-overlay');
+      if (wo) { wo.style.display = 'none'; document.body.style.overflow = ''; }
       setTimeout(function(){ document.getElementById('gate-user') && document.getElementById('gate-user').focus(); }, 100);
     },
 
@@ -2152,12 +2170,18 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
     var bar = document.createElement('div');
     bar.id = '_ingly_bar';
     bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;height:22px;background:#111115;border-top:1px solid #1e1e2e;display:flex;align-items:center;gap:12px;padding:0 12px;font-family:Inter,system-ui;font-size:10px;color:#555;z-index:9900';
+    var I = window.InglyIdentita;
+    var nome = session.labName || (I ? I.emailSessione(session) : session.email) || '';
+    /* Piano e scadenza non si leggono da `session.plan`/`.expiresAt`: la
+       sessione non li ha mai portati (sarebbe manomissione). Si taggano i
+       nodi e si passa dall'unico scrittore canonico, _aggiornaPiano. */
     bar.innerHTML = '<span style="color:#6366f1;font-weight:700">INGLY v35</span>'
-      + '<span style="color:#888">' + (session.labName || session.username) + '</span>'
-      + '<span style="background:#6366f120;border-radius:99px;padding:1px 7px;color:#818cf8;font-size:9px;font-weight:700">' + (session.plan || '').toUpperCase() + '</span>'
-      + '<span style="color:#555">' + (session.expiresAt ? 'Scade: ' + new Date(session.expiresAt).toLocaleDateString('it-IT') : '\u221e') + '</span>'
+      + '<span style="color:#888">' + _escHtml(nome) + '</span>'
+      + '<span style="background:#6366f120;border-radius:99px;padding:1px 7px;color:#818cf8;font-size:9px;font-weight:700" data-ingly-piano>\u2014</span>'
+      + '<span style="color:#555" data-ingly-scadenza></span>'
       + '<span style="margin-left:auto;cursor:pointer;color:#6366f1" onclick="window._inglyDash&&_inglyDash()" title="Ctrl+Shift+D">\uD83D\uDD17</span>';
     document.body.appendChild(bar);
+    if (window.SaaSGate && window.SaaSGate._aggiornaPiano) window.SaaSGate._aggiornaPiano(session);
   }
 
   /* ── 11. Dashboard Ctrl+Shift+D ── */
@@ -3646,6 +3670,19 @@ body.saas-active main {
    ✅ Modal 'revocato': bottone "Riaccedi qui" per re-registrare
    ✅ Se Supabase non configurato: login sempre libero
    ══════════════════════════════════════════════════════════════ */
+/* ⚠ DEPRECATO — NON riattivare, NON usare come riferimento.
+   Terza implementazione del limite a una postazione, duplicata rispetto a
+   InglyDispositivi (src/product/device-sessions.js — quella canonica,
+   verificata con due schede browser vere in questa release) e parallela a
+   InglySaaSPlatform. Ha la propria tabella Supabase (ingly_sessions) e lo
+   stesso mismatch di campo sessione della classe SEC-009
+   (registerSession(s.userId, s.username, ...) — campi che la sessione non
+   ha mai avuto: sempre undefined). Non è stata riparata di proposito: farlo
+   creerebbe una seconda verità sul device, esattamente ciò che è vietato.
+   Resta dormiente (attiva solo con Cloud Sync configurato, mai per
+   default). Va ritirata quando si consoliderà il Cloud Sync su un solo
+   sistema — vedi docs/RELEASE-AUTH-SECURITY-3.md §3 e
+   docs/CLOUD-SYNC-STATUS.md §7. */
 (function SingleDeviceEnforcement() {
   'use strict';
 

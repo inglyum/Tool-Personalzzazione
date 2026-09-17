@@ -131,7 +131,34 @@ per farla sembrare una seconda opzione valida.
 | Accessor canonici di sessione | **PASS, verificato con unit test** |
 | Canale realtime (filtro, apply update, dedup subscribe) | **Corretto nel codice, non verificabile senza backend reale** |
 | Polling di ripiego | **Corretto nel codice, non verificabile senza backend reale** |
+| `InglyBilling.subscribe` (client_reference_id/prefilled_email verso Stripe) | **PASS, corretto — attivo per default, non dietro Cloud Sync** |
+| Barra di stato `injectStatusBar` (piano/scadenza/nome) | **PASS, corretto — riusa `SaaSGate._aggiornaPiano`, non duplica logica** |
+| Cambio account (A→B→A, stesso browser, dati non mischiati) | **PASS, verificato con `tests/qa/cambio-account.mjs`, 11/11** |
 | Sync queue / retry / backoff / conflict resolution | **Non esistono — intervento di architettura, non un bug** |
 | Tenant isolation lato client | **PASS, verificato da test esistenti** |
 | Tenant isolation lato RLS reale | **BLOCKED — richiede accesso a un progetto Supabase reale** |
 | SingleDeviceEnforcement (terzo sistema device) | **Duplicato, dormiente, non riparato — da ritirare** |
+
+## 9. Staging reale — cercato, trovato l'URL, bloccato sulla chiave
+
+Il mandato più recente nomina esplicitamente un progetto Supabase di
+staging autorizzato: **«INGLY OS V2 STAGING», ref `uepyexyosyogyvzorata`**,
+vietando di toccare la produzione («Ingly 91»), `Pusatingly`, o progetti
+vecchi hardcoded, e vietando di inventare credenziali o costruire un mock.
+
+L'URL `https://uepyexyosyogyvzorata.supabase.co` è stato trovato, coerente
+con il ref indicato, in un file `env.example.js` di un repository adiacente
+a questo — chiaramente un template d'esempio, non un file di configurazione
+reale. **La anon/publishable key non è presente in nessun punto di questo
+ambiente**: nello stesso file è un segnaposto non compilato
+(`<INCOLLA_QUI_LA_PUBLISHABLE_ANON_KEY>`), e non esiste altrove.
+
+Senza quella chiave, **zero richieste autenticate verso Supabase sono
+possibili**: niente lettura schema, niente canale realtime, niente test RLS
+reale. Il mandato vieta esplicitamente di sostituire una configurazione
+esterna mancante con un mock — quindi la sezione 4 sopra resta il percorso
+corretto: chi amministra il progetto di staging deve incollare quella
+anon key in Impostazioni → Cloud Sync (mai nel sorgente). Fino ad allora,
+ogni riga della tabella al §8 marcata «non verificabile senza backend
+reale» resta esattamente in quello stato — non declassata a mock, non
+promossa a PASS senza prova.
