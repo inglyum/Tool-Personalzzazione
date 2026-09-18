@@ -24,10 +24,23 @@
         +'<button class="btn btn-secondary btn-sm" onclick="MachineCard._close()">Chiudi</button></div>'
         +'<div class="mc-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
         +(list.length?list.map(function(m){
+          /* Lo stesso pallino di stato che la tab Manutenzione mostra nel
+             dettaglio, qui sull'elenco: chi apre il parco macchine deve
+             vedere subito quali sono scadute, senza aprire una a una. */
+          var allertaHtml='';
+          try{
+            var Mnt=(typeof InglyMachineMaintenance!=='undefined')?InglyMachineMaintenance:null;
+            if(Mnt){
+              var s=Mnt.stato(MachineCard._machineForEngine(m), MachineCard._interventiPerEngine(m), m.hoursWorked);
+              if(s.calcolabile && s.stato!=='ok'){
+                allertaHtml=' <span style="color:'+(s.stato==='scaduta'?'#ef4444':'#f59e0b')+'">'+(s.stato==='scaduta'?'🔴 manutenzione scaduta':'🟡 manutenzione vicina')+'</span>';
+              }
+            }
+          }catch(e){}
           return '<div onclick="MachineCard.open('+JSON.stringify(m.id)+')" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:11px;padding:13px;cursor:pointer;transition:.14s" onmouseover="this.style.borderColor=\'var(--primary)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'
             +'<div style="font-weight:800;font-size:13px">'+esc(m.name||m.brand||'Macchina')+'</div>'
             +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(m.tech||'')+(m.workArea?' · '+esc(m.workArea):'')+'</div>'
-            +'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'+(m.status||'attiva')+'</div></div>';
+            +'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'+(m.status||'attiva')+allertaHtml+'</div></div>';
         }).join(''):'<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:30px">Nessuna macchina. Aggiungile dal 🏭 Catalogo Macchine.</div>')
         +'</div></div>';
     },
@@ -84,17 +97,28 @@
              una capacità presunta uguale per tutte. */
           +F('Ore al giorno (h)','hoursPerDay','number')+F('Ore attese/anno (h)','expectedAnnualHours','number')
           +F('Posizione','location')+F('Seriale (S/N)','serial')
-          +F('Data acquisto','purchaseDate','date')+F('Garanzia fino a','warranty','date')+'</div>';
+          +F('Data acquisto','purchaseDate','date')+F('Garanzia fino a','warranty','date')
+          /* Senza questo numero InglyMachineMaintenance non può dire quando la
+             macchina è scaduta di manutenzione — e non lo inventa: la scheda
+             lo dice nella tab Manutenzione ("nessun intervallo dichiarato")
+             invece di mostrare uno stato finto. */
+          +F('Intervallo manutenzione (ore)','maintenanceIntervalHours','number')+'</div>';
       } else if(this._tab==='maint'){
         var log=Array.isArray(m.maintLog)?m.maintLog:[];
-        el.innerHTML='<div style="display:flex;gap:8px;margin-bottom:12px">'
+        el.innerHTML=this._maintStatusCard()
+          +'<div style="display:flex;gap:8px;margin:12px 0">'
           +'<input id="mc-maint-in" placeholder="Descrizione intervento (es. pulizia lente, cambio tubo)" style="flex:1;padding:9px 12px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px">'
+          +'<select id="mc-maint-type" style="padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px">'
+          +'<option value="PREVENTIVA">Preventiva</option><option value="CORRETTIVA">Correttiva (guasto)</option><option value="ISPEZIONE">Ispezione</option></select>'
           +'<input id="mc-maint-cost" type="number" placeholder="€" style="width:90px;padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px">'
           +'<button class="btn btn-primary btn-sm" onclick="MachineCard._addMaint()">+ Registra</button></div>'
+          +'<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Solo «Preventiva» azzera l\'usura e sposta la prossima scadenza. Si registra alle ore macchina attuali ('+Math.round(parseFloat(m.hoursWorked)||0)+' h).</div>'
           +'<div style="display:flex;flex-direction:column;gap:8px">'
           +(log.length?log.slice().reverse().map(function(x,idx){
+            var tipoLabel=({PREVENTIVA:'🔧 Preventiva',CORRETTIVA:'⚠️ Correttiva',ISPEZIONE:'🔍 Ispezione'})[x.type]||'';
             return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-card2);border-radius:9px">'
-              +'<div style="flex:1"><div style="font-size:13px">'+esc(x.desc)+'</div><div style="font-size:11px;color:var(--text-dim)">'+esc(x.date)+'</div></div>'
+              +'<div style="flex:1"><div style="font-size:13px">'+esc(x.desc)+(tipoLabel?' <span style="color:var(--text-dim);font-size:11px">· '+tipoLabel+'</span>':'')+'</div>'
+              +'<div style="font-size:11px;color:var(--text-dim)">'+esc(x.date)+(x.hoursAtService!=null?' · '+Math.round(x.hoursAtService)+' h macchina':'')+'</div></div>'
               +'<div style="font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums">'+eur(x.cost)+'</div>'
               +'<button onclick="MachineCard._delMaint('+(log.length-1-idx)+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">🗑</button></div>';
           }).join(''):'<div style="text-align:center;color:var(--text-muted);padding:24px;font-size:13px">Nessun intervento registrato</div>')
@@ -111,18 +135,79 @@
     },
     _set(key,val){
       if(!this._m) return;
-      if(['powerW','costBuy','lifeYears','costMaint','costConsum','hoursLife','hoursWorked'].indexOf(key)>=0) val=(val===''?'':parseFloat(val));
+      if(['powerW','costBuy','lifeYears','costMaint','costConsum','hoursLife','hoursWorked','maintenanceIntervalHours'].indexOf(key)>=0) val=(val===''?'':parseFloat(val));
       this._m[key]=val;
       this._save();
     },
     _addMaint(){
-      var d=document.getElementById('mc-maint-in'), c=document.getElementById('mc-maint-cost');
+      var d=document.getElementById('mc-maint-in'), c=document.getElementById('mc-maint-cost'), t=document.getElementById('mc-maint-type');
       if(!d||!d.value.trim()) return;
       if(!Array.isArray(this._m.maintLog)) this._m.maintLog=[];
-      this._m.maintLog.push({ date:new Date().toLocaleDateString('it-IT'), desc:d.value.trim(), cost:parseFloat(c.value)||0 });
+      /* `hoursAtService` è il contachilometri al momento dell'intervento —
+         senza questo numero InglyMachineMaintenance non può misurare l'usura
+         trascorsa da qui in avanti. Si legge da `hoursWorked`, lo stesso
+         campo che la tab Uso già tiene: non è un dato nuovo da chiedere due
+         volte, è quello che c'è già. */
+      this._m.maintLog.push({
+        date: new Date().toLocaleDateString('it-IT'),
+        timestamp: new Date().toISOString(),
+        desc: d.value.trim(),
+        cost: parseFloat(c.value)||0,
+        type: t ? t.value : 'CORRETTIVA',
+        hoursAtService: parseFloat(this._m.hoursWorked)||0,
+      });
       this._save(); this._renderTab();
     },
     _delMaint(i){ if(Array.isArray(this._m.maintLog)){ this._m.maintLog.splice(i,1); this._save(); this._renderTab(); } },
+    /* L'adapter fra lo schema di questa scheda (costBuy/hoursLife/costMaint,
+       nomi che questa vista usa da prima che il motore esistesse) e quello
+       che InglyMachineRate/InglyMachineMaintenance si aspettano. Non è una
+       seconda matematica: è solo la traduzione dei nomi di campo, perché il
+       motore non deve conoscere lo schema di ogni schermata che lo chiama. */
+    _machineForEngine(m){
+      return {
+        id: m.id, purchasePrice: m.costBuy, expectedLifeHours: m.hoursLife,
+        annualMaintenance: m.costMaint, expectedAnnualHours: m.expectedAnnualHours,
+        maintenanceIntervalHours: m.maintenanceIntervalHours,
+        hoursWorked: m.hoursWorked, categoria: m.tech,
+      };
+    },
+    /* Solo gli interventi registrati col nuovo modulo (che portano `type` e
+       `hoursAtService`) entrano nel conto dell'usura. Gli interventi scritti
+       prima di questa correzione restano visibili nella lista — sopra — ma
+       non partecipano al calcolo: non c'è modo onesto di sapere se erano
+       preventivi o correttivi senza inventarlo. */
+    _interventiPerEngine(m){
+      return (Array.isArray(m.maintLog)?m.maintLog:[]).filter(function(x){ return x && x.type && x.hoursAtService!=null; })
+        .map(function(x){ return { machineId: m.id, type: x.type, hoursAtService: x.hoursAtService, timestamp: x.timestamp || null }; });
+    },
+    _maintStatusCard(){
+      var m=this._m;
+      var Mnt=(typeof InglyMachineMaintenance!=='undefined')?InglyMachineMaintenance:null;
+      if(!Mnt) return '';
+      var macchina=this._machineForEngine(m);
+      var interventi=this._interventiPerEngine(m);
+      var s=Mnt.stato(macchina, interventi, m.hoursWorked);
+      var eff=Mnt.tariffaEffettiva(macchina, interventi, m.hoursWorked);
+
+      if(!s.calcolabile){
+        return '<div style="padding:12px;background:var(--bg-card2);border-radius:10px;font-size:12px;color:var(--text-muted);margin-bottom:4px">'
+          +'⚪ Stato di manutenzione non calcolabile: dichiara l\'intervallo di manutenzione (tab «Uso») per vederlo.</div>';
+      }
+      var COLORI={ok:'#22c55e',vicina:'#f59e0b',scaduta:'#ef4444'};
+      var LABEL={ok:'🟢 In regola',vicina:'🟡 Manutenzione vicina',scaduta:'🔴 Manutenzione scaduta'};
+      var col=COLORI[s.stato]||'#64748b';
+      return '<div style="padding:12px;background:var(--bg-card2);border-radius:10px;margin-bottom:4px;border-left:3px solid '+col+'">'
+        +'<div style="font-weight:800;font-size:13px;color:'+col+'">'+(LABEL[s.stato]||s.stato)+'</div>'
+        +'<div style="font-size:12px;color:var(--text-muted);margin-top:4px">'
+        +(s.stato==='scaduta'
+          ? 'scaduta di '+Math.round(s.oreTrascorse-s.intervalloOre)+' h sull\'intervallo di '+s.intervalloOre+' h'
+          : 'prossima manutenzione in '+Math.round(s.oreAlProssimoServizio)+' h (intervallo '+s.intervalloOre+' h)')
+        +(eff.sovrapprezzoManutenzione>0
+          ? ' · tariffa macchina effettiva '+eur(eff.euroOra)+'/h invece di '+eur(eff.euroOraPreventivata)+'/h preventivate'
+          : '')
+        +'</div></div>';
+    },
     _upPhoto(inp){
       var f=inp.files&&inp.files[0]; if(!f) return;
       var r=new FileReader(); var self=this;
