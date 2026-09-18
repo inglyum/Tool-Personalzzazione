@@ -210,16 +210,33 @@ window.PrimaNota = {
 
 // ─── PROFILO CLIENTE DEDICATO ────────────────────────────────────
 window.ClientProfile = {
-  open:function(clientName){
-    var clients=[]; try{clients=JSON.parse(localStorage.getItem('ingly_crm_v1')||'[]');}catch(e){}
-    var c=clients.find(function(x){return x.name===clientName;});
+  /* Cercava il cliente per NOME, poi filtrava preventivi/ordini per lo
+     STESSO nome (`q.client===c.name`). Due clienti con lo stesso nome —
+     "Mario Rossi" padre e figlio non sono un caso raro in un laboratorio —
+     vedevano il fatturato, gli ordini e i preventivi l'uno dell'altro nella
+     stessa finestra. CRM-04 aveva già dato a ogni cliente un id stabile
+     proprio per questo motivo («Rossi e Rossi sono spesso due clienti
+     diversi») e preventivi/ordini portano già `clientId` nello stesso spazio
+     di id (`AppStore` popola i menu con `c.id`, non col nome): il difetto era
+     che questo pannello non lo usava. Ora risolve per id; un record senza
+     `clientId` (preventivo/ordine scritto prima di CRM-04) resta comunque
+     visibile tramite il nome come ripiego dichiarato, non silenzioso. */
+  open:function(clientId){
+    var C = window.InglyClienti;
+    var c = C ? C.perId(clientId) : null;
+    if(!c){
+      var clients=[]; try{clients=JSON.parse(localStorage.getItem('ingly_crm_v1')||'[]');}catch(e){}
+      c=clients.find(function(x){return String(x.id)===String(clientId);}) || null;
+    }
     if(!c){if(typeof toast!=='undefined')toast('Cliente non trovato','error');return;}
     var quotes=[]; try{quotes=JSON.parse(localStorage.getItem('lb2b_quotes_v1')||'[]');}catch(e){}
     var orders=[]; try{orders=JSON.parse(localStorage.getItem('ingly_orders_pro_v1')||'[]');}catch(e){}
     var notes={}; try{notes=JSON.parse(localStorage.getItem('ingly_note_interne_v1')||'{}');}catch(e){}
     var listino={}; try{listino=JSON.parse(localStorage.getItem('ingly_listino_v1')||'{}');}catch(e){}
-    var cQuotes=quotes.filter(function(q){return q.client===c.name;}).sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
-    var cOrders=orders.filter(function(o){return o.client===c.name;}).sort(function(a,b){return(b.created||b.date||'').localeCompare(a.created||a.date||'');});
+    var perId=function(x){return x.clientId!=null && String(x.clientId)===String(c.id);};
+    var perNomeLegacy=function(x){return x.clientId==null && x.client===c.name;};
+    var cQuotes=quotes.filter(function(q){return perId(q)||perNomeLegacy(q);}).sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+    var cOrders=orders.filter(function(o){return perId(o)||perNomeLegacy(o);}).sort(function(a,b){return(b.created||b.date||'').localeCompare(a.created||a.date||'');});
     var cRev=cOrders.reduce(function(a,o){return a+(parseFloat(o.total||0));},0);
     var cNotes=notes[(c.name||'').toLowerCase().trim()]||{};
     var disc=(listino[(c.name||'').toLowerCase().trim()]?.discount||0);
@@ -314,7 +331,9 @@ window.ClientProfile = {
       id:'profilo-cliente',
       classe:'prof-btn btn-v37 btn-ghost',
       icona:'👤', titolo:'Profilo cliente completo',
-      comando:function(c){ return "ClientProfile.open('"+String(c.nome).replace(/'/g,"")+"')"; },
+      /* Passa l'id, non il nome: due clienti con lo stesso nome aprivano lo
+         stesso profilo — vedi il commento su ClientProfile.open. */
+      comando:function(c){ return "ClientProfile.open('"+String(c.id).replace(/'/g,"")+"')"; },
       stile:'padding:4px 8px;background:rgba(99,102,241,.1);color:#818cf8;border:1px solid rgba(99,102,241,.25);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700',
     });
   }
