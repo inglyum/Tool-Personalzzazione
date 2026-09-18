@@ -44,6 +44,11 @@ export const PRODUCT_FILES = [
      bundle incontra la matematica comune prima delle sue applicazioni. */
   /* la tariffa macchina prima del motore: il motore la interroga */
   'machine-rate.js',
+  /* La manutenzione: legge la tariffa preventivata di `machine-rate.js` a
+     runtime (non al caricamento), quindi basta che stia dopo di lei. Puro:
+     nessun IDB, nessun DOM — la persistenza dello storico interventi è un
+     passo successivo, non ancora costruito. */
+  'machine-maintenance.js',
   'cost-engine.js',
   'print3d-cost.js',
   /* L'adapter del preventivo: dopo il motore, prima di chi lo usa. */
