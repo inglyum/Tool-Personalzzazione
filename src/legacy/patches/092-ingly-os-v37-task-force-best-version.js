@@ -209,6 +209,19 @@ window.PrimaNota = {
 })();
 
 // ─── PROFILO CLIENTE DEDICATO ────────────────────────────────────
+/* Il pannello componeva l'HTML del popup interpolando nome, azienda, note e
+   prodotto senza escaping: un cliente con `<script>` nel nome (o nelle note
+   interne, o nella descrizione di un ordine) lo eseguiva alla prima apertura
+   di questo profilo. Non è teorico — sono tutti campi che un modulo di
+   import CSV/VCF scrive senza validazione. Corretto qui, riusando la stessa
+   regola del resto del progetto: tutto ciò che finisce in innerHTML/
+   document.write passa da esc(). */
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,function(x){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[x];
+  });
+}
+
 window.ClientProfile = {
   /* Cercava il cliente per NOME, poi filtrava preventivi/ordini per lo
      STESSO nome (`q.client===c.name`). Due clienti con lo stesso nome —
@@ -237,22 +250,45 @@ window.ClientProfile = {
     var perNomeLegacy=function(x){return x.clientId==null && x.client===c.name;};
     var cQuotes=quotes.filter(function(q){return perId(q)||perNomeLegacy(q);}).sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
     var cOrders=orders.filter(function(o){return perId(o)||perNomeLegacy(o);}).sort(function(a,b){return(b.created||b.date||'').localeCompare(a.created||a.date||'');});
-    var cRev=cOrders.reduce(function(a,o){return a+(parseFloat(o.total||0));},0);
     var cNotes=notes[(c.name||'').toLowerCase().trim()]||{};
     var disc=(listino[(c.name||'').toLowerCase().trim()]?.discount||0);
     var FLAG_ICONS={vip:'⭐',lento:'🐌',attenzione:'⚠️',fido:'🤝',volume:'📦',sconto:'💰'};
     var flagIcon=FLAG_ICONS[cNotes.flag]||'';
-    var w=window.open('','_blank','width=900,height=680,resizable=yes');
+
+    /* CRM-15/17 — storico economico, CLV e timeline vengono dal motore
+       canonico (InglyCustomer360, che a sua volta consuma InglyOrderEconomics/
+       InglyQuoteStatus/InglyCLV): questo pannello non ricalcola ricavo, costo,
+       margine o valore cliente. Se il modulo non è nel bundle il pannello
+       degrada a quanto mostrava prima — non sparisce e non finge un numero. */
+    var Cust = window.InglyCustomer360;
+    var stat = Cust ? Cust.statisticheCliente(c.id, {ordini:orders, preventivi:quotes}) : null;
+    var storico = Cust ? Cust.storicoEconomico(c.id, orders) : [];
+    var clv = Cust ? Cust.clvCliente(c.id, orders, [c]) : null;
+    var timeline = Cust ? Cust.timelineCliente(c.id, {cliente:c, preventivi:quotes, ordini:orders}) : [];
+
+    var w=window.open('','_blank','width=980,height=800,resizable=yes');
     if(!w){if(typeof toast!=='undefined')toast('Abilita popup','info');return;}
+
+    var eu=function(v){return '€'+(Math.round((parseFloat(v)||0)*100)/100).toFixed(2);};
+    var pc=function(v){return (parseFloat(v)||0).toFixed(1)+'%';};
+    var nd='<span style="color:#475569">N/D</span>';
+    /* Ogni KPI economico passa da qui: un valore noto si formatta, uno non
+       noto diventa N/D con il motivo in un tooltip — mai un numero indovinato
+       al posto di un dato assente (Cost Engine e InglyOrderEconomics già
+       distinguono "zero" da "non dichiarato": questo pannello lo rispetta). */
+    var kpi=function(campo, fmt){
+      if(!campo || !campo.noto) return '<span title="'+esc(campo&&campo.motivo||'dato non disponibile')+'">'+nd+'</span>';
+      return fmt(campo.valore);
+    };
 
     var quoteRows=cQuotes.slice(0,8).map(function(q){
       var dt=new Date(q.date||Date.now()).toLocaleDateString('it',{day:'2-digit',month:'2-digit',year:'2-digit'});
       var sc={draft:'#64748b',confirmed:'#3b82f6',paid:'#22c55e',cancelled:'#ef4444'};
       return '<tr style="border-bottom:1px solid #1e293b">'
         +'<td style="padding:7px 10px;font-size:10px;color:#64748b">'+dt+'</td>'
-        +'<td style="padding:7px 10px;font-size:11px;color:#f1f5f9">'+( q.product||'').slice(0,40)+'</td>'
-        +'<td style="padding:7px 10px;font-weight:700;color:#6366f1">€'+(q.total||0).toFixed(2)+'</td>'
-        +'<td style="padding:7px 10px"><span style="background:'+(sc[q.status||'draft']||'#64748b')+'20;color:'+(sc[q.status||'draft']||'#64748b')+';padding:1px 7px;border-radius:10px;font-size:9px;font-weight:700">'+(q.status||'draft')+'</span></td>'
+        +'<td style="padding:7px 10px;font-size:11px;color:#f1f5f9">'+esc((q.product||'').slice(0,40))+'</td>'
+        +'<td style="padding:7px 10px;font-weight:700;color:#6366f1">'+eu(q.total)+'</td>'
+        +'<td style="padding:7px 10px"><span style="background:'+(sc[q.status||'draft']||'#64748b')+'20;color:'+(sc[q.status||'draft']||'#64748b')+';padding:1px 7px;border-radius:10px;font-size:9px;font-weight:700">'+esc(q.status||'draft')+'</span></td>'
         +'</tr>';
     }).join('');
     var orderRows=cOrders.slice(0,8).map(function(o){
@@ -260,48 +296,105 @@ window.ClientProfile = {
       var sc={draft:'#64748b',confirmed:'#3b82f6',in_progress:'#f59e0b',delivered:'#10b981',paid:'#22c55e',cancelled:'#ef4444'};
       return '<tr style="border-bottom:1px solid #1e293b">'
         +'<td style="padding:7px 10px;font-size:10px;color:#64748b">'+dt+'</td>'
-        +'<td style="padding:7px 10px;font-size:11px;color:#f1f5f9">'+( o.description||o.product||'').slice(0,40)+'</td>'
-        +'<td style="padding:7px 10px;font-weight:700;color:#10b981">€'+(o.total||0).toFixed(2)+'</td>'
-        +'<td style="padding:7px 10px"><span style="background:'+(sc[o.status||'draft']||'#64748b')+'20;color:'+(sc[o.status||'draft']||'#64748b')+';padding:1px 7px;border-radius:10px;font-size:9px;font-weight:700">'+(o.status||'draft')+'</span></td>'
+        +'<td style="padding:7px 10px;font-size:11px;color:#f1f5f9">'+esc((o.description||o.product||'').slice(0,40))+'</td>'
+        +'<td style="padding:7px 10px;font-weight:700;color:#10b981">'+eu(o.total)+'</td>'
+        +'<td style="padding:7px 10px"><span style="background:'+(sc[o.status||'draft']||'#64748b')+'20;color:'+(sc[o.status||'draft']||'#64748b')+';padding:1px 7px;border-radius:10px;font-size:9px;font-weight:700">'+esc(o.status||'draft')+'</span></td>'
         +'</tr>';
     }).join('');
 
-    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>👤 '+c.name+'</title>'
+    /* ── Storico economico (CRM-15): periodo × ordini/ricavi/costi/profitto/margine/ticket medio */
+    var storicoRows=storico.map(function(p){
+      return '<tr style="border-bottom:1px solid #1e293b">'
+        +'<td style="padding:7px 10px;font-size:11px;color:#f1f5f9;font-weight:700">'+esc(p.label)+'</td>'
+        +'<td style="padding:7px 10px;font-size:11px;text-align:right">'+p.ordini+'</td>'
+        +'<td style="padding:7px 10px;font-size:11px;text-align:right;color:#10b981">'+(p.ricavi!=null?eu(p.ricavi):nd)+'</td>'
+        +'<td style="padding:7px 10px;font-size:11px;text-align:right;color:#ef4444">'+(p.costi!=null?eu(p.costi):nd)+'</td>'
+        +'<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:700">'+(p.profitto!=null?eu(p.profitto):nd)+'</td>'
+        +'<td style="padding:7px 10px;font-size:11px;text-align:right">'+(p.marginePct!=null?pc(p.marginePct):nd)+'</td>'
+        +'<td style="padding:7px 10px;font-size:11px;text-align:right">'+(p.ticketMedio!=null?eu(p.ticketMedio):nd)+'</td>'
+        +(p.ordini>0 && !p.coperturaCompleta?'<td style="padding:7px 4px;font-size:9px;color:#f59e0b" title="alcuni ordini di questo periodo non hanno un ricavo dichiarato: i totali contano solo quelli noti">⚠</td>':'<td></td>')
+        +'</tr>';
+    }).join('');
+
+    /* ── Valore cliente (CLV) — dall'unica formula, InglyCLV ── */
+    var clvHtml;
+    if(clv && clv.disponibile){
+      var r=clv.riga;
+      clvHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+        +'<div><div style="font-size:9px;color:#64748b;text-transform:uppercase">Valore storico (margine)</div>'
+        +'<div style="font-size:16px;font-weight:900;color:'+(r.storico.margineNoto?'#22c55e':'#64748b')+'">'+(r.storico.margineNoto?eu(r.storico.margine):nd)+'</div>'
+        +(!r.storico.margineNoto?'<div style="font-size:9px;color:#64748b">costo non dichiarato su '+(r.storico.ordini-r.storico.ordiniConCosto)+' di '+r.storico.ordini+' ordini</div>':'')
+        +'</div>'
+        +'<div><div style="font-size:9px;color:#64748b;text-transform:uppercase">Previsto (12 mesi)</div>'
+        +'<div style="font-size:16px;font-weight:900;color:'+(r.previsto.margine!=null?'#818cf8':'#64748b')+'">'+(r.previsto.margine!=null?eu(r.previsto.margine):nd)+'</div>'
+        +(r.previsto.motivo?'<div style="font-size:9px;color:#64748b">'+esc(r.previsto.motivo)+'</div>':'')
+        +'</div></div>'
+        +'<div style="font-size:9px;color:#475569;margin-top:8px">Confidence: '+(r.storico.margineNoto?'reale (costo dichiarato su tutti gli ordini)':(r.storico.ordiniConCosto>0?'parziale (costo noto solo su alcuni ordini)':'assente (nessun costo dichiarato)'))+' · fonte InglyCLV</div>';
+    } else {
+      clvHtml='<div style="font-size:12px;color:#64748b">Dati insufficienti'+(clv&&clv.motivo?' — '+esc(clv.motivo):'')+'</div>';
+    }
+
+    /* ── Timeline unificata (CRM-17) — solo eventi con una data vera ── */
+    var TL_ICONE={CLIENTE_CREATO:'🆕',CLIENTE_MODIFICATO:'✏️',PREVENTIVO_CREATO:'📄',PREVENTIVO_VISTO:'👀',ORDINE_CREATO:'📦',ORDINE_AGGIORNATO:'🔄'};
+    var timelineHtml=timeline.length?timeline.slice(0,30).map(function(ev){
+      var dt=new Date(ev.data).toLocaleDateString('it',{day:'2-digit',month:'2-digit',year:'2-digit'});
+      return '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #1e293b">'
+        +'<div style="font-size:14px">'+(TL_ICONE[ev.tipo]||'•')+'</div>'
+        +'<div style="flex:1"><div style="font-size:12px;color:#f1f5f9">'+esc(ev.etichetta)+(ev.rif&&ev.rif.statoAttuale?' <span style="color:#64748b">· '+esc(ev.rif.statoAttuale)+'</span>':'')+'</div>'
+        +(ev.dettaglio?'<div style="font-size:10px;color:#64748b">'+esc(ev.dettaglio)+'</div>':'')+'</div>'
+        +'<div style="font-size:10px;color:#475569;white-space:nowrap">'+dt+'</div></div>';
+    }).join(''):'<div style="padding:16px;text-align:center;color:#64748b;font-size:12px">Nessun evento con una data registrata</div>';
+
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>👤 '+esc(c.name)+'</title>'
       +'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#0f172a;color:#f1f5f9;font-size:13px}'
       +'table{width:100%;border-collapse:collapse}th{background:#1e293b;padding:8px 10px;text-align:left;font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase}'
       +'.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{background:#1e293b;border-radius:12px;padding:14px;margin-bottom:12px}.btn{padding:8px 14px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700}'
+      +'.sect{font-size:12px;font-weight:800;margin-bottom:8px;color:#e2e8f0}'
       +'</style></head><body style="padding:20px">'
       // Header
       +'<div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #334155">'
-      +'<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#fff;flex-shrink:0">'+c.name.charAt(0).toUpperCase()+'</div>'
+      +'<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#fff;flex-shrink:0">'+esc(c.name.charAt(0).toUpperCase())+'</div>'
       +'<div style="flex:1">'
-      +'<div style="font-size:22px;font-weight:900;color:#f1f5f9">'+flagIcon+' '+c.name+'</div>'
-      +(c.company?'<div style="font-size:13px;color:#64748b">'+c.company+'</div>':'')
+      +'<div style="font-size:22px;font-weight:900;color:#f1f5f9">'+flagIcon+' '+esc(c.name)+'</div>'
+      +(c.company?'<div style="font-size:13px;color:#64748b">'+esc(c.company)+'</div>':'')
       +'<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">'
-      +(c.phone?'<a href="tel:'+c.phone+'" style="font-size:12px;color:#25D366">📱 '+c.phone+'</a>':'')
-      +(c.email?'<a href="mailto:'+c.email+'" style="font-size:12px;color:#6366f1">✉️ '+c.email+'</a>':'')
-      +(disc>0?'<span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">💰 Sconto fisso: -'+disc+'%</span>':'')
-      +(c.tags?c.tags.split(',').map(function(t){return '<span style="background:rgba(99,102,241,.1);color:#818cf8;padding:2px 8px;border-radius:10px;font-size:9px">'+t.trim()+'</span>';}).join(''):'')
+      +(c.phone?'<a href="tel:'+esc(c.phone)+'" style="font-size:12px;color:#25D366">📱 '+esc(c.phone)+'</a>':'')
+      +(c.email?'<a href="mailto:'+esc(c.email)+'" style="font-size:12px;color:#6366f1">✉️ '+esc(c.email)+'</a>':'')
+      +(disc>0?'<span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">💰 Sconto fisso: -'+esc(String(disc))+'%</span>':'')
+      +(c.tags?c.tags.split(',').map(function(t){return '<span style="background:rgba(99,102,241,.1);color:#818cf8;padding:2px 8px;border-radius:10px;font-size:9px">'+esc(t.trim())+'</span>';}).join(''):'')
       +'</div></div>'
       +'<div style="display:flex;gap:8px">'
-      +'<button onclick="window.opener&&window.opener.QuoteGeneratorV2&&window.opener.QuoteGeneratorV2.open({clientName:\''+c.name.replace(/'/g,"\\'")+'\',clientPhone:\''+(c.phone||'')+'\'})" class="btn" style="background:linear-gradient(135deg,#22c55e,#059669);color:#fff">📄 Preventivo</button>'
-      +(c.phone?'<button onclick="window.open(\'https://wa.me/'+c.phone.replace(/\D/g,'')+'\',\'_blank\')" class="btn" style="background:#25D36620;color:#25D366;border:1px solid #25D36640">💬 WA</button>':'')
+      +'<button onclick="window.opener&&window.opener.QuoteGeneratorV2&&window.opener.QuoteGeneratorV2.open({clientName:'+JSON.stringify(c.name)+',clientPhone:'+JSON.stringify(c.phone||'')+'})" class="btn" style="background:linear-gradient(135deg,#22c55e,#059669);color:#fff">📄 Preventivo</button>'
+      +(c.phone?'<button onclick="window.open('+JSON.stringify('https://wa.me/'+String(c.phone).replace(/\D/g,''))+',\'_blank\')" class="btn" style="background:#25D36620;color:#25D366;border:1px solid #25D36640">💬 WA</button>':'')
       +'</div></div>'
-      // Stats row
-      +'<div class="grid2" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">'
-      +[
-        {l:'Fatturato Totale',v:'€'+cRev.toFixed(0),c:'#10b981'},
+      // Stats row (CRM-15) — dal motore canonico, N/D quando non noto
+      +'<div class="grid2" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">'
+      +(stat?[
+        {l:'Fatturato Totale',v:kpi(stat.ordini.fatturatoNetto,eu),c:'#10b981'},
+        {l:'N° Ordini',v:stat.ordini.numero,c:'#f59e0b'},
+        {l:'N° Preventivi',v:stat.preventivi.numero,c:'#6366f1'},
+        {l:'Preventivi accettati',v:stat.preventivi.accettatiOConvertiti!=null?stat.preventivi.accettatiOConvertiti:nd,c:'#8b5cf6'},
+        {l:'Tasso conversione',v:kpi(stat.preventivi.tassoConversionePct,pc),c:'#8b5cf6'},
+        {l:'Valore medio ordine',v:kpi(stat.ordini.valoreMedio,eu),c:'#06b6d4'},
+        {l:'Margine',v:kpi(stat.ordini.marginePct,pc),c:'#22c55e'},
+        {l:'Ultimo ordine',v:stat.ordini.ultimo?new Date(stat.ordini.ultimo).toLocaleDateString('it'):nd,c:'#64748b'},
+      ]:[
         {l:'N° Preventivi',v:cQuotes.length,c:'#6366f1'},
         {l:'N° Ordini',v:cOrders.length,c:'#f59e0b'},
-        {l:'Aggiunto il',v:c.added?new Date(c.added).toLocaleDateString('it'):'—',c:'#64748b'},
-      ].map(function(k){return '<div class="card" style="text-align:center"><div style="font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:4px">'+k.l+'</div><div style="font-size:20px;font-weight:900;color:'+k.c+'">'+k.v+'</div></div>';}).join('')
+      ]).map(function(k){return '<div class="card" style="text-align:center"><div style="font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:4px">'+esc(k.l)+'</div><div style="font-size:18px;font-weight:900;color:'+k.c+'">'+k.v+'</div></div>';}).join('')
       +'</div>'
+      +'<div style="font-size:9px;color:#475569;margin-bottom:16px">Aggiunto il '+(c.added||c.createdAt?new Date(c.added||c.createdAt).toLocaleDateString('it'):'—')+'</div>'
       // Notes interne
       +(cNotes.notes?'<div class="card" style="background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);margin-bottom:12px">'
         +'<div style="font-size:10px;font-weight:800;color:#818cf8;margin-bottom:6px">🔒 NOTE INTERNE</div>'
-        +'<div style="font-size:12px;color:#f1f5f9;white-space:pre-wrap">'+cNotes.notes+'</div>'
+        +'<div style="font-size:12px;color:#f1f5f9;white-space:pre-wrap">'+esc(cNotes.notes)+'</div>'
         +'</div>':'')
-      // Quote history
+      // Storico economico (CRM-15)
+      +(stat?'<div class="card"><div class="sect">📊 Storico economico</div>'
+        +'<table><thead><tr><th>Periodo</th><th style="text-align:right">Ordini</th><th style="text-align:right">Ricavi</th><th style="text-align:right">Costi</th><th style="text-align:right">Profitto</th><th style="text-align:right">Margine</th><th style="text-align:right">Ticket medio</th><th></th></tr></thead><tbody>'+storicoRows+'</tbody></table></div>':'')
+      // CLV (CRM-15)
+      +(stat?'<div class="card"><div class="sect">💎 Valore cliente (CLV)</div>'+clvHtml+'</div>':'')
+      // Quote/order history
       +'<div class="grid2">'
       +'<div><div style="font-size:12px;font-weight:800;margin-bottom:8px">📄 Preventivi ('+cQuotes.length+')</div>'
       +(cQuotes.length?'<table><thead><tr><th>Data</th><th>Prodotto</th><th>Totale</th><th>Stato</th></tr></thead><tbody>'+quoteRows+'</tbody></table>':'<div style="padding:20px;text-align:center;color:#64748b">Nessun preventivo</div>')
@@ -309,6 +402,8 @@ window.ClientProfile = {
       +'<div><div style="font-size:12px;font-weight:800;margin-bottom:8px">📦 Ordini ('+cOrders.length+')</div>'
       +(cOrders.length?'<table><thead><tr><th>Data</th><th>Descrizione</th><th>Totale</th><th>Stato</th></tr></thead><tbody>'+orderRows+'</tbody></table>':'<div style="padding:20px;text-align:center;color:#64748b">Nessun ordine</div>')
       +'</div></div>'
+      // Timeline (CRM-17)
+      +'<div class="card" style="margin-top:12px"><div class="sect">🕒 Timeline</div>'+timelineHtml+'</div>'
       +'<button onclick="close()" style="margin-top:16px;padding:9px 18px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;cursor:pointer">Chiudi</button>'
       +'</body></html>');
     w.document.close();

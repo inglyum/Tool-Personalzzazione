@@ -48,10 +48,22 @@ scrive la ricerca prima degli id stabili la riscrive due volte.
 
 | # | Cosa |
 | - | ---- |
-| CRM-15 | Scheda cliente con lo **storico economico reale**, cioè gli `economicSnapshot` degli ordini (Fase 30), non un ricalcolo |
-| CRM-16 | Segmentazione RFM su una sorgente sola |
-| CRM-17 | Timeline unificata: preventivi, ordini, vendite, pagamenti |
-| CRM-18 | Esportazioni (VCF, CSV) che esportano la selezione, non l'elenco intero |
+| CRM-15 | Scheda cliente con lo **storico economico reale** | ✅ fatto — `src/product/customer-360.js` (`InglyCustomer360.statisticheCliente`/`storicoEconomico`). Non ricalcola: legge `InglyOrderEconomics` (ricavo/costo/profitto/margine per ordine) e `InglyQuoteStatus` (conversione), filtrando sempre per `clientId`, mai per nome — CRM-04 applicato ai dati economici. Ogni KPI non calcolabile torna N/D con motivo, non zero. Quattro finestre (30gg/90gg/anno/tutto) nella tab «Storico economico» del profilo cliente. `tests/customer-360.test.mjs` (27 unit) + `tests/qa/crm-customer-360.mjs` (10, browser reale) |
+| CRM-16 | Segmentazione RFM su una sorgente sola | ⬜ non iniziato |
+| CRM-17 | Timeline unificata: preventivi, ordini, vendite, pagamenti | ✅ fatto in parte — `InglyCustomer360.timelineCliente` aggrega creazione cliente, preventivi (con stato derivato da `InglyQuoteStatus` e legame verso l'ordine), ordini. **Non aggregati, deliberatamente**: note interne (`ingly_note_interne_v1`) e storico comunicazioni (`lb2b_comm_hist_v1`, scritto da `CommHistory.add` — trovato durante questo lavoro, attivamente scritto da tre punti in `src/legacy/patches/086,094,096`) restano indicizzati per **nome cliente**, non per `clientId`. Includerli riaprirebbe lo stesso difetto di CRM-05b in una superficie nuova; il lato che scrive `CommHistory` (il campo cliente del calcolatore Laser B2B) è testo libero e quasi mai ha un `clientId` risolto — chiuderlo per davvero è un intervento sul flusso di preventivazione, non su questo modulo. Vendite/pagamenti: non aggregati in questo giro, nessuna sorgente dati con timestamp per-cliente trovata oltre agli ordini |
+| CRM-18 | Esportazioni (VCF, CSV) che esportano la selezione, non l'elenco intero | ⬜ non iniziato |
+
+### Trovato durante CRM-15/17, non corretto — stessa classe di CRM-05b
+
+`CommHistory` (`src/legacy/patches/086-...js`, scritto anche da `094-...js` e
+`096-...js`) è un secondo store attivo, non note interne morte: registra
+ogni preventivo/ordine salvato dal calcolatore Laser B2B, indicizzato per
+`client.toLowerCase().trim()`. Due clienti omonimi vedono lo storico
+comunicazioni l'uno dell'altro nel pulsante «📋 Storico comunicazioni» di
+CRM-05. Non corretto qui perché il lato scrittore (`cl`, una stringa libera
+nel form del calcolatore) non porta quasi mai un `clientId` — un fix onesto
+richiede prima far risolvere quel campo a un cliente vero, che è un
+intervento sul calcolatore Laser B2B (oggi verde), non sul CRM.
 
 ---
 

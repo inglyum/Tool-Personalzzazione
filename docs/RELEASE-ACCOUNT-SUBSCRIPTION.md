@@ -105,6 +105,22 @@ stessa macchina — contesa di CPU contro i tempi di avvio dell'applicazione,
 non un difetto del prodotto. Il secondo giro, con la macchina libera e un solo
 build, è **77 su 77**.
 
+**Correzione, da una sessione successiva** (release 1.1.0, verticali
+Maintenance e CRM Customer 360): l'attribuzione «contesa di CPU» sopra non è
+la causa completa. Sia `quoter3d-calcoli` (FASE 16b-e, salvataggio
+preventivo → ricarica → l'archivio c'è ancora) sia `apparel-scaglioni-
+consuntivo` (stesso schema: consuntivo scritto → ricarica → c'è ancora)
+sono stati visti fallire **in isolamento assoluto**, nessun altro processo
+sulla macchina, e passare pulito su una ripetizione immediata dello stesso
+identico comando sullo stesso build. È un flake intermittente reale nel
+percorso «scrivi poi ricarica la pagina» di questo ambiente di test, non
+solo contesa di CPU — probabilmente un timing fra la scrittura IndexedDB e
+il `location.reload()` che Playwright non sempre attende a sufficienza.
+Non è stato investigato più a fondo perché non blocca nessun lavoro reale:
+la disciplina resta la stessa — se uno di questi due fallisce da solo,
+riprovare la stessa suite in isolamento prima di trattarlo come una
+regressione vera.
+
 Test di unità aggiunti in questo mandato: 125.
 
 ```

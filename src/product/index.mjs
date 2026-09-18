@@ -105,6 +105,10 @@ export const PRODUCT_FILES = [
   /* Quanto vale un cliente, in margine. Dopo order-economics, di cui usa le
      letture canoniche di ricavo e costo. */
   'clv.js',
+  /* CRM-15/17 · Customer 360: storico economico e timeline per cliente.
+     Consuma order-economics, quote-status e clv — non ricalcola niente,
+     quindi sta dopo tutti e tre. */
+  'customer-360.js',
   /* Quale lavoro rende davvero: legge tecnologia e macchina da order-fields e
      ricavo e costo da order-economics, quindi sta dopo entrambi. */
   'redditivita.js',
