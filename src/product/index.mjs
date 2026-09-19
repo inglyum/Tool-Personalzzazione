@@ -118,6 +118,11 @@ export const PRODUCT_FILES = [
   'order-payments.js',
   'redditivita-tecnologia.js',
   'operations-model.js',
+  /* La decisione su uno scarto o un rifacimento: legge le quantità che
+     `operations-model.js` conta già (non le ricalcola), quindi sta dopo di
+     lui. Puro, poi la metà che parla con IndexedDB. */
+  'quality-ncr.js',
+  'quality-ncr-store.js',
   'redditivita-macchina.js',
   'material-requirement.js',
   'repositories.js',

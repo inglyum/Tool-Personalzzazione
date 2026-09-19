@@ -65,6 +65,47 @@ nel form del calcolatore) non porta quasi mai un `clientId` — un fix onesto
 richiede prima far risolvere quel campo a un cliente vero, che è un
 intervento sul calcolatore Laser B2B (oggi verde), non sul CRM.
 
+### Trovato e corretto durante il verticale Procurement — stessa ricerca
+
+`Clients.openModal(id)` (`src/legacy/app/src/modules/clients/index.js`), il
+pannello «📊 Statistiche Cliente» dentro la scheda di modifica, filtrava le
+vendite con `s.clientId===id||(cl&&s.clientName===cl.name)`: il ripiego sul
+nome si **sommava** al filtro per id invece di sostituirlo solo quando l'id
+manca, quindi una vendita di un cliente **omonimo** (`clientId` diverso,
+stesso nome) entrava comunque nel conteggio — acquisti, spesa totale e
+scontrino medio di due Mario Rossi si mischiavano. Corretto a
+`s.clientId==null&&cl&&s.clientName===cl.name`: il nome copre solo le
+vendite scritte prima che `clientId` esistesse. `tests/qa/statistiche-cliente-omonimi.mjs`
+(rosso confermato prima del fix).
+
+`AutoInvoicePDF.generate` (`src/legacy/patches/064-...js`), la ricevuta/
+fattura PDF automatica, risolveva il cliente per nome
+(`c.name===sale.clientName`) per stampare email e indirizzo: due clienti
+omonimi potevano scambiarsi questi dati su un documento fiscale vero.
+Corretto a risolvere per `sale.clientId` quando presente (lo è dalla Fase
+30 in poi), nome come ripiego dichiarato per le vendite più vecchie.
+`tests/qa/documenti-cliente.mjs` (rosso confermato prima del fix). Vedi
+`docs/PROCUREMENT.md` per il contesto (trovato indagando la duplicazione
+`SupplierIntelligence` vs `suppliers`, stessa classe su un'altra entità).
+
+**Trovato, non corretto — causa più profonda di un filtro**: il modulo
+«CRM Pro» del pacchetto Prox (`src/legacy/patches/099-ingly-prox-js-ingly-os-pro-x-v2.js`,
+`healthScore()` e `buildCRMPro()`, raggiungibile da
+`App.navigate('prox-crm')`) filtra gli ordini con lo stesso schema
+`o.client===c.id||o.clientName===c.name` — ma il modulo che scrive quegli
+ordini (`101-...js`, il modulo «Nuovo Ordine» del pacchetto Prox) non
+cattura mai un `clientId` reale: il campo cliente è testo libero, e viene
+scritto **identico** sia in `client` sia in `clientName`
+(`client: client, clientName: client`). Il primo termine del filtro non
+incontra mai un id vero: in pratica il match è sempre e solo per nome. Due
+clienti omonimi condividono Health Score, Kanban lifecycle e conteggio
+ordini in questa schermata. Non corretto qui perché il filtro non è la
+causa: la causa è che il modulo «Nuovo Ordine» del Prox non ha mai avuto un
+selettore cliente reale — servirebbe dare a quel form un vero
+autocompletamento su `ingly_clients` che scriva un id, non solo correggere
+la lettura. È un intervento sul modulo di inserimento ordini del Prox, non
+sul CRM standard (che usa `clientId` correttamente dalla Fase 30).
+
 ---
 
 ## Regole per chi esegue

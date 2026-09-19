@@ -1131,6 +1131,26 @@ const GestioneOrdini = {
     const timerData = JSON.parse(localStorage.getItem(timerKey)||'{"total":0,"running":false,"start":null}');
     const totalMinutes = Math.floor(timerData.total/60);
 
+    /* Qualità: il routing (InglyOperazioni) e le non conformità aperte per
+       questo ordine. Un ordine senza tecnologia dichiarata non ha routing, e
+       lo dice — non finge operazioni che nessuno ha creato. */
+    const OPZ = window.InglyOperazioni;
+    let routing = OPZ ? OPZ.leggi(order) : [];
+    if(OPZ && !routing.length){
+      const costruito = OPZ.costruisciDaOrdine(order);
+      if(costruito.create && costruito.operations.length){
+        routing = costruito.operations;
+        /* Il routing appena dedotto si scrive subito: senza, sparirebbe alla
+           prossima apertura e _registraQualita non troverebbe mai l'id
+           dell'operazione a cui e' stato appena chiesto di registrare
+           qualcosa. */
+        order.operations = routing;
+        await IDB.put('orders', order).catch(()=>{});
+      }
+    }
+    const ncrs = window.InglyQualityNCRStore ? await window.InglyQualityNCRStore.perOrdine(orderId).catch(()=>[]) : [];
+    const qualitaHTML = this._qualitaHTML(orderId, routing, ncrs, _esc);
+
     const ov = document.createElement('div');
     ov.id = '_prod-panel';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -1201,6 +1221,9 @@ const GestioneOrdini = {
           </div>
         </div>
 
+        <!-- Qualità e non conformità -->
+        <div id="pp-qualita">${qualitaHTML}</div>
+
         <!-- Timer -->
         <div style="background:var(--bg-card2);border-radius:10px;padding:12px 14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1247,6 +1270,118 @@ const GestioneOrdini = {
     if(timerData.running) {
       this._timerInterval = setInterval(() => GestioneOrdini._updateTimerDisplay(orderId), 1000);
     }
+  },
+
+  /**
+   * La sezione Qualità del pannello produzione: il routing dell'ordine
+   * (InglyOperazioni), un modulo compatto per registrare buoni/scarti/
+   * rifacimenti su ogni operazione, e le non conformità aperte con la loro
+   * disposizione. Non ricalcola niente che il motore già sappia — legge
+   * `InglyOperazioni.qualita()` per operazione e mostra quello che c'è.
+   */
+  _qualitaHTML(orderId, routing, ncrs, _esc) {
+    const OPZ = window.InglyOperazioni;
+    if(!OPZ) return '';
+    const righeOperazioni = !routing.length
+      ? '<div style="font-size:11px;color:var(--text-dim)">Nessuna operazione di routing — nessuna tecnologia dichiarata su questo ordine.</div>'
+      : routing.map(op=>{
+          const q = OPZ.qualita(op);
+          const st = OPZ.infoStato ? OPZ.infoStato(op.status) : null;
+          return `
+          <div style="background:var(--bg-card2);border-radius:8px;padding:9px 11px;margin-bottom:7px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <div style="font-size:11px;font-weight:700">${_esc(op.technology||'—')}${op.machineName?' · '+_esc(op.machineName):''}</div>
+              <span style="font-size:9px;padding:1px 7px;border-radius:99px;background:${st?st.colore:'#64748b'}22;color:${st?st.colore:'#64748b'}">${st?_esc(st.label):_esc(op.status)}</span>
+            </div>
+            ${q.contato?`<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">resa ${q.resaPct!=null?q.resaPct+'%':'N/D'}${q.scartoPct!=null?' · scarto '+q.scartoPct+'%':''}${q.coerente===false?' · <span style="color:#ef4444">i numeri non tornano</span>':''}</div>`:''}
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:5px">
+              <input id="pq-good-${op.id}" type="number" min="0" step="1" placeholder="buoni" value="${op.goodQuantity!=null?op.goodQuantity:''}" class="form-control" style="font-size:11px;padding:5px">
+              <input id="pq-waste-${op.id}" type="number" min="0" step="1" placeholder="scarti" value="${op.wasteQuantity!=null?op.wasteQuantity:''}" class="form-control" style="font-size:11px;padding:5px">
+              <input id="pq-rework-${op.id}" type="number" min="0" step="1" placeholder="da rifare" value="${op.reworkQuantity!=null?op.reworkQuantity:''}" class="form-control" style="font-size:11px;padding:5px">
+            </div>
+            <div style="display:flex;gap:5px">
+              <input id="pq-reason-${op.id}" placeholder="motivo scarto/rifacimento" value="${op.wasteReason?_esc(op.wasteReason):''}" class="form-control" style="flex:1;font-size:11px;padding:5px">
+              <button onclick="GestioneOrdini._registraQualita('${orderId}','${op.id}')" style="padding:5px 10px;background:var(--primary-dim);color:var(--primary);border:1px solid var(--primary-border,var(--border));border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">Registra</button>
+            </div>
+          </div>`;
+        }).join('');
+
+    const DISP = window.InglyQualityNCR ? window.InglyQualityNCR.DISPOSIZIONI : {};
+    const righeNCR = !ncrs.length ? '' : `
+      <div style="margin-top:8px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">⚠️ Non conformità</div>
+        ${ncrs.map(n=>{
+          const aperta = n.status==='aperta';
+          return `<div style="background:${aperta?'rgba(239,68,68,.06)':'var(--bg-card2)'};border:1px solid ${aperta?'rgba(239,68,68,.2)':'var(--border)'};border-radius:8px;padding:8px 10px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+              <div style="font-size:11px"><b>${n.quantity}×</b> ${_esc(n.reason)}</div>
+              <span style="font-size:9px;padding:1px 7px;border-radius:99px;background:${aperta?'#ef444422':'#22c55e22'};color:${aperta?'#ef4444':'#22c55e'}">${aperta?'Aperta':(DISP[n.disposition]?_esc(DISP[n.disposition].label):'Chiusa')}</span>
+            </div>
+            ${aperta?`<div style="display:flex;gap:5px;margin-top:6px">
+              <select id="ncr-disp-${n.id}" class="form-control" style="flex:1;font-size:11px;padding:4px">
+                ${Object.keys(DISP).map(k=>`<option value="${k}">${_esc(DISP[k].label)}</option>`).join('')}
+              </select>
+              <button onclick="GestioneOrdini._chiudiNCR('${orderId}','${n.id}')" style="padding:4px 10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">Chiudi</button>
+            </div>`:''}
+          </div>`;
+        }).join('')}
+      </div>`;
+
+    return `<div style="margin-bottom:2px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">🔍 Qualità</div>
+      ${righeOperazioni}
+      ${righeNCR}
+    </div>`;
+  },
+
+  /** Registra buoni/scarti/rifacimenti su un'operazione del routing. Se lo
+      scarto o il rifacimento hanno un motivo dichiarato, propone e crea una
+      non conformità — mai in automatico senza un motivo (InglyQualityNCR.daOperazione
+      lo rifiuta esplicitamente). */
+  async _registraQualita(orderId, opId) {
+    const OPZ = window.InglyOperazioni;
+    if(!OPZ) return;
+    const v = (sel)=>{ const el=document.getElementById(sel); const val=el?.value; return val===''||val==null?null:parseFloat(val); };
+    const buoni = v('pq-good-'+opId), scarti = v('pq-waste-'+opId), rifatti = v('pq-rework-'+opId);
+    const motivo = document.getElementById('pq-reason-'+opId)?.value?.trim() || null;
+
+    const order = await IDB.get('orders', +orderId||orderId).catch(()=>null);
+    if(!order) return;
+    const dentroProduction = order.production && Array.isArray(order.production.operations);
+    const lista = dentroProduction ? order.production.operations : (order.operations = Array.isArray(order.operations) ? order.operations : []);
+    const idx = lista.findIndex(o=>String(o.id)===String(opId));
+    if(idx<0){ if(typeof toast!=='undefined') toast('Operazione non trovata','error'); return; }
+
+    const agg = {};
+    if(buoni!=null) agg.goodQuantity = buoni;
+    if(scarti!=null) agg.wasteQuantity = scarti;
+    if(rifatti!=null) agg.reworkQuantity = rifatti;
+    if(motivo) agg.wasteReason = motivo;
+    lista[idx] = Object.assign({}, lista[idx], agg);
+    await IDB.put('orders', order);
+
+    const opNormalizzata = OPZ.normalizza(lista[idx]);
+    const proposta = window.InglyQualityNCR ? window.InglyQualityNCR.daOperazione(opNormalizzata, { orderId }) : null;
+    if(proposta && proposta.proponibile && window.InglyQualityNCRStore){
+      const esito = await window.InglyQualityNCRStore.crea(proposta);
+      if(esito.ok){ if(typeof toast!=='undefined') toast('⚠️ Non conformità registrata: '+proposta.reason,'warning'); }
+      else if(typeof toast!=='undefined') toast('Qualità salvata, non conformità non creata: '+esito.motivo,'warning');
+    } else if(typeof toast!=='undefined') toast('✅ Qualità registrata','success');
+
+    this.openProductionPanel(orderId);
+  },
+
+  /** Chiude una non conformità aperta con la disposizione scelta. */
+  async _chiudiNCR(orderId, ncrId) {
+    if(!window.InglyQualityNCRStore) return;
+    const disposition = document.getElementById('ncr-disp-'+ncrId)?.value;
+    if(!disposition){ if(typeof toast!=='undefined') toast('Scegli una disposizione','warning'); return; }
+    const sess = window.SaaSGate && window.SaaSGate._session;
+    const approvatoDa = (sess && window.InglyIdentita) ? window.InglyIdentita.idUtente(sess) : null;
+    const esito = await window.InglyQualityNCRStore.chiudi(ncrId, { disposition, approvatoDa });
+    if(!esito.ok){ if(typeof toast!=='undefined') toast('Non chiusa: '+esito.motivo,'error'); return; }
+    if(typeof toast!=='undefined') toast('✅ Non conformità chiusa','success');
+    this.openProductionPanel(orderId);
   },
 
   _timerToggle(orderId) {

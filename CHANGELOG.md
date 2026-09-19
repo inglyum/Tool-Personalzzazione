@@ -3,6 +3,58 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 1.4.0 — Qualità: uno scarto diventa una decisione
+
+**Nuove funzionalità**
+- `src/product/quality-ncr.js` (`InglyQualityNCR`) + `quality-ncr-store.js`:
+  registro delle non conformità (rilavorazione/scarto/accettato con
+  deroga/reso al fornitore), collegato al routing di produzione
+  (`InglyOperazioni`, già esistente e testato) senza ricalcolarne i numeri.
+  Una non conformità nasce sempre aperta e non si propone mai senza uno
+  scarto o un rifacimento **con un motivo dichiarato**.
+- Il Pannello Produzione di un ordine (⚙️ in Gestione Ordini) mostra ora il
+  routing dell'ordine — prima invisibile ovunque tranne un badge «2/3» in
+  lista — con un modulo per registrare buoni/scarti/rifacimenti per
+  operazione, e le non conformità aperte con chiusura per disposizione.
+
+**Trovato**: `InglyOperazioni` (buoni/scarti/rifacimenti, stato routing,
+resa/coerenza) esisteva completo e testato dalla Fase precedente ma non
+aveva **nessuna** superficie di inserimento dati — solo tre consumatori
+in lettura (redditività macchina, fabbisogno materiali, repository) e un
+badge di avanzamento. Verificato sull'architettura reale prima di
+concludere alcunché, come richiesto: non un modulo mancante, un modulo
+senza UI.
+
+**Verificato**: 263 file sintassi, 2167/2167 unit, 87/87 suite browser QA,
+0 errori JS, nessuna regressione.
+
+## 1.3.1 — CRM: un'altra superficie della classe CRM-05b
+
+Continuando la ricerca sistematica di "identità cliente risolta per nome"
+avviata con CRM-04/05b, iniziata durante l'indagine sul verticale
+Procurement (vedi 1.3.0, `AutoInvoicePDF`).
+
+**Difetti corretti**
+- `Clients.openModal` (pannello «📊 Statistiche Cliente» nella scheda di
+  modifica): filtrava le vendite con `s.clientId===id||(cl&&s.clientName===cl.name)`
+  — il ripiego sul nome si sommava al filtro per id invece di sostituirlo
+  solo quando l'id manca. Una vendita di un cliente **omonimo** (clientId
+  diverso, stesso nome) entrava comunque nel conteggio di acquisti, spesa
+  totale e scontrino medio. Corretto a sommare il nome solo quando
+  `clientId` è assente. `tests/qa/statistiche-cliente-omonimi.mjs` (rosso
+  confermato prima del fix).
+
+**Trovato, documentato, non corretto in questo giro**
+- Il modulo «CRM Pro» del pacchetto Prox (`healthScore`/`buildCRMPro`,
+  `App.navigate('prox-crm')`) ha lo stesso schema di filtro, ma la causa è
+  più profonda: il modulo «Nuovo Ordine» del Prox non cattura mai un
+  `clientId` reale (scrive lo stesso testo libero sia in `client` sia in
+  `clientName`) — un fix onesto richiede un vero selettore cliente su quel
+  form, non solo correggere la lettura. Tracciato in `docs/CRM-ROADMAP.md`.
+
+**Verificato**: 261 file sintassi, 2143/2143 unit, 86/86 suite browser QA,
+0 errori JS, nessuna regressione.
+
 ## 1.3.0 — Procurement: ordine d'acquisto reale
 
 **Nuove funzionalità**

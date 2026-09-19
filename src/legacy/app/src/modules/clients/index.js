@@ -519,7 +519,12 @@ const Clients={
           AppStore.get('orders').catch(()=>[]),
         ]);
         const cl = await IDB.get('clients',id).catch(()=>null);
-        const cSales = sales.filter(s=>s.clientId===id||(cl&&s.clientName===cl.name));
+        // Per id, sempre: il ripiego sul nome vale SOLO per le vendite scritte
+        // prima che clientId esistesse (s.clientId==null), non in aggiunta —
+        // altrimenti una vendita di un OMONIMO (clientId diverso, stesso nome)
+        // finiva anche nelle statistiche di questo cliente. Stessa classe di
+        // CRM-05b, sul pannello statistiche invece che sul profilo.
+        const cSales = sales.filter(s=>s.clientId===id||(s.clientId==null&&cl&&s.clientName===cl.name));
         const cOrders = orders.filter(o=>o.clientId===id);
         const totalSpent = cSales.reduce((a,s)=>a+(+s.amount||0),0);
         const lastSale = cSales.sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
