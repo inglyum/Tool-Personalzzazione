@@ -121,6 +121,14 @@ la disciplina resta la stessa — se uno di questi due fallisce da solo,
 riprovare la stessa suite in isolamento prima di trattarlo come una
 regressione vera.
 
+**Terza conferma** (verticale Multi-Tech BOM, release 1.6.0): anche
+`quoter3d-archivio` (FASE D, stesso schema: naviga via e torna → l'archivio
+c'è ancora) è stato visto fallire una volta nella regressione completa e
+passare pulito 7/7 alla ripetizione immediata sullo stesso build. Conferma
+che il flake non è specifico di un test né di IndexedDB — l'archivio qui è
+in `localStorage`, non IDB — ma del percorso generico «scrivi poi cambia/
+ricarica la vista» sotto Playwright in questo ambiente.
+
 Test di unità aggiunti in questo mandato: 125.
 
 ```

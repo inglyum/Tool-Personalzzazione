@@ -114,6 +114,12 @@ export const PRODUCT_FILES = [
   'redditivita.js',
   'previsioni.js',
   'production-model.js',
+  /* La distinta base di un prodotto: righe di materiale e di operazione,
+     riusabili da un ordine all'altro. Puro: non chiama InglyOperazioni né
+     InglyFabbisogno, produce solo dati nella forma che loro sanno leggere —
+     nessuna dipendenza di caricamento verso l'uno o l'altro. */
+  'product-bom.js',
+  'product-bom-store.js',
   'order-sales-service.js',
   'order-payments.js',
   'redditivita-tecnologia.js',

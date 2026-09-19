@@ -1404,6 +1404,8 @@ const Catalog={
               style="padding:9px 20px;background:var(--primary);color:#000;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-weight:800;width:180px">✏️ Modifica Prodotto</button>
             <button onclick="event.stopPropagation();Catalog.quickAddToQuote(${p.id})"
               style="padding:9px 20px;background:#22c55e;color:#fff;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-weight:700;width:180px">📋 Aggiungi al Quoter</button>
+            <button onclick="event.stopPropagation();Catalog.openBOM(${p.id})"
+              style="padding:7px 20px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:9px;cursor:pointer;font-size:11px;font-weight:700;width:180px">🧬 Distinta base</button>
             <div style="display:flex;gap:8px">
               <button onclick="event.stopPropagation();Catalog.quickEditPrice(${p.id},${sp},event)"
                 style="padding:6px 14px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">💶 Prezzo</button>
@@ -2697,6 +2699,161 @@ Genera ESATTAMENTE in questo formato:
       if(this._activeMarginFilter==='negative') return mg<=0;
       return true;
     });
+  },
+
+  /**
+   * Distinta base del prodotto (InglyProductBOM): materiali e operazioni
+   * riusabili da un ordine all'altro. Un prodotto semplice (una sola
+   * tecnologia, un solo materiale, come oggi) non ne ha bisogno — questo
+   * pannello è per chi vuole dichiarare "legno + laser + UV + assemblaggio"
+   * una volta sola. Non tocca il modale di modifica prodotto esistente:
+   * vive a parte, per non rischiare quel modulo già grande e delicato.
+   */
+  async openBOM(id){
+    const prod = await IDB.get('catalog', +id||id).catch(()=>null);
+    if(!prod){ if(typeof toast!=='undefined') toast('Prodotto non trovato','error'); return; }
+    if(typeof InglyProductBOMStore==='undefined'){ if(typeof toast!=='undefined') toast('Motore distinta base non disponibile','error'); return; }
+
+    const attuale = await InglyProductBOMStore.corrente(id).catch(()=>null);
+    this._bomProductId = id;
+    this._bomVersionePrecedente = attuale ? attuale.version : 0;
+    /* Le righe salvate portano `quantityPerPiece` (il nome che `crea()`
+       congela); il modulo qui lavora su bozze non ancora congelate, che
+       `InglyProductBOM.valida`/`crea` leggono come `quantity` — si
+       riallinea qui, un solo posto, invece di far convivere due nomi nel
+       resto del pannello. */
+    this._bomRighe = attuale ? attuale.righe.map(r=>r.type==='materiale'
+      ? Object.assign({}, r, { quantity: r.quantityPerPiece })
+      : Object.assign({}, r)) : [];
+    this._bomArticoli = await this._bomCaricaArticoli();
+    const escTitolo=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    document.getElementById('_bom-modal')?.remove();
+    const ov = document.createElement('div');
+    ov.id = '_bom-modal';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.onclick = e=>{ if(e.target===ov) ov.remove(); };
+    ov.innerHTML = `
+    <div style="background:var(--bg-card);border-radius:16px;width:min(620px,100%);max-height:90vh;overflow-y:auto;border:1px solid var(--border2)" onclick="event.stopPropagation()">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg-card);z-index:1">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:800">🧬 Distinta base — ${escTitolo(prod.name)||'Prodotto'}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${attuale?'Versione '+attuale.version+' salvata':'Nessuna distinta ancora — solo il materiale e la tecnologia singoli del catalogo'}</div>
+        </div>
+        <button onclick="document.getElementById('_bom-modal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+      </div>
+      <div style="padding:18px" id="bom-righe-wrap">${this._bomRigheHTML()}</div>
+      <div style="padding:0 18px 18px;display:flex;gap:8px">
+        <button onclick="Catalog._bomAggiungiRiga('materiale')" style="flex:1;padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:12px">+ Materiale</button>
+        <button onclick="Catalog._bomAggiungiRiga('operazione')" style="flex:1;padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:12px">+ Operazione</button>
+      </div>
+      <div style="padding:0 18px 18px;display:flex;gap:8px;border-top:1px solid var(--border);padding-top:14px">
+        <button onclick="document.getElementById('_bom-modal').remove()" style="flex:1;padding:10px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:13px">Chiudi</button>
+        <button onclick="Catalog._bomSalva()" style="flex:2;padding:10px;background:var(--primary);color:#000;border:none;border-radius:9px;cursor:pointer;font-size:13px;font-weight:800">💾 Salva distinta</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+  },
+
+  /** I quattro archivi che tengono un articolo (stesso elenco di
+      inventory-store.js): la distinta collega per store+id, non per nome. */
+  async _bomCaricaArticoli(){
+    const archivi = [['items','Articoli'],['materials','Materiali'],['components','Componenti'],['gadgets','Gadget']];
+    const tutti = [];
+    for(const [store,label] of archivi){
+      const righe = await IDB.getAll(store).catch(()=>[]);
+      righe.forEach(r=>{ if(r && r.id!=null) tutti.push({ store, id:r.id, nome:r.name||r.nome||String(r.id), gruppo:label }); });
+    }
+    return tutti;
+  },
+
+  _bomRigheHTML(){
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    if(!this._bomRighe.length) return '<div style="font-size:12px;color:var(--text-dim);text-align:center;padding:14px">Nessuna riga. Aggiungi un materiale o un\'operazione qui sotto.</div>';
+    return this._bomRighe.map((r,i)=>{
+      if(r.type==='materiale'){
+        const opzioni = (this._bomArticoli||[]).map(a=>{
+          const val = a.store+':'+a.id;
+          const sel = r.itemKey===val ? 'selected' : '';
+          return `<option value="${val}" ${sel}>${esc(a.nome)} (${a.gruppo})</option>`;
+        }).join('');
+        return `<div style="background:var(--bg-card2);border-radius:8px;padding:9px 11px;margin-bottom:7px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase">📦 Materiale</span>
+            <button onclick="Catalog._bomRimuoviRiga(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px">✕</button>
+          </div>
+          <select id="bom-r${i}-item" class="form-control" style="font-size:12px;margin-bottom:6px">
+            <option value="">— scegli articolo —</option>${opzioni}
+          </select>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <input id="bom-r${i}-qty" type="number" min="0" step="0.001" placeholder="quantità per pezzo" value="${r.quantity!=null?r.quantity:''}" class="form-control" style="font-size:12px">
+            <input id="bom-r${i}-scrap" type="number" min="0" step="1" placeholder="scarto %" value="${r.scrapPct!=null?r.scrapPct:''}" class="form-control" style="font-size:12px">
+          </div>
+        </div>`;
+      }
+      return `<div style="background:var(--bg-card2);border-radius:8px;padding:9px 11px;margin-bottom:7px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase">⚙️ Operazione</span>
+          <button onclick="Catalog._bomRimuoviRiga(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px">✕</button>
+        </div>
+        <input id="bom-r${i}-tech" placeholder="tecnologia (laser, uv, print3d, dtf, sublimation...)" value="${r.technology?esc(r.technology):''}" class="form-control" style="font-size:12px;margin-bottom:6px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <input id="bom-r${i}-setup" type="number" min="0" step="0.5" placeholder="avviamento (min)" value="${r.setupTime!=null?r.setupTime:''}" class="form-control" style="font-size:12px">
+          <input id="bom-r${i}-perpz" type="number" min="0" step="0.1" placeholder="min per pezzo" value="${r.timePerUnit!=null?r.timePerUnit:''}" class="form-control" style="font-size:12px">
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  _bomAggiungiRiga(tipo){
+    this._bomRighe = this._bomRighe || [];
+    this._bomLeggiDalDOM();
+    this._bomRighe.push(tipo==='materiale' ? { type:'materiale' } : { type:'operazione' });
+    const wrap = document.getElementById('bom-righe-wrap');
+    if(wrap) wrap.innerHTML = this._bomRigheHTML();
+  },
+
+  _bomRimuoviRiga(i){
+    this._bomLeggiDalDOM();
+    this._bomRighe.splice(i,1);
+    const wrap = document.getElementById('bom-righe-wrap');
+    if(wrap) wrap.innerHTML = this._bomRigheHTML();
+  },
+
+  /** Rilegge dal DOM lo stato corrente delle righe prima di aggiungerne o
+      toglierne una: senza, un valore appena digitato in una riga andrebbe
+      perso al ridisegno delle altre. */
+  _bomLeggiDalDOM(){
+    (this._bomRighe||[]).forEach((r,i)=>{
+      if(r.type==='materiale'){
+        const val = document.getElementById('bom-r'+i+'-item')?.value||'';
+        const parti = val.split(':');
+        r.itemStore = parti[0]||null;
+        r.itemId = parti[1]!=null?parti[1]:null;
+        r.itemKey = val||r.itemKey;
+        const nome = (this._bomArticoli||[]).find(a=>(a.store+':'+a.id)===val);
+        r.label = nome ? nome.nome : r.label;
+        const q = document.getElementById('bom-r'+i+'-qty')?.value;
+        if(q!=='' && q!=null) r.quantity = parseFloat(q);
+        const s = document.getElementById('bom-r'+i+'-scrap')?.value;
+        r.scrapPct = (s!=='' && s!=null) ? parseFloat(s) : null;
+      } else {
+        const t = document.getElementById('bom-r'+i+'-tech')?.value?.trim();
+        if(t) r.technology = t;
+        const st = document.getElementById('bom-r'+i+'-setup')?.value;
+        r.setupTime = (st!=='' && st!=null) ? parseFloat(st) : 0;
+        const pp = document.getElementById('bom-r'+i+'-perpz')?.value;
+        r.timePerUnit = (pp!=='' && pp!=null) ? parseFloat(pp) : 0;
+      }
+    });
+  },
+
+  async _bomSalva(){
+    this._bomLeggiDalDOM();
+    const esito = await InglyProductBOMStore.salvaNuovaVersione(this._bomProductId, this._bomRighe, {});
+    if(!esito.ok){ if(typeof toast!=='undefined') toast('Distinta non salvata: '+esito.motivo,'error'); return; }
+    if(typeof toast!=='undefined') toast('✅ Distinta base salvata (versione '+esito.bom.version+')','success');
+    document.getElementById('_bom-modal')?.remove();
   }
 };
 if(typeof Catalog!=="undefined")window.Catalog=Catalog; // immediate window export

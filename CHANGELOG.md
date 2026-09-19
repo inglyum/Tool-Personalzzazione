@@ -3,6 +3,52 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 1.6.0 — Multi-Tech BOM, rilascio 2: UI dal catalogo
+
+**Nuove funzionalità**
+- Pulsante «🧬 Distinta base» sulla card prodotto del Catalogo
+  (`Catalog.openBOM`): pannello a parte (non nel modale di modifica
+  prodotto, già grande e delicato) per dichiarare materiali — collegati a
+  un vero articolo di magazzino, mai testo libero — e operazioni
+  multi-tecnologia con avviamento e tempo per pezzo separati. Salvare crea
+  sempre una nuova versione; le versioni precedenti restano nel registro.
+
+**Difetto trovato e corretto scrivendo il pannello**: le righe bozza usano
+il nome di campo che `InglyProductBOM.valida`/`crea` si aspettano
+(`quantity`), le righe già salvate portano quello che `crea()` congela
+(`quantityPerPiece`) — senza riallinearli al caricamento di una distinta
+esistente, ogni salvataggio dopo il primo falliva la validazione in
+silenzio (l'utente vedeva un errore, ma non capiva perché una distinta già
+salvata non si potesse più modificare). Riallineato in un solo punto.
+
+**Test**: `tests/qa/distinta-base-prodotto.mjs` (15, browser reale).
+
+**Verificato**: 265 file sintassi, 2191/2191 unit, 88/88 suite browser QA,
+0 errori JS, nessuna regressione.
+
+## 1.5.0 — Multi-Tech BOM, rilascio 1: dominio e persistenza
+
+Primo rilascio del verticale Multi-Tech (Product → BOM → Routing → Cost
+Engine), scomposto in blocchi utilizzabili — vedi `docs/MULTI-TECH-BOM.md`.
+
+**Nuove funzionalità**
+- `src/product/product-bom.js` (`InglyProductBOM`) + `product-bom-store.js`:
+  distinta base di prodotto (materiali + operazioni), riusabile da un ordine
+  all'altro — oggi il catalogo dichiara una tecnologia e un materiale soli
+  per prodotto. Espande le proprie righe nella forma che
+  `material-requirement.js` e `InglyOperazioni` sanno già leggere, senza
+  ricalcolare né duplicare i loro conti. L'anatomia avviamento/tempo-per-
+  pezzo sulle operazioni impedisce di moltiplicare un avviamento per la
+  quantità dell'ordine (verificato a 100 pezzi contro 1 nei test).
+- Store IDB `product_bom` (v34, migrazione additiva).
+
+**Non ancora fatto, apposta**: nessuna UI, nessun collegamento a un ordine
+reale — dominio e persistenza prima del pulsante, come per Manutenzione.
+
+**Test**: `tests/product-bom.test.mjs` (24 unit).
+
+**Verificato**: 265 file sintassi, 2191/2191 unit, nessuna regressione.
+
 ## 1.4.0 — Qualità: uno scarto diventa una decisione
 
 **Nuove funzionalità**

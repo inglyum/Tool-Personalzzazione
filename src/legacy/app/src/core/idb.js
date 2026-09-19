@@ -2,7 +2,7 @@
 // === /src/core/idb.js ===
 const IDB = (function(){
   let db=null;
-  const DB='InglyMasterDB',VER=33; // v33: quality_ncr — registro delle non conformità (scarto/rilavorazione/deroga/reso), store nuovo e vuoto: nessun dato esistente cambia forma. // v32: cost_profiles — manodopera, spese generali e imballo del laboratorio. Tre store nuovi e vuoti: nessun record esistente viene letto, riscritto o cancellato. Servono al motore di costo, che sapeva gia' contarli e non aveva chi glieli passasse (overhead a zero in ogni preventivo, manodopera presa dal campo del modulo). // v31: inventory_ledger — registro append-only dei movimenti di magazzino (migrazione additiva: nuovo store vuoto, nessun dato esistente toccato) // v30: v10 archive+lab+workflow // v28: laser_resources store // v26: always ≥ browser version // v23: re-added legacy stores (ai_log,kpi_snap,kpi_cache,scanner_history,versions) // v22: legacy stores removed (kpi_cache,versions,scanner_history,ai_log,kpi_snap) // v21: stores 'orders','quotes','sales' deprecated (kept read-only, pipeline is now source of truth) // v20: store pipeline unificata store
+  const DB='InglyMasterDB',VER=34; // v34: product_bom — distinta base di prodotto (materiali+operazioni riusabili), store nuovo e vuoto. // v33: quality_ncr — registro delle non conformità (scarto/rilavorazione/deroga/reso), store nuovo e vuoto: nessun dato esistente cambia forma. // v32: cost_profiles — manodopera, spese generali e imballo del laboratorio. Tre store nuovi e vuoti: nessun record esistente viene letto, riscritto o cancellato. Servono al motore di costo, che sapeva gia' contarli e non aveva chi glieli passasse (overhead a zero in ogni preventivo, manodopera presa dal campo del modulo). // v31: inventory_ledger — registro append-only dei movimenti di magazzino (migrazione additiva: nuovo store vuoto, nessun dato esistente toccato) // v30: v10 archive+lab+workflow // v28: laser_resources store // v26: always ≥ browser version // v23: re-added legacy stores (ai_log,kpi_snap,kpi_cache,scanner_history,versions) // v22: legacy stores removed (kpi_cache,versions,scanner_history,ai_log,kpi_snap) // v21: stores 'orders','quotes','sales' deprecated (kept read-only, pipeline is now source of truth) // v20: store pipeline unificata store
   const STORES=[
     {n:'clients',k:'id'},{n:'sales',k:'id'},{n:'quotes',k:'id'},
     {n:'inventory',k:'id'},{n:'cashflow',k:'id'},{n:'projects',k:'id'},
@@ -26,6 +26,7 @@ const IDB = (function(){
     {n:'suppliers',k:'id'},
     {n:'supplier_orders',k:'id'}, // v18: Registro ordini fornitore
     {n:'quality_ncr',k:'id'}, // v33: registro non conformità
+    {n:'product_bom',k:'id'}, // v34: distinta base di prodotto
     {n:'ideas',k:'id'},        // Idee & Ispirazione        // Fornitori
     {n:'products',k:'id'},         // Prodotti extra
     // ── v56: unified modules ─────────────────────────────
