@@ -3,6 +3,50 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 1.3.0 — Procurement: ordine d'acquisto reale
+
+**Nuove funzionalità**
+- `src/product/purchase-order.js` (`InglyPurchaseOrder`) + `purchase-order-store.js`:
+  ordine d'acquisto, dal suggerimento di riordino (`InglyRiordino`) al
+  ricevimento. Il ricevimento passa i movimenti a `InglyInventory.registra`
+  (mai una seconda scrittura di giacenza) e ricalcola le statistiche del
+  fornitore dagli ordini realmente ricevuti.
+- `SuppliersManager` (Gestione Fornitori): barra di tab reale
+  («Lista mia»/«Scopri fornitori»/«Confronta»), modulo «🛒 Ordine» che crea un
+  ordine vero sul fornitore IDB mostrato in lista, registro ordini
+  («📦 Ordini», prima uno stub) con ricevimento e annullamento, tab
+  «📊 Confronta» con punteggio fornitore da ordini ricevuti — mai un prezzo
+  di mercato inventato.
+
+**Difetti corretti**
+- Le KPI «Ordini in Attesa» / «⚠️ In Ritardo» leggevano lo store IDB
+  `supplier_orders`, dichiarato dalla v18 e mai scritto da nessuna funzione:
+  sempre a zero, su ogni installazione. Ora scritte da un ordine vero.
+- `SuppliersManager._renderConfronta` era chiamata (`this._tab==='confronta'`)
+  ma mai definita — un crash reale, mai osservato perché nessun pulsante
+  impostava mai quel tab (l'header non aveva una barra di schede). La stessa
+  assenza rendeva irraggiungibile anche «Scopri Fornitori», una vista
+  completa e funzionante.
+- `SuppliersManager.openOrders()` era un `toast('...in arrivo')` dichiarato.
+- Il pulsante «🛒 Ordine» chiamava `SupplierIntelligence`, che tiene i
+  fornitori in un `localStorage` diverso da quello che la lista mostra (IDB
+  `suppliers`) — stessa classe di CRM-05b su un'entità diversa: un id
+  coincidente per caso poteva registrare l'ordine sul fornitore sbagliato, o
+  aprire silenziosamente «nuovo fornitore» e creare un record fantasma con
+  lo stesso id in un'altra memoria.
+
+**Trovato, documentato, non corretto in questo giro**
+- Unificare `SupplierIntelligence` (localStorage) e IDB `suppliers` in
+  un'unica identità fornitore — lo stesso lavoro che CRM-04 ha fatto per i
+  clienti, su un'altra entità. Tracciato in `docs/PROCUREMENT.md`.
+
+**Test**
+- `tests/purchase-order.test.mjs` (33 unit)
+- `tests/qa/ordine-fornitore.mjs` (22, browser reale)
+
+**Verificato**: 261 file sintassi, 2143/2143 unit, 85/85 suite browser QA,
+0 errori JS, nessuna regressione.
+
 ## 1.2.0 — CRM Customer 360 (CRM-15 storico economico + CRM-17 timeline)
 
 **Nuove funzionalità**

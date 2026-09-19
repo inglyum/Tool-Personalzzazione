@@ -145,6 +145,11 @@ export const PRODUCT_FILES = [
   /* Quando ricomprare, calcolato dai movimenti invece che scritto a mano.
      Puro: legge un registro che riceve, non lo va a prendere. */
   'inventory-riordino.js',
+  /* L'ordine d'acquisto: dal suggerimento di riordino alla giacenza che
+     cresce. Puro, poi la metà che parla con IndexedDB — stesso schema del
+     registro di magazzino, di cui `ricevi()` usa i movimenti. */
+  'purchase-order.js',
+  'purchase-order-store.js',
   'tema.js',
   'tema-view.js',
   'cliente-integrita.js',

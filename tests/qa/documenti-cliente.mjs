@@ -101,8 +101,14 @@ const documenti = await page.evaluate(async () => {
     economic: { revenueNet: 150, revenueGross: 183, productionCost: 60 },
     items: [{ desc: 'Targa', qty: 2, price: 75, total: 150 }], createdAt: Date.now(),
   });
+  /* Due clienti OMONIMI, id diversi: la ricevuta deve leggere i dati di
+     contatto del cliente giusto (clientId), non del primo che condivide il
+     nome — stessa classe di CRM-05b, sul documento fiscale invece che sul
+     profilo cliente. */
+  await window.IDB.put('clients', { id: 995001, name: 'Mario Rossi', email: 'omonimo@sbagliato.it', address: 'Via Sbagliata 2' });
+  await window.IDB.put('clients', { id: 995002, name: 'Mario Rossi', email: 'giusto@mariorossi.it', address: 'Via Corretta 1' });
   await window.IDB.put('sales', {
-    id: 990002, clientName: 'Mario Rossi', desc: 'Targa laser', amount: 150,
+    id: 990002, clientId: 995002, clientName: 'Mario Rossi', desc: 'Targa laser', amount: 150,
     netAmount: 150, grossAmount: 183, totalCost: 60, margine: 90, marginePct: 60,
     date: new Date().toISOString().slice(0, 10), status: 'pagato', channel: 'Diretto',
   });
@@ -179,6 +185,17 @@ for (const nome of nomi) {
     const trovate = vietate.filter((v) => testo.includes(v));
     dico(etichetta + ' — nessun dato interno (' + (trovate.join(', ') || 'nessuno') + ')',
       trovate.length === 0);
+  }
+
+  /* La vendita 990002 appartiene al cliente 995001, non al suo omonimo
+     995002: la ricevuta deve leggere l'email/indirizzo del cliente giusto,
+     mai quello dell'omonimo — un id coincidente per caso, o una ricerca per
+     nome, li scambierebbe su un documento fiscale vero. */
+  if (nome === 'ricevuta automatica') {
+    dico(etichetta + ' — mostra i dati del cliente giusto (clientId), non del primo omonimo',
+      testo.includes('giusto@mariorossi.it'));
+    dico(etichetta + ' — NON mostra i dati dell\'omonimo sbagliato',
+      !testo.includes('omonimo@sbagliato.it') && !testo.includes('via sbagliata'));
   }
 }
 

@@ -510,7 +510,13 @@ const AutoInvoicePDF = {
     if(typeof window.jspdf==='undefined') { if(typeof toast!=='undefined') toast('jsPDF non disponibile','error'); return; }
 
     const cp     = (typeof CompanyProfile!=='undefined') ? CompanyProfile.get() : {};
-    const client = (await IDB.getAll('clients').catch(()=>[])).find(c=>c.name===sale.clientName);
+    // Per id quando la vendita lo porta (CRM-04 lo garantisce da tempo): due
+    // clienti omonimi non devono scambiarsi email/indirizzo su un documento
+    // fiscale vero. Il nome resta un ripiego dichiarato per le vendite scritte
+    // prima che clientId esistesse — mai la prima scelta.
+    const clientiTutti = await IDB.getAll('clients').catch(()=>[]);
+    const client = (sale.clientId != null ? clientiTutti.find(c=>String(c.id)===String(sale.clientId)) : null)
+      || clientiTutti.find(c=>c.name===sale.clientName);
     const { jsPDF } = window.jspdf;
     const doc    = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
     const amount = +(sale.amount||0);

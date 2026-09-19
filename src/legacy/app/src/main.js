@@ -198,6 +198,11 @@ const SuppliersManager = {
         </div>
       </div>
       <div class="grid-4 mb-16">${kpiHtml}</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button onclick="SuppliersManager._tab='mylist';SuppliersManager.render()" style="padding:6px 14px;background:var(--primary-dim);border:1.5px solid var(--primary);border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;color:var(--primary)">📋 Lista mia</button>
+        <button onclick="SuppliersManager._tab='scopri';SuppliersManager.render()" style="padding:6px 14px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text-muted)">🌍 Scopri fornitori</button>
+        <button onclick="SuppliersManager._tab='confronta';SuppliersManager.render()" style="padding:6px 14px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text-muted)">📊 Confronta</button>
+      </div>
       <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
         <div style="flex:1;min-width:200px;position:relative">
           <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-dim);font-size:12px"></i>
@@ -279,62 +284,86 @@ const SuppliersManager = {
         ${s.url?`<a href="${s.url}" target="_blank" rel="noopener" style="padding:4px 10px;background:var(--primary-dim);color:var(--primary);border:1px solid var(--primary-dim);border-radius:6px;font-size:11px;font-weight:700;text-decoration:none">🌐 Sito</a>`:''}
         <button onclick="SupplierIntelligence._openModal(${s.id})" style="padding:4px 8px;background:var(--bg-card);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:11px;color:var(--text-muted)">✏️ Modifica</button>
         <button onclick="SupplierIntelligence._contact(${s.id})" style="padding:4px 8px;background:#25D36615;border:1px solid #25D36630;border-radius:6px;cursor:pointer;font-size:11px;color:#25D366">💬 WA</button>
-        <button onclick="SupplierIntelligence._recordOrder(${s.id})" style="padding:4px 8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:6px;cursor:pointer;font-size:11px;color:#f59e0b">🛒 Ordine</button>
+        <button onclick="SuppliersManager._nuovoOrdine(${s.id})" style="padding:4px 8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:6px;cursor:pointer;font-size:11px;color:#f59e0b">🛒 Ordine</button>
       </div>
     </div>`;
   },
 
-  // ► Log an order against a supplier (spending tracker)
-  _recordOrder(id) {
+  // ► Ordine d'acquisto reale: dominio InglyPurchaseOrder + persistenza in
+  // supplier_orders (IDB) — non più un totale a mano sul fornitore sbagliato.
+  // Vedi PROCUREMENT.md per il perché: la vecchia _recordOrder chiamava
+  // SupplierIntelligence, che tiene i fornitori in un localStorage separato
+  // da quello che questa lista mostra (IDB `suppliers`) — un id numerico
+  // uguale per coincidenza poteva salvare l'ordine su un fornitore diverso
+  // da quello su cui si era cliccato, o su nessuno.
+  _slugArticolo(s) {
+    return String(s||'articolo').trim().toLowerCase()
+      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'articolo';
+  },
+
+  async _nuovoOrdine(supplierId) {
+    const s = await IDB.get('suppliers', supplierId).catch(()=>null);
+    document.getElementById('po-neworder-modal')?.remove();
     const modal = document.createElement('div');
+    modal.id = 'po-neworder-modal';
     modal.style.cssText='position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center';
     modal.onclick=e=>{if(e.target===modal)modal.remove();};
     modal.innerHTML=`
-    <div style="background:var(--bg-card);border-radius:12px;width:min(360px,95vw);padding:20px;border:1px solid var(--border);box-shadow:0 24px 60px rgba(0,0,0,.5)">
-      <div style="font-size:14px;font-weight:800;margin-bottom:14px">🛒 Registra Ordine Fornitore</div>
+    <div style="background:var(--bg-card);border-radius:12px;width:min(400px,95vw);padding:20px;border:1px solid var(--border);box-shadow:0 24px 60px rgba(0,0,0,.5)">
+      <div style="font-size:14px;font-weight:800;margin-bottom:4px">🛒 Nuovo ordine — ${s?s.name:'fornitore'}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">L'ordine resta «in attesa» finché non registri il ricevimento in 📦 Ordini.</div>
       <div style="margin-bottom:10px">
-        <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Importo speso (€)</label>
-        <input id="so-amount" class="form-control" type="number" step="0.01" placeholder="0.00" style="font-size:13px">
+        <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Articolo *</label>
+        <input id="po-item" class="form-control" placeholder="Es. MDF 3mm 60x90" style="font-size:13px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Quantità *</label>
+          <input id="po-qty" class="form-control" type="number" step="0.01" min="0" style="font-size:13px"></div>
+        <div><label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Costo unitario (€)</label>
+          <input id="po-cost" class="form-control" type="number" step="0.01" min="0" placeholder="opzionale" style="font-size:13px"></div>
       </div>
       <div style="margin-bottom:10px">
-        <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Consegna attesa (giorni)</label>
-        <input id="so-days" class="form-control" type="number" value="3" min="1" style="font-size:13px">
+        <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Consegna attesa il</label>
+        <input id="po-date" class="form-control" type="date" style="font-size:13px">
       </div>
       <div style="margin-bottom:14px">
         <label style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Note (opzionale)</label>
-        <input id="so-notes" class="form-control" placeholder="Es. MDF 3mm x 20 fogli" style="font-size:12px">
+        <input id="po-notes" class="form-control" placeholder="Es. 20 fogli, colore naturale" style="font-size:12px">
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:9px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px">Annulla</button>
-        <button onclick="SupplierIntelligence._saveOrder(${id})" style="flex:1;padding:9px;background:var(--primary);color:#000;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">✅ Salva</button>
+        <button onclick="SuppliersManager._salvaOrdine(${supplierId})" style="flex:1;padding:9px;background:var(--primary);color:#000;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">✅ Crea ordine</button>
       </div>
     </div>`;
     document.body.appendChild(modal);
-    document.getElementById('so-amount')?.focus();
+    document.getElementById('po-item')?.focus();
   },
 
-  _saveOrder(id) {
-    const amount = parseFloat(document.getElementById('so-amount')?.value||0);
-    const days   = parseInt(document.getElementById('so-days')?.value||3);
-    if(!amount){ toast('Inserisci l\'importo','warning'); return; }
-    const all = this.getAll();
-    const idx = all.findIndex(s=>s.id===id);
-    if(idx<0) return;
-    all[idx].totalSpent   = (all[idx].totalSpent||0) + amount;
-    all[idx].orderCount   = (all[idx].orderCount||0) + 1;
-    all[idx].lastOrder    = new Date().toISOString();
-    all[idx].avgDeliveryDays = days;
-    // Compute avg days between orders
-    if(all[idx].orderCount > 1) {
-      // simple rolling: use a stored first-order date
-      if(!all[idx]._firstOrder) all[idx]._firstOrder = new Date(Date.now()-30*24*60*60*1000).toISOString();
-      const daysSinceFirst = Math.floor((Date.now()-new Date(all[idx]._firstOrder).getTime())/(1000*60*60*24));
-      all[idx].avgDaysBetween = Math.round(daysSinceFirst / (all[idx].orderCount-1));
-    }
-    this.save(all);
-    document.querySelector('[style*="fixed"][style*="align-items:center"]')?.remove();
+  async _salvaOrdine(supplierId) {
+    const nome = document.getElementById('po-item')?.value?.trim();
+    const qty = parseFloat(document.getElementById('po-qty')?.value||0);
+    const costo = document.getElementById('po-cost')?.value;
+    const data = document.getElementById('po-date')?.value;
+    const note = document.getElementById('po-notes')?.value?.trim();
+    if(!nome){ toast('Inserisci l\'articolo','warning'); return; }
+    if(!(qty>0)){ toast('Inserisci una quantità valida','warning'); return; }
+    if(typeof InglyPurchaseOrderStore==='undefined'){ toast('Motore ordini non disponibile','error'); return; }
+
+    // Il nome si rilegge dal fornitore vero (IDB `suppliers`), non da un
+    // parametro passato per l'onclick: interpolare JSON.stringify() dentro
+    // un attributo delimitato dalle stesse doppie virgolette troncava
+    // l'handler ("Unexpected end of input") — misurato in browser.
+    const fornitore = await IDB.get('suppliers', supplierId).catch(()=>null);
+    const esito = await InglyPurchaseOrderStore.crea({
+      supplierId, supplierName: fornitore&&fornitore.name||null,
+      expectedDate: data||null, note: note||null,
+      righe: [{ itemId: this._slugArticolo(nome), itemName: nome, quantity: qty,
+        unitCost: costo!==''&&costo!=null ? parseFloat(costo) : null }],
+    });
+    if(!esito.ok){ toast('Ordine non salvato: '+esito.motivo,'error'); return; }
+    document.getElementById('po-neworder-modal')?.remove();
+    toast(`✅ Ordine registrato — «${nome}» × ${qty}`,'success');
     this.render();
-    toast(`✅ Ordine di €${amount} registrato per ${all[idx].name}!`,'success');
   },
 
 
@@ -467,8 +496,80 @@ const SuppliersManager = {
     else if(typeof toast!=='undefined') toast('Apri Fornitori per modificare','info');
   },
 
-  openOrders(id){
-    if(typeof toast!=='undefined') toast('Funzione ordini fornitore in arrivo','info');
+  async openOrders() {
+    if(typeof InglyPurchaseOrderStore==='undefined'){ toast('Motore ordini non disponibile','error'); return; }
+    const [ordini, fornitori] = await Promise.all([
+      InglyPurchaseOrderStore.tutti(),
+      IDB.getAll('suppliers').catch(()=>[]),
+    ]);
+    const nomeDi = {}; fornitori.forEach(f=>{ nomeDi[String(f.id)] = f.name; });
+    const oggi = new Date().toISOString().slice(0,10);
+    const ordinati = ordini.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+
+    const STATI_COLORI = { attesa:'#f59e0b', ricevuto_parziale:'#3b82f6', ricevuto:'#22c55e', annullato:'#64748b' };
+    const STATI_LABEL = { attesa:'In attesa', ricevuto_parziale:'Ricevuto parzialmente', ricevuto:'Ricevuto', annullato:'Annullato' };
+
+    const modal = document.createElement('div');
+    modal.id = 'po-registry-modal';
+    modal.style.cssText='position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    modal.onclick=e=>{if(e.target===modal)modal.remove();};
+    const righeHtml = ordinati.length ? ordinati.map(o=>{
+      const scaduto = (typeof InglyPurchaseOrder!=='undefined') && InglyPurchaseOrder.scaduto(o, oggi);
+      const aperto = o.status==='attesa' || o.status==='ricevuto_parziale';
+      const riepilogoRighe = o.righe.map(r=>`${r.itemName||r.itemId} · ${r.received||0}/${r.quantity}${r.unit?(' '+r.unit):''}`).join(', ');
+      return `<div style="padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;background:var(--bg-card2)">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+          <div>
+            <div style="font-size:12px;font-weight:800">${nomeDi[String(o.supplierId)]||o.supplierName||'Fornitore '+o.supplierId}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${riepilogoRighe}</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:3px">Creato ${new Date(o.createdAt).toLocaleDateString('it-IT')}${o.expectedDate?' · atteso '+o.expectedDate:''}${o.totaleNoto?' · €'+o.totale.toFixed(2):''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${STATI_COLORI[o.status]}22;color:${STATI_COLORI[o.status]}">${STATI_LABEL[o.status]||o.status}</span>
+            ${scaduto?'<div style="font-size:10px;color:#ef4444;font-weight:700;margin-top:3px">⚠️ In ritardo</div>':''}
+          </div>
+        </div>
+        ${aperto?`<div style="display:flex;gap:6px;margin-top:8px">
+          <button onclick="SuppliersManager._riceviTuttoOrdine('${o.id}')" style="flex:1;padding:6px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">✅ Segna ricevuto</button>
+          <button onclick="SuppliersManager._annullaOrdineUI('${o.id}')" style="padding:6px 10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;cursor:pointer;font-size:11px;color:#ef4444">✖ Annulla</button>
+        </div>`:''}
+      </div>`;
+    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text-dim);font-size:12px">Nessun ordine registrato. Usa «🛒 Ordine» su un fornitore per crearne uno.</div>';
+
+    modal.innerHTML = `<div style="background:var(--bg-card);border-radius:14px;width:min(560px,100%);max-height:85vh;overflow-y:auto;border:1px solid var(--border2)" onclick="event.stopPropagation()">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg-card)">
+        <div style="font-size:15px;font-weight:800;flex:1">📦 Registro ordini fornitore</div>
+        <button onclick="document.getElementById('po-registry-modal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+      </div>
+      <div style="padding:16px 18px">${righeHtml}</div>
+    </div>`;
+    document.body.appendChild(modal);
+  },
+
+  async _riceviTuttoOrdine(id) {
+    if(typeof InglyPurchaseOrderStore==='undefined') return;
+    const ordini = await InglyPurchaseOrderStore.tutti();
+    const ordine = ordini.find(o=>String(o.id)===String(id));
+    if(!ordine) return;
+    const righe = ordine.righe.map(r=>({ itemId: r.itemId,
+      quantity: (typeof InglyPurchaseOrder!=='undefined') ? InglyPurchaseOrder.quantitaResidua(r) : (r.quantity-(r.received||0)) }));
+    const esito = await InglyPurchaseOrderStore.ricevi(id, { righe });
+    if(!esito.ok){ toast('Ricevimento non registrato: '+esito.motivo,'error'); return; }
+    toast('✅ Ricevimento registrato, giacenza aggiornata','success');
+    document.getElementById('po-registry-modal')?.remove();
+    this.openOrders();
+    this.render();
+  },
+
+  async _annullaOrdineUI(id) {
+    if(!confirm('Annullare questo ordine?')) return;
+    if(typeof InglyPurchaseOrderStore==='undefined') return;
+    const esito = await InglyPurchaseOrderStore.annulla(id, 'annullato dall\'utente');
+    if(!esito.ok){ toast('Non annullato: '+esito.motivo,'error'); return; }
+    toast('Ordine annullato','info');
+    document.getElementById('po-registry-modal')?.remove();
+    this.openOrders();
+    this.render();
   },
 
   exportCSV(){
@@ -586,6 +687,59 @@ const SuppliersManager = {
     });
     H+='</div>';
     el.innerHTML=H;
+  },
+
+  /**
+   * Confronto fornitori: non un listino prezzi (nessuna storia prezzi
+   * multi-fornitore esiste in questo progetto) — quello che gli ordini
+   * ricevuti davvero dicono su puntualità e tempi di consegna. Un fornitore
+   * con meno di due ordini ricevuti resta "dati insufficienti", non sparisce
+   * e non riceve un punteggio inventato (`InglyPurchaseOrder.confronta`).
+   */
+  async _renderConfronta(el) {
+    if(typeof InglyPurchaseOrderStore==='undefined' || typeof InglyPurchaseOrder==='undefined') {
+      el.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-dim)">Motore ordini non disponibile.</div>';
+      return;
+    }
+    const [fornitori, ordini] = await Promise.all([
+      IDB.getAll('suppliers').catch(()=>[]),
+      InglyPurchaseOrderStore.tutti(),
+    ]);
+    const ordiniPerFornitore = {};
+    ordini.forEach(o=>{ const k=String(o.supplierId); (ordiniPerFornitore[k]=ordiniPerFornitore[k]||[]).push(o); });
+    const esito = InglyPurchaseOrder.confronta(fornitori.map(f=>({id:f.id,name:f.name})), ordiniPerFornitore);
+
+    const righeHtml = esito.righe.length ? esito.righe.map(r=>{
+      const p = r.punteggio;
+      if(!p.calcolabile) {
+        return `<tr>
+          <td style="padding:9px 10px;font-weight:700">${r.fornitoreName||r.fornitoreId}</td>
+          <td colspan="4" style="padding:9px 10px;color:var(--text-dim);font-size:11px;font-style:italic">Dati insufficienti — ${p.motivo}</td>
+        </tr>`;
+      }
+      return `<tr>
+        <td style="padding:9px 10px;font-weight:700">${r.fornitoreName||r.fornitoreId}</td>
+        <td style="padding:9px 10px;text-align:center">${p.numeroOrdiniRicevuti}</td>
+        <td style="padding:9px 10px;text-align:center">${p.puntualita!=null?Math.round(p.puntualita*100)+'%':'N/D'}</td>
+        <td style="padding:9px 10px;text-align:center">${p.tempoConsegnaMedioGiorni!=null?Math.round(p.tempoConsegnaMedioGiorni)+'gg':'N/D'}</td>
+        <td style="padding:9px 10px;text-align:right">€${p.spesaTotale.toFixed(2)}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text-dim)">Nessun fornitore registrato.</td></tr>`;
+
+    el.innerHTML = `<div style="padding:14px 18px;max-width:1000px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div><div style="font-size:18px;font-weight:900">📊 Confronto fornitori</div>
+        <div style="font-size:11px;color:var(--text-muted)">Solo da ordini ricevuti davvero — ${esito.confrontabili} confrontabili, ${esito.dataInsufficienti} con dati insufficienti</div></div>
+        <button onclick="SuppliersManager._tab='mylist';SuppliersManager.render()" style="padding:7px 14px;background:var(--bg-card2);border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:12px;color:var(--text-muted)">← Lista mia</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <thead><tr style="background:var(--bg-card2);text-align:left;font-size:10px;text-transform:uppercase;color:var(--text-muted)">
+          <th style="padding:8px 10px">Fornitore</th><th style="padding:8px 10px;text-align:center">Ordini ricevuti</th>
+          <th style="padding:8px 10px;text-align:center">Puntualità</th><th style="padding:8px 10px;text-align:center">Consegna media</th>
+          <th style="padding:8px 10px;text-align:right">Spesa totale</th></tr></thead>
+        <tbody>${righeHtml}</tbody>
+      </table>
+    </div>`;
   },
 
   async _addForn(btn) {
