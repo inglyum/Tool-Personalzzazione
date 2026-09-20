@@ -963,14 +963,15 @@ const GestioneOrdini = {
     if (!E || !E.pannelloConsuntivo) { n.innerHTML = ''; return; }
     const A = window.InglyActualCost;
     try {
-      const [reale, spese] = await Promise.all([
+      const [reale, spese, bomCosto] = await Promise.all([
         A && A.perOrdine ? A.perOrdine(o.id, o.quoteId).catch(() => ({ registrato: false })) : Promise.resolve({ registrato: false }),
         E.vociRegistrate ? E.vociRegistrate(o.id).catch(() => ({})) : Promise.resolve({}),
+        window.InglyProductBOMStore ? window.InglyProductBOMStore.costoDaOrdine(o).catch(() => null) : Promise.resolve(null),
       ]);
       /* Il nodo può essere sparito nel frattempo: chi chiude il modale mentre
          la lettura è in volo non deve vedere un errore in console. */
       const vivo = document.getElementById('go-consuntivo');
-      if (vivo) vivo.innerHTML = E.pannelloConsuntivo(o, reale, spese);
+      if (vivo) vivo.innerHTML = E.pannelloConsuntivo(o, reale, spese, bomCosto);
     } catch (e) {
       if (window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('consuntivo ordine', e);
     }
@@ -1137,7 +1138,16 @@ const GestioneOrdini = {
     const OPZ = window.InglyOperazioni;
     let routing = OPZ ? OPZ.leggi(order) : [];
     if(OPZ && !routing.length){
-      const costruito = OPZ.costruisciDaOrdine(order);
+      /* Se l'ordine ha una sola riga collegata a un prodotto con distinta
+         base (Multi-Tech BOM), il routing viene da lì — una operazione per
+         lavorazione dichiarata — non dedotto dalla singola tecnologia
+         dell'ordine. Stessa decisione, stessa funzione, usata anche dalla
+         transizione automatica a produzione (WorkflowSync): mai due copie
+         della stessa logica in due patch diverse. */
+      let costruito = window.InglyProductBOMStore
+        ? await window.InglyProductBOMStore.routingDaOrdine(order).catch(()=>null)
+        : null;
+      if(!costruito) costruito = OPZ.costruisciDaOrdine(order);
       if(costruito.create && costruito.operations.length){
         routing = costruito.operations;
         /* Il routing appena dedotto si scrive subito: senza, sparirebbe alla
@@ -1150,6 +1160,13 @@ const GestioneOrdini = {
     }
     const ncrs = window.InglyQualityNCRStore ? await window.InglyQualityNCRStore.perOrdine(orderId).catch(()=>[]) : [];
     const qualitaHTML = this._qualitaHTML(orderId, routing, ncrs, _esc);
+
+    /* Materiali: il fabbisogno dalla distinta base, se l'ordine ne ha una
+       collegata — quanto serve e quanto c'è oggi sullo scaffale. Un ordine
+       senza distinta non mostra questa sezione: non è una regressione, è la
+       stessa applicabilità del routing e del costo. */
+    const fabbisogno = window.InglyProductBOMStore ? await window.InglyProductBOMStore.fabbisognoDaOrdine(order).catch(()=>null) : null;
+    const materialiHTML = this._materialiHTML(fabbisogno, _esc);
 
     const ov = document.createElement('div');
     ov.id = '_prod-panel';
@@ -1221,6 +1238,9 @@ const GestioneOrdini = {
           </div>
         </div>
 
+        <!-- Materiali necessari (distinta base) -->
+        <div id="pp-materiali">${materialiHTML}</div>
+
         <!-- Qualità e non conformità -->
         <div id="pp-qualita">${qualitaHTML}</div>
 
@@ -1279,6 +1299,29 @@ const GestioneOrdini = {
    * disposizione. Non ricalcola niente che il motore già sappia — legge
    * `InglyOperazioni.qualita()` per operazione e mostra quello che c'è.
    */
+  /** Il fabbisogno materiali dalla distinta base, se l'ordine ne ha una
+      collegata (`InglyProductBOMStore.fabbisognoDaOrdine`). Mostra quanto
+      serve e quanto c'è oggi sullo scaffale — non impegna niente, non
+      scrive niente: è una lettura. Un ordine senza distinta applicabile non
+      mostra questa sezione, invariato rispetto a prima di questo rilascio. */
+  _materialiHTML(fabbisogno, _esc) {
+    if(!fabbisogno || !fabbisogno.righe || !fabbisogno.righe.length) return '';
+    const righe = fabbisogno.righe.map(r=>{
+      const nota = r.sufficiente===false
+        ? `<span style="color:#ef4444;font-weight:700">manca ${_esc((r.quantity-r.giacenza).toFixed ? (r.quantity-r.giacenza).toFixed(2) : (r.quantity-r.giacenza))} ${_esc(r.unit||'')}</span>`
+        : (r.sufficiente===true ? `<span style="color:#22c55e">disponibile</span>` : `<span style="color:var(--text-dim)">giacenza N/D</span>`);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-card2);border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:11px">
+        <div>${_esc(r.label||r.itemKey)} — <b>${_esc(r.quantity)}</b> ${_esc(r.unit||'')}</div>
+        <div>${nota}</div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:2px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">🧱 Materiali necessari (dalla distinta base)</div>
+      ${righe}
+      <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Quanto serve per questo ordine e quanto c'è oggi — non tiene conto degli altri ordini aperti che lo impegnano già.</div>
+    </div>`;
+  },
+
   _qualitaHTML(orderId, routing, ncrs, _esc) {
     const OPZ = window.InglyOperazioni;
     if(!OPZ) return '';

@@ -120,6 +120,10 @@ export const PRODUCT_FILES = [
      nessuna dipendenza di caricamento verso l'uno o l'altro. */
   'product-bom.js',
   'product-bom-store.js',
+  /* Il costo aggregato di una distinta multi-tecnologia: legge le righe di
+     product-bom.js (dopo di lui), non tocca InglyCostEngine né i suoi
+     profili — riceve tariffe già risolte da chi orchestra. */
+  'bom-cost.js',
   'order-sales-service.js',
   'order-payments.js',
   'redditivita-tecnologia.js',

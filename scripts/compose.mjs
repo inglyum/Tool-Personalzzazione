@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { build } from './build.mjs';
 import { designSystemCss, adminDesignSystemCss } from '../src/design-system/index.mjs';
@@ -132,10 +133,45 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
   };
 }
 
+/** Le informazioni di release: un'unica sorgente di verità, letta da
+    `package.json` e da git al momento del build, mai inventata e mai
+    duplicata altrove. `RELEASES.json` (tracciato in git, alla radice del
+    repository) porta lo stato di test/QA/blocker dichiarato dall'ultima
+    `npm run release-artifacts` per questa versione — se manca (build
+    locale intermedia, mai ancora registrata), i campi restano `null`: N/D,
+    mai un falso «PASS».
+
+    `productArtifact`/`adminArtifact` sono sempre i percorsi «vivi»
+    (`dist/INGLY-OS.html`/`dist/INGLY-CLOUD-ADMIN.html`): è quello che questo
+    stesso build sta scrivendo, non il percorso versionato che
+    `snapshot-release.mjs` scrive altrove (`dist/releases/<versione>/...`,
+    una copia derivata, mai la fonte). Leggerli da `RELEASES.json` come
+    ripiego li avrebbe fatti puntare al file sbagliato non appena una
+    release fosse stata registrata. */
+function leggiReleaseInfo() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const git = (cmd) => { try { return execSync(cmd, { cwd: ROOT }).toString().trim(); } catch (e) { return null; } };
+  const releasesPath = path.join(ROOT, 'RELEASES.json');
+  const releases = fs.existsSync(releasesPath) ? JSON.parse(fs.readFileSync(releasesPath, 'utf8')) : [];
+  const voce = releases.find((r) => r.version === pkg.version) || {};
+  return {
+    version: pkg.version,
+    commit: git('git rev-parse HEAD'),
+    branch: git('git rev-parse --abbrev-ref HEAD'),
+    buildDate: new Date().toISOString(),
+    productArtifact: 'dist/INGLY-OS.html',
+    adminArtifact: 'dist/INGLY-CLOUD-ADMIN.html',
+    tests: voce.tests || null,
+    browserQA: voce.browserQA || null,
+    knownBlockers: voce.knownBlockers || null,
+  };
+}
+
 export function composeInglyCloudAdmin({ srcDir = 'src/admin/legacy' } = {}) {
   const manifest = JSON.parse(fs.readFileSync(path.join(srcDir, 'manifest.json'), 'utf8'));
   const read = (f) => fs.readFileSync(path.join(srcDir, f), 'utf8');
   const overrides = {};
+  const releaseInfo = leggiReleaseInfo();
 
   for (const part of manifest.parts) {
     if (part.type !== 'style' || !part.file) continue;
@@ -152,11 +188,11 @@ export function composeInglyCloudAdmin({ srcDir = 'src/admin/legacy' } = {}) {
   }
 
   overrides[ADMIN_SECURITY_HOST] = adminAuthJs(read(ADMIN_SECURITY_HOST));
-  overrides[ADMIN_SHELL_HOST] = adminShellJs(read(ADMIN_SHELL_HOST));
+  overrides[ADMIN_SHELL_HOST] = adminShellJs(read(ADMIN_SHELL_HOST), releaseInfo);
 
   let { html } = build({ srcDir, overrides });
   for (const re of [...DEAD_ICON_CDNS, ...EXTERNAL_FONT_TAGS]) html = html.replace(re, '');
-  return { html, manifest };
+  return { html, manifest, releaseInfo };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

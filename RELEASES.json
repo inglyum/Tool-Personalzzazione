@@ -1,0 +1,16 @@
+[
+  {
+    "version": "2.1.0",
+    "commit": "c6ac79454c163c288564b6c4d8b0aba5c7d92658",
+    "branch": "claude/ingly-personalization-repo-ekvc0z",
+    "buildDate": "2026-09-20T16:58:15.561Z",
+    "product": "dist/releases/2.1.0/INGLY-OS-2.1.0.html",
+    "admin": "dist/releases/2.1.0/INGLY-CLOUD-ADMIN-2.1.0.html",
+    "productBytes": 11792298,
+    "adminBytes": 1007554,
+    "tests": "PASS",
+    "browserQA": "PASS",
+    "knownBlockers": null,
+    "migrationStatus": "additiva — nessun dato esistente rimosso o incompatibile"
+  }
+]

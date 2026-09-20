@@ -3,6 +3,224 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.1.0 — Release management: versione tracciabile in Admin, artefatti versionati
+
+**Trovato verificando l'architettura reale prima di scrivere codice**:
+nessun punto della console Admin, né del prodotto, leggeva mai la versione
+di INGLY OS — il bundle finale è un file HTML statico, non un'app Node con
+accesso a `package.json`. Chi amministrava l'installazione non aveva modo
+di sapere quale release stesse gestendo. Nessun meccanismo equivalente
+esisteva già (verificato con `grep` su "release"/"version"/"build metadata"
+nell'intero `src/`): questo non sostituisce né duplica niente.
+
+**Una sola source of truth**, non un sistema parallelo:
+- `RELEASES.json` (tracciato in git, alla radice del repository) è l'unico
+  registro di versione/commit/branch/build/artefatti/stato test/QA/blocker
+  per ogni release. `scripts/snapshot-release.mjs` (`npm run
+  release-artifacts`) lo scrive dopo che una release è verificata verde,
+  senza mai cancellare le voci delle altre versioni.
+- `scripts/compose.mjs` legge **la stessa** `RELEASES.json` (più
+  `package.json` e git direttamente, per commit/branch/data sempre
+  aggiornati anche fra due snapshot) e incorpora il risultato come
+  `window.INGLY_RELEASE_INFO` nel bundle Admin al momento della build — mai
+  un secondo posto che dichiara una versione diversa.
+
+**Nuove funzionalità**
+- Un badge «INGLY OS vX.Y.Z» in basso a destra nella console Admin
+  (`src/admin/release-info.js`): un click mostra versione, commit, branch,
+  build, quali file sono l'artefatto Product e l'artefatto Admin, stato
+  test/QA e blocker noti — e dichiara esplicitamente che sottoscrizione,
+  licenza e utenti live richiedono un backend non ancora collegato, mai
+  dati finti al loro posto.
+- `scripts/snapshot-release.mjs`: copia `dist/INGLY-OS.html` e
+  `dist/INGLY-CLOUD-ADMIN.html` correnti sotto `dist/releases/<versione>/`
+  come `INGLY-OS-<versione>.html` / `INGLY-CLOUD-ADMIN-<versione>.html`, e
+  scrive/aggiorna `RELEASES.json`. Le copie HTML versionate restano locali
+  (`dist/` non è tracciato: sono 10+ MB, riproducibili da `npm run build`
+  su qualunque commit); `RELEASES.json` è la fonte di verità storica,
+  apposta piccola e testuale.
+
+**Non ancora fatto, apposta**: nessuna sezione Admin dedicata a utenti/
+dispositivi/sicurezza live per-release — quelle superfici esistono già
+(Postazioni aperte, Attività recente, gestione utenti, force logout,
+audit di sicurezza, dal mandato Account/Abbonamento) e restano invariate;
+questo rilascio aggiunge solo l'informazione di versione che mancava, senza
+duplicare o spostare ciò che già c'era.
+
+**Difetto trovato e corretto scrivendo il test**: il primo modale copriva
+l'intera pagina (`position:fixed;inset:0`) sopra il badge che lo apre — un
+secondo click sul badge, con il modale già aperto, non può mai raggiungerlo
+davvero (l'overlay lo intercetta), esattamente come Playwright ha rilevato
+per hit-testing reale. Aggiunto un pulsante di chiusura esplicito nel box;
+il click fuori dal box chiude comunque.
+
+**Secondo difetto, trovato eseguendo `npm run release-artifacts` una prima
+volta**: `productArtifact`/`adminArtifact` ripiegavano su `RELEASES.json`
+quando presente — ma quei campi, scritti da `snapshot-release.mjs`,
+descrivono la copia **versionata** (`dist/releases/<versione>/...`), non il
+bundle che il build corrente sta scrivendo. Il badge di un `dist/INGLY-OS.html`
+appena generato dichiarava se stesso con il percorso della release
+precedente. Corretto a dichiarare sempre i percorsi vivi
+(`dist/INGLY-OS.html`/`dist/INGLY-CLOUD-ADMIN.html`), mai letti da
+`RELEASES.json`.
+
+**Test**: `tests/qa/admin-release-info.mjs` (16, browser reale) — il badge
+esiste, la versione incorporata coincide con `package.json`, commit/branch/
+build non sono vuoti, entrambi gli artefatti sono nominati esplicitamente,
+lo stato test/QA è mostrato (mai un falso PASS), dichiara il limite del
+backend, il pulsante di chiusura chiude davvero, il badge riapre dopo una
+chiusura.
+
+**Verificato**: 267 file sintassi (aggiunto `src/admin/release-info.js`),
+2203/2203 unit, 92/92 suite browser QA, 0 errori JS, nessuna regressione.
+
+## 2.0.0 — Multi-Tech BOM, rilascio 6: fabbisogno materiali reale (Material Reservation)
+
+Downstream del percorso BOM→Routing→Cost→Order appena chiuso (1.9.0):
+verificato con `grep` che `InglyFabbisogno` (`material-requirement.js`,
+Fase 31/32) non ha mai avuto un consumatore in tutto il codice, e che
+comunque leggerebbe solo dal preventivo (`costBreakdown.voci`), mai da una
+distinta di prodotto.
+
+**Nuove funzionalità**
+- `InglyProductBOMStore.fabbisognoDaOrdine(ordine)`: il fabbisogno
+  materiali di un ordine dalla distinta del suo prodotto — righe espanse
+  sulla quantità ordinata, scarto già compreso — con la giacenza attuale
+  letta dal registro di magazzino (`InglyInventoryLedger.ricostruisci`,
+  lo stesso registro che il resolver di costo già usa). Stessa applicabilità
+  di `routingDaOrdine`/`costoDaOrdine` (`_bomApplicabile`, condivisa):
+  un ordine per cui viene il routing dalla distinta è lo stesso per cui
+  viene anche il fabbisogno.
+- Il Pannello Produzione mostra ora «🧱 Materiali necessari»: quanto serve
+  e se lo scaffale ne ha abbastanza, con il numero esatto che manca quando
+  non basta. Un ordine senza distinta applicabile non vede la sezione.
+
+**Non ancora fatto, apposta**: questo è il fabbisogno di **un** ordine
+contro la giacenza fisica, non al netto di quanto già impegnato dagli altri
+ordini aperti (quel conto, `InglyFabbisogno.impegnato`, esiste ma sul
+vecchio percorso preventivo — incrociarlo con la distinta è un rilascio a
+sé, più rischioso da mescolare qui).
+
+**Test**: `tests/qa/multitech-material-reservation.mjs` (8, browser reale).
+
+**Verificato**: 266 file sintassi, 2203/2203 unit, 91/91 suite browser QA,
+0 errori JS, nessuna regressione.
+
+## 1.9.0 — Multi-Tech BOM, rilascio 5: l'orchestratore reale (distinta → routing → costo → ordine)
+
+**Nuove funzionalità**
+- `InglyProductBOMStore.costoDaOrdine(ordine)`: il primo punto di questo
+  verticale che collega i motori puri (`InglyProductBOM`, `InglyBOMCost`)
+  a IndexedDB per davvero — non tariffe passate a mano come nei rilasci
+  precedenti. Risolve l'oraria macchina da `equipment` via
+  `InglyMachineCost`, l'oraria manodopera di ripiego dai profili economici
+  del laboratorio (`InglyCostProfilesStore`, la stessa fonte del
+  preventivatore) e il costo materiale dal registro di magazzino
+  (`InglyInventoryCostResolver`, lo stesso resolver che valorizza un
+  preventivo). La domanda «questa distinta è applicabile a questo ordine?»
+  — già isolata in una funzione sola nel rilascio 3 (`routingDaOrdine`) —
+  è ora condivisa da entrambe le funzioni (`_bomApplicabile`): mai due
+  risposte diverse alla stessa domanda per lo stesso ordine.
+- Il pannello «Preventivato · Reale · Scostamento» di un ordine mostra ora,
+  quando applicabile, una riga «📐 Secondo la distinta» col costo per pezzo
+  e le tecnologie — un terzo numero, diverso dal preventivato (congelato al
+  cliente) e dal reale (misurato a mano): puramente informativo, non scrive
+  mai nei campi di consuntivo. Un ordine senza distinta collegata non lo
+  vede: nessuna regressione sul pannello esistente.
+
+**Protezione doppio conteggio**, verificata con test dedicati (unit e
+browser): richiamare l'orchestratore più volte non accumula nulla; una
+distinta con N righe genera esattamente N voci di costo; due lavorazioni
+sulla stessa macchina applicano ciascuna il proprio tempo, mai una tariffa
+già conteggiata una seconda volta.
+
+**Non ancora fatto, apposta**: nessuna scrittura automatica nel consuntivo
+misurato (`cost_entries`) — quei campi restano una misura fatta a mano, non
+una stima; un pulsante che li pre-compili lasciando la conferma
+all'operatore resta un'estensione naturale, fuori dallo scopo di questo
+rilascio. Nessun collegamento al fabbisogno materiali reale
+(`InglyFabbisogno`, ancora senza alcun consumatore nel codice).
+
+**Test**: `tests/bom-cost.test.mjs` esteso a 12 unit (tre nuovi, dedicati
+alla protezione doppio conteggio). `tests/qa/multitech-bom-e2e.mjs` — 18
+controlli in browser reale, il percorso completo a tre tecnologie
+(stampa 3D + laser con macchina, assemblaggio a mano senza) dal prodotto
+all'ordine al pannello, con ricaricamento e verifica di non-regressione su
+un ordine senza distinta.
+
+**Verificato**: 266 file sintassi, 2203/2203 unit, 90/90 suite browser QA,
+0 errori JS, nessuna regressione.
+
+## 1.8.0 — Multi-Tech BOM, rilascio 4: costo aggregato multi-tecnologia
+
+**Nuove funzionalità**
+- `src/product/bom-cost.js` (`InglyBOMCost`): il costo di una distinta con
+  più tecnologie, aggregando — non ricalcolando — quello che la distinta
+  dichiara. Il tempo di ogni operazione (avviamento in una tantum, tempo per
+  pezzo in per-pezzo, mai l'uno moltiplicato come l'altro) va alla tariffa
+  oraria della sua macchina o, in mancanza, a una tariffa di manodopera di
+  ripiego; i materiali vanno al loro costo unitario. Overhead, imballo e
+  spedizione restano fuori: sono costi dell'ordine, non della lavorazione —
+  sommarli qui li avrebbe sommati una volta per tecnologia invece che una
+  volta sola sull'ordine.
+
+**Decisione esplicita**: `InglyCostEngine` non viene toccato. Farlo leggere
+una distinta multi-tecnologia avrebbe richiesto un profilo combinato
+inventato dentro il file con la storia di difetti critici sui totali più
+lunga di questo codice; l'aggregazione vive invece in un modulo nuovo e
+puro, che riusa `InglyProductBOM` senza duplicarne i conti.
+
+**N/D esplicito**: una voce (operazione o materiale) senza tariffa/costo
+noto non entra nel totale — il risultato dichiara `completo:false`, elenca
+che cosa manca e perché, mai un numero indovinato.
+
+**Non ancora fatto, apposta**: nessun collegamento a un ordine reale.
+Risolvere le tariffe (macchina/manodopera/materiale) per un ordine vero
+richiede IDB — un orchestratore asincrono come `routingDaOrdine` del
+rilascio 3, insieme al percorso end-to-end in browser, è il rilascio 5.
+
+**Test**: `tests/bom-cost.test.mjs` (9 unit).
+
+**Verificato**: 266 file sintassi, 2200/2200 unit, nessuna regressione
+(nessun modulo esistente toccato).
+
+## 1.7.0 — Multi-Tech BOM, rilascio 3: un ordine espande la distinta in routing reale
+
+**Nuove funzionalità**
+- `InglyProductBOMStore.routingDaOrdine(ordine)`: se un ordine ha una sola
+  riga collegata (`catalogId`) a un prodotto con una distinta base corrente,
+  il routing di produzione viene da `InglyProductBOM.espandiOperazioni`
+  (una operazione per lavorazione dichiarata nella distinta, avviamento e
+  tempo per pezzo espansi sulla quantità realmente ordinata) invece che
+  dedotto dalla singola tecnologia dell'ordine. Senza distinta applicabile
+  il comportamento non cambia.
+
+**Trovato verificando l'architettura reale prima di scrivere codice**: il
+routing di un ordine si genera lazy in **due** punti, non uno — la
+transizione automatica a produzione (`WorkflowSync.transition`, patch 042)
+e l'apertura a mano del Pannello Produzione (`GestioneOrdini.openProductionPanel`,
+patch 052), entrambi verificati con `grep` sull'unica chiamata precedente a
+`InglyOperazioni.costruisciDaOrdine`. Le due patch ora chiamano la stessa
+`routingDaOrdine` invece di duplicare la logica ciascuna per conto proprio —
+la stessa classe di difetto di CRM-05b (due letture della stessa cosa che
+divergono alla prima modifica fatta su una sola), evitata mettendo la
+decisione in un solo posto (`product-bom-store.js`).
+
+**Non ancora fatto, apposta**: il fabbisogno materiali reale
+(`espandiMateriali` → `material-requirement.js`) e l'aggregazione di costo
+multi-tecnologia restano per il rilascio successivo — un cambio al routing
+(nessun numero economico) è un rischio diverso da uno al costo, su un
+motore con una storia documentata di difetti critici sui totali.
+
+**Test**: `tests/qa/bom-routing-ordine.mjs` (12, browser reale) — routing
+multi-tecnologia da distinta su transizione di stato, non ricostruito su una
+transizione successiva, nessuna regressione su un ordine senza distinta,
+stesso routing dal Pannello Produzione aperto a mano, persistenza dopo un
+ricaricamento vero.
+
+**Verificato**: 265 file sintassi, 2191/2191 unit, 89/89 suite browser QA,
+0 errori JS, nessuna regressione.
+
 ## 1.6.0 — Multi-Tech BOM, rilascio 2: UI dal catalogo
 
 **Nuove funzionalità**

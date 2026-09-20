@@ -88,6 +88,164 @@ riallineare i due nomi al caricamento, ogni salvataggio successivo al primo
 falliva la validazione. Riallineato in un solo punto (`openBOM`, al
 caricamento), non sparso nel resto del pannello.
 
+## Rilascio 3 — collegamento ordine → distinta: routing reale
+
+Un ordine entra in produzione senza routing in due punti soli del codice
+(verificato con `grep`, non dedotto): la transizione automatica di stato
+(`WorkflowSync.transition`, quando lo stage passa a uno di produzione) e
+l'apertura a mano del Pannello Produzione (`GestioneOrdini.openProductionPanel`).
+Entrambi chiamavano `InglyOperazioni.costruisciDaOrdine`, che deduce **una
+sola** operazione dalla tecnologia singola dell'ordine — corretto per un
+prodotto senza distinta, sbagliato per uno che ne ha una multi-tecnologia.
+
+Aggiunta `InglyProductBOMStore.routingDaOrdine(ordine)`: se l'ordine ha
+**una sola riga** che porta un `catalogId` con una distinta corrente con
+almeno una riga di lavorazione, espande quella distinta
+(`InglyProductBOM.espandiOperazioni`) sulla quantità realmente ordinata e
+restituisce un routing con una operazione per lavorazione dichiarata,
+avviamento e tempo per pezzo già separati com'è nella distinta. In ogni
+altro caso restituisce `null`, e chi chiama ricade sulla deduzione
+esistente — nessun comportamento cambia per un ordine senza distinta
+collegata.
+
+**Una funzione sola, non due copie**: la stessa decisione serve sia a
+`WorkflowSync.transition` (042) sia a `openProductionPanel` (052). Le due
+patch chiamano `routingDaOrdine` invece di duplicare la logica ciascuna per
+conto proprio — la stessa classe di difetto già vista con CRM-05b (due copie
+della stessa lettura che divergono alla prima modifica fatta su una sola)
+qui evitata alla radice, mettendo la decisione in un solo posto della
+persistenza (`product-bom-store.js`, che già parla con IDB) invece che nei
+due punti UI che la consumano.
+
+**Ancora non fatto, apposta**: il fabbisogno materiali reale
+(`InglyProductBOM.espandiMateriali` → `material-requirement.js`) resta per
+il rilascio successivo — mescolare in questo stesso rilascio una modifica al
+routing (rischio basso: nessun numero economico cambia) con una al
+fabbisogno/costo (rischio più alto, su un file — `quote-to-order.js`/il
+cost engine — con una storia documentata di difetti critici sui totali)
+avrebbe reso più difficile isolare un eventuale problema.
+
+Riga 6 della tabella finale, aggiunta durante il rilascio 3, non nella
+scomposizione originale: `InglyFabbisogno` (`material-requirement.js`)
+esiste, è testato, e **non ha nessun punto di consumo nel codice** —
+verificato con `grep`, zero occorrenze fuori dal proprio file. Collegarlo
+alla distinta richiederebbe anche costruire la sua prima UI, non solo un
+nuovo lettore: un lavoro più grande della sola aggregazione di costo
+(rilascio 4), quindi separato invece di infilato nello stesso rilascio.
+
+## Rilascio 4 — il costo aggregato di una distinta multi-tecnologia
+
+`InglyCostEngine` preventiva **una** tecnologia alla volta, con un profilo
+che conosce i suoi driver fisici — grammi e filamento per il 3D, potenza e
+velocità di taglio per il laser. Farlo leggere una distinta con più
+tecnologie avrebbe voluto dire inventare un profilo combinato dentro il file
+con la storia di difetti critici sui totali più lunga di questo codice
+(`quote-to-order.js`/il cost engine stesso) — il rischio più alto possibile
+per il guadagno più incerto. Non toccato.
+
+Aggiunto invece `src/product/bom-cost.js` (`InglyBOMCost`), puro come
+`product-bom.js`: aggrega quello che la distinta **già dichiara** — tempo di
+ogni operazione (avviamento + tempo per pezzo, mai l'uno moltiplicato per
+la quantità come l'altro) e quantità di ogni materiale — a tariffe che
+arrivano già risolte da chi lo chiama (oraria macchina, oraria manodopera di
+ripiego, costo unitario materiale). Non calcola overhead, imballo o
+spedizione: sono costi dell'ordine, non della lavorazione, e li somma chi
+consuma il risultato — una volta sola sull'ordine, mai una volta per
+tecnologia.
+
+Una voce senza tariffa o costo noto non entra nel totale e non genera un
+numero inventato: il risultato dichiara `completo:false` e la lista di che
+cosa manca, con un motivo — la stessa disciplina N/D del resto del motore.
+
+**Ancora non fatto, apposta**: nessun collegamento a un ordine reale, nessuna
+UI. Le tariffe (macchina/manodopera/materiale) oggi vivono in tre posti
+diversi (`InglyMachineCost`, `InglyCostProfiles`, il magazzino) e risolverle
+per un ordine vero richiede IDB — un orchestratore asincrono, sullo stesso
+modello di `InglyProductBOMStore.routingDaOrdine` del rilascio 3, che è
+lavoro del rilascio 5 insieme al percorso end-to-end in browser.
+
+## Rilascio 5 — l'orchestratore reale: distinta → routing → costo → ordine
+
+L'ultimo pezzo del percorso: `InglyProductBOMStore.costoDaOrdine(ordine)`,
+il primo punto di questo verticale che parla **sia** con i motori puri
+(`InglyProductBOM`, `InglyBOMCost`) **sia** con IndexedDB per davvero,
+risolvendo le tariffe che il rilascio 4 aveva lasciato ai chiamanti:
+
+- oraria macchina — `equipment` (IDB) → `InglyMachineCost.daCatalogo`
+  (`machineCostPerHour`, mai `fullMachineCostPerHour`: l'overhead della
+  macchina non si somma qui, altrimenti si sommerebbe una seconda volta
+  quando l'ordine applica il suo overhead di laboratorio);
+- oraria manodopera di ripiego, per una lavorazione senza macchina propria
+  (assemblaggio a mano, finitura) — `InglyCostProfilesStore.ingresso()`,
+  la stessa fonte che il preventivatore già usa;
+- costo materiale — `inventory_ledger` (IDB) → `InglyInventoryCostResolver`,
+  lo stesso resolver che valorizza le righe di un preventivo, non un secondo
+  modo di leggere il magazzino.
+
+La stessa domanda «questa distinta è applicabile a questo ordine?» che il
+rilascio 3 aveva isolato in una funzione sola (`routingDaOrdine`) è stata
+estratta un livello più su (`_bomApplicabile`), condivisa anche da
+`costoDaOrdine`: un ordine per cui il routing viene dalla distinta è lo
+stesso ordine per cui il costo viene dalla distinta, mai una decisione
+diversa fra i due.
+
+**Dove si vede**: il pannello «Preventivato · Reale · Scostamento» di un
+ordine (`InglyOrderEconomics.pannelloConsuntivo`, già esistente dal mandato
+Ordini §16-17) mostra ora, quando applicabile, una riga «📐 Secondo la
+distinta» col costo per pezzo e le tecnologie coinvolte — **non** il
+preventivato (congelato al cliente, non cambia) e **non** il reale (misurato
+a mano dall'operatore, in `InglyActualCost`): un terzo numero, «cosa dice
+la distinta tecnica che dovrebbe costare», utile quando il preventivo era
+nato da un profilo a singola tecnologia e il prodotto ne dichiara più d'una.
+Non scrive niente da solo — è puramente informativo, e un ordine senza
+distinta collegata non lo vede: il pannello si comporta esattamente come
+prima.
+
+**Protezione doppio conteggio**, verificata esplicitamente: richiamare
+`costoDaOrdine` più volte sullo stesso ordine dà lo stesso identico
+risultato (nessun accumulo); una distinta con N righe genera esattamente N
+voci di costo, mai una per lettura; due lavorazioni sulla stessa macchina
+mantengono la tariffa oraria ma applicano ciascuna il proprio tempo, mai
+una tariffa già usata sommata di nuovo.
+
+**Ancora non fatto, apposta**: il costo dalla distinta non scrive mai nei
+campi «Registra com'è andata» (`cost_entries`/`InglyActualCost`) — quei
+campi restano una misura, non una stima, e riempirli in automatico
+confonderebbe le due cose. Un pulsante «usa questo valore» che li
+pre-compili lasciando all'operatore la conferma è un'estensione naturale,
+non fatta qui per restare nello scopo di questo rilascio.
+
+## Rilascio 6 — fabbisogno materiali reale, nel Pannello Produzione
+
+Verificato con `grep` prima di scrivere codice: `InglyFabbisogno`
+(`material-requirement.js`, Fase 31/32) esiste, è testato, e **non ha mai
+avuto un consumatore** — zero occorrenze fuori dal proprio file in tutto il
+codice. E anche con un consumatore leggerebbe solo `costBreakdown.voci` (il
+preventivo), mai la distinta di un prodotto.
+
+Aggiunta `InglyProductBOMStore.fabbisognoDaOrdine(ordine)`, sullo stesso
+schema di `routingDaOrdine`/`costoDaOrdine` (stessa `_bomApplicabile`,
+condivisa fra le tre): espande i materiali della distinta sulla quantità
+ordinata (`InglyProductBOM.espandiMateriali`, scarto già compreso) e legge
+la giacenza attuale da `inventory_ledger` (`InglyInventoryLedger.ricostruisci`
+— lo stesso registro, non un secondo modo di leggere il magazzino). Non
+impegna niente, non scrive niente: dice solo se un ordine potrebbe partire
+subito con quello che c'è oggi sullo scaffale.
+
+**Dove si vede**: una nuova sezione «🧱 Materiali necessari» nel Pannello
+Produzione, sorella di quella Qualità — stesso pattern, stesso file
+(`_materialiHTML` accanto a `_qualitaHTML`). Un ordine senza distinta
+applicabile non la vede: nessuna regressione.
+
+**Ancora non fatto, apposta**: questo è «quanto serve a questo ordine»
+contro «quanto c'è oggi», non «quanto è davvero disponibile dopo aver
+tolto quello che gli altri ordini aperti hanno già impegnato» — quel conto
+esiste già in `InglyFabbisogno.impegnato(ordini)`, ma aggregato sul vecchio
+percorso (`costBreakdown`). Incrociarlo con la distinta per un fabbisogno
+realmente al netto degli impegni di tutti gli ordini aperti è un rilascio a
+sé: mescolarlo qui avrebbe reso questo rilascio più grande e più difficile
+da isolare in caso di problemi.
+
 ## Test
 
 - `tests/product-bom.test.mjs` — 24 unit: validazione, congelamento,
@@ -100,6 +258,36 @@ caricamento), non sparso nel resto del pannello.
   avviamento/per-pezzo verificata anche nell'espansione a 20 pezzi,
   riapertura che ritrova la distinta salvata, seconda modifica che crea la
   versione 2 senza cancellare la versione 1.
+- `tests/qa/bom-routing-ordine.mjs` — 12 controlli in browser reale: un
+  ordine reale che transita a "working" riceve il routing dalla distinta
+  (due operazioni, laser + uv, coi tempi giusti a 20 pezzi), una transizione
+  successiva non lo ricostruisce, un ordine senza distinta collegata si
+  comporta esattamente come prima (nessuna regressione), il Pannello
+  Produzione aperto a mano genera lo stesso routing senza passare da una
+  transizione, e tutto resta dopo un ricaricamento vero della pagina.
+- `tests/bom-cost.test.mjs` — 12 unit: tempo in minuti convertito in ore
+  alla tariffa macchina, anatomia avviamento/per-pezzo (una tantum identico
+  a 1 e a 100 pezzi, costo per pezzo che cala), ripiego sulla manodopera
+  quando la macchina non ha tariffa, nessuna tariffa nota → nessun numero
+  inventato, materiali risolti/non risolti, due tecnologie sommate senza
+  doppiare, overhead/imballo/spedizione esclusi, tre test dedicati di
+  protezione doppio conteggio (idempotenza, una voce per riga, tariffa non
+  sommata due volte sulla stessa macchina).
+- `tests/qa/multitech-bom-e2e.mjs` — 18 controlli in browser reale, il
+  percorso completo: prodotto con distinta a **tre** tecnologie (stampa 3D
+  + laser, con macchina; assemblaggio a mano, senza) → ordine vero →
+  Pannello Produzione (routing reale, tre operazioni nell'ordine giusto) →
+  `costoDaOrdine` con tariffe risolte da IDB vere (equipaggiamento, profili
+  economici, registro di magazzino) → pannello Preventivato·Reale·
+  Scostamento (mostra «Secondo la distinta», il preventivo del cliente non
+  cambia) → ricaricamento vero (tutto resta identico) → un ordine senza
+  distinta non regredisce (nessuna sezione mostrata).
+- `tests/qa/multitech-material-reservation.mjs` — 8 controlli in browser
+  reale: un prodotto con due materiali (uno abbondante, uno scarso), un
+  ordine piccolo per cui entrambi bastano, uno grande per cui il materiale
+  scarso non basta più (e lo dice con il numero esatto che manca), un
+  ordine senza distinta che non mostra la sezione, persistenza dopo un
+  ricaricamento vero.
 
 ## Prossimi rilasci di questo verticale
 
@@ -107,6 +295,10 @@ caricamento), non sparso nel resto del pannello.
 | - | ---- | ----- |
 | 1 | Dominio + persistenza (`InglyProductBOM`/-Store) | ✅ rilascio 1 |
 | 2 | UI: creare/modificare una distinta da un prodotto del catalogo | ✅ rilascio 2 |
-| 3 | Collegamento ordine → distinta: un ordine di quel prodotto espande la distinta in routing e fabbisogno materiali reali | ⬜ |
-| 4 | Aggregazione di costo multi-tecnologia: `InglyCostEngine` legge la distinta invece di un singolo profilo, senza doppiare setup/manodopera/overhead fra le tecnologie | ⬜ |
-| 5 | Percorso end-to-end verificato in browser: prodotto con distinta → ordine → routing reale → qualità → costo aggregato | ⬜ |
+| 3 | Collegamento ordine → distinta: un ordine di quel prodotto espande la distinta in routing reale | ✅ rilascio 3 |
+| 4 | Aggregazione di costo multi-tecnologia (`InglyBOMCost`, dominio puro) | ✅ rilascio 4 |
+| 5 | Orchestratore reale (`costoDaOrdine`, IDB) + percorso end-to-end verificato in browser: prodotto con distinta → ordine → routing reale → costo aggregato → pannello ordine | ✅ rilascio 5 |
+| 6 | Fabbisogno materiali reale dalla distinta, con giacenza dal registro di magazzino, nel Pannello Produzione | ✅ rilascio 6 |
+| 7 | Fabbisogno al netto degli impegni di **tutti** gli ordini aperti (incrociare `fabbisognoDaOrdine` con `InglyFabbisogno.impegnato`), non solo di questo ordine | ⬜ |
+| 8 | Un modo per portare il costo dalla distinta nel consuntivo misurato (`cost_entries`), con conferma dell'operatore — mai automatico | ⬜ |
+| 9 | Collegare la Qualità al percorso: un'operazione dedotta dalla distinta multi-tecnologia propone comunque una non conformità con scarto/rifacimento | ⬜ |

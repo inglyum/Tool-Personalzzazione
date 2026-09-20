@@ -52,13 +52,24 @@ const WorkflowSync = {
          tecnologia che dichiara: è il momento in cui smette di essere un
          prezzo e diventa un lavoro da fare.
 
+         Se l'ordine ha una sola riga collegata a un prodotto del catalogo
+         che ha una distinta base (Multi-Tech BOM), il routing viene dalla
+         distinta — una operazione per riga di lavorazione dichiarata, con
+         l'anatomia avviamento/tempo-per-pezzo già espansa sulla quantità
+         ordinata — non dedotto dalla singola tecnologia del prodotto.
+         Altrimenti resta la deduzione esistente, invariata.
+
          Non si inventa niente — nessun tempo, nessuna macchina: quelli li
          misura chi produce. E se il routing c'è già non si ricostruisce, o
          i tempi reali già registrati sparirebbero. */
       const _INPROD = ['produzione','production','working','in_produzione','lavorazione'];
       if(_INPROD.indexOf(String(newStage))>=0 && typeof window!=='undefined' && window.InglyOperazioni){
         try {
-          const _r = window.InglyOperazioni.costruisciDaOrdine(order);
+          let _r = null;
+          if(!window.InglyOperazioni.leggi(order).length && window.InglyProductBOMStore){
+            _r = await window.InglyProductBOMStore.routingDaOrdine(order).catch(()=>null);
+          }
+          if(!_r) _r = window.InglyOperazioni.costruisciDaOrdine(order);
           if(_r.create && _r.operations.length){
             order.production = Object.assign({}, order.production, { operations: _r.operations });
             if(!order.operations) order.operations = _r.operations;

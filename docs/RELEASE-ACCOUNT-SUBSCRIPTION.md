@@ -129,6 +129,20 @@ che il flake non è specifico di un test né di IndexedDB — l'archivio qui è
 in `localStorage`, non IDB — ma del percorso generico «scrivi poi cambia/
 ricarica la vista» sotto Playwright in questo ambiente.
 
+**Quarta conferma, e più intensa** (Multi-Tech BOM, release 1.7.0/1.8.0):
+`apparel-scaglioni-consuntivo` (lo stesso della seconda conferma) ha fallito
+due volte di fila in isolamento assoluto — nessun altro test in esecuzione,
+stesso identico comando, stesso build — con lo stesso schema («dopo la
+ricarica il consuntivo tessile c'è ancora» e «e quello 3D pure» tornano
+vuoti), e poi è passato pulito 33/33 alla terza ripetizione immediata,
+identica alle prime due. Nessun file toccato in questo rilascio (routing da
+distinta, aggregazione di costo) sfiora il modulo apparel o l'archivio 3D —
+verificato con `grep` sui percorsi cambiati. Due fallimenti di fila alzano
+l'attenzione ma non cambiano la diagnosi: la stessa causa (timing fra
+scrittura e `location.reload()`) può manifestarsi a raffica quanto isolata.
+La disciplina resta la stessa — non si interpreta come regressione un
+fallimento che sparisce a codice invariato.
+
 Test di unità aggiunti in questo mandato: 125.
 
 ```

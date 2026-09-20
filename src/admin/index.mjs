@@ -36,11 +36,19 @@ export function adminAuthJs(originalBlock) {
   );
 }
 
-export function adminShellJs(originalBlock) {
+export function adminShellJs(originalBlock, releaseInfo) {
   const bridge =
     '\n(function (global) {\n  "use strict";\n' +
     toClassicScript('nav-map.js') +
     '\n  global.InglyAdminNav = { ADMIN_NAV: ADMIN_NAV, adminPages: adminPages, plannedPages: plannedPages };\n' +
     '})(window);\n';
-  return originalBlock + '\n' + bridge + '\n' + fs.readFileSync(path.join(HERE, 'sidebar.js'), 'utf8');
+  /* Le informazioni di release sono un dato del *build*, non del codice:
+     l'unico posto onesto per iniettarle è qui, incorporate come JSON al
+     momento in cui compose.mjs scrive il file — mai lette da package.json a
+     runtime, perché il bundle finale non ha un runtime Node. Una sola
+     sorgente (`window.INGLY_RELEASE_INFO`): niente di questo file la
+     ricalcola o la duplica altrove. */
+  const releaseScript = '\nwindow.INGLY_RELEASE_INFO = ' + JSON.stringify(releaseInfo || {}) + ';\n';
+  return originalBlock + '\n' + bridge + '\n' + fs.readFileSync(path.join(HERE, 'sidebar.js'), 'utf8')
+    + releaseScript + fs.readFileSync(path.join(HERE, 'release-info.js'), 'utf8');
 }

@@ -323,12 +323,40 @@
       + '</tr>';
   }
 
+  /** Il costo secondo la distinta multi-tecnologia del prodotto, quando
+      l'ordine ne ha una applicabile (`InglyProductBOMStore.costoDaOrdine`):
+      un terzo numero, diverso da preventivato (congelato al cliente) e da
+      reale (misurato a mano) — «quanto dice la distinta che dovrebbe
+      costare», utile quando il preventivo è nato da un profilo a singola
+      tecnologia e il prodotto ne dichiara più d'una. Non scrive niente da
+      sola: è chi legge questo pannello a decidere se riportarla nei campi
+      «Registra com'è andata» qui sotto. */
+  function rigaCostoDistinta(bomCosto) {
+    if (!bomCosto) return '';
+    var tec = (bomCosto.tecnologie || []).join(' + ') || 'nessuna';
+    var pezzo = bomCosto.costoPerPezzo != null ? eu(bomCosto.costoPerPezzo) : '—';
+    var dettaglio = bomCosto.unaTantum != null && bomCosto.perPezzo != null
+      ? ' (avviamento ' + eu(bomCosto.unaTantum) + ' + ' + eu(bomCosto.perPezzo) + '/pz alla quantità ordinata)'
+      : '';
+    var avviso = !bomCosto.completo
+      ? '<div style="font-size:10px;color:var(--amber,#f59e0b);margin-top:2px">Parziale: ' + esc(bomCosto.motivo || '') + '</div>'
+      : '';
+    return '<div style="font-size:11px;color:var(--text-muted);border-top:1px dashed var(--border);padding-top:8px;margin-top:2px">'
+      + '📐 Secondo la distinta (' + esc(tec) + '): <strong style="color:var(--text)">' + esc(pezzo) + '/pz</strong>'
+      + esc(dettaglio)
+      + avviso
+      + '</div>';
+  }
+
   /**
    * Il pannello del consuntivo di un ordine.
    *
-   * @param {Object} ordine  l'ordine canonico
-   * @param {Object} reale   l'esito di `InglyActualCost.perOrdine()`
-   * @param {Object} spese   le voci già registrate, indicizzate per tipo
+   * @param {Object} ordine    l'ordine canonico
+   * @param {Object} reale     l'esito di `InglyActualCost.perOrdine()`
+   * @param {Object} spese     le voci già registrate, indicizzate per tipo
+   * @param {Object} bomCosto  opzionale, l'esito di
+   *   `InglyProductBOMStore.costoDaOrdine()` — assente per un ordine senza
+   *   distinta collegata, il pannello si comporta esattamente come prima
    */
   /* ── I due lettori canonici ─────────────────────────────────────────────
      Il ricavo di un ordine viveva in quattro campi — `economic.revenueGross`,
@@ -372,7 +400,7 @@
     return { valore: 0, noto: false };
   }
 
-  function pannelloConsuntivo(ordine, reale, spese) {
+  function pannelloConsuntivo(ordine, reale, spese, bomCosto) {
     var S = global.InglyOrderSnapshot;
     var SC = global.InglyScostamento;
     var o = ordine || {};
@@ -476,6 +504,7 @@
       + oreTracciate + campi
       + '<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'
       + 'Il preventivo non cambia: resta quello promesso al cliente. Qui si scrive quanto è costato davvero.</div>'
+      + rigaCostoDistinta(bomCosto)
       + '</div></div>';
   }
 
