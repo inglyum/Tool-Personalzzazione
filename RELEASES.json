@@ -1,9 +1,9 @@
 [
   {
     "version": "2.1.0",
-    "commit": "c6ac79454c163c288564b6c4d8b0aba5c7d92658",
+    "commit": "b4288f75d5a4a6d2da3186a4aa255929e8f2a34d",
     "branch": "claude/ingly-personalization-repo-ekvc0z",
-    "buildDate": "2026-09-20T16:58:15.561Z",
+    "buildDate": "2026-09-20T16:59:25.568Z",
     "product": "dist/releases/2.1.0/INGLY-OS-2.1.0.html",
     "admin": "dist/releases/2.1.0/INGLY-CLOUD-ADMIN-2.1.0.html",
     "productBytes": 11792298,
