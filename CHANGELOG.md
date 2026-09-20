@@ -3,6 +3,47 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.3.0 — Multi-Tech BOM, rilascio 8: fabbisogno netto sugli ordini aperti
+
+Chiude il gap che il rilascio 6 (2.0.0) rimandava esplicitamente nella sua
+stessa documentazione: `fabbisognoDaOrdine` diceva solo «quanto c'è oggi
+sullo scaffale», non «quanto ne impegnano già gli altri ordini aperti» —
+due ordini per lo stesso materiale potevano risultare **entrambi**
+disponibili, verificati ciascuno da solo.
+
+**Nuove funzionalità**
+- `InglyProductBOMStore._impegnatoAltriOrdini(ordine, IDB)`: somma, per
+  articolo, il fabbisogno di tutti gli ALTRI ordini aperti (stessa
+  definizione di aperto/chiuso di `InglyFabbisogno.impegnato` — non una
+  seconda regola). Un ordine aperto con distinta contribuisce dalla sua
+  distinta; un ordine aperto senza distinta ma con un preventivo collegato
+  contribuisce da `InglyFabbisogno.daOrdine` — il motore esistente dalla
+  Fase 31/32, che non aveva mai avuto un consumatore reale prima d'ora.
+  Ogni ordine impegna per una sola via, mai per entrambe.
+- `fabbisognoDaOrdine` guadagna tre campi per riga, puramente additivi,
+  stesso contratto di prima: `impegnatoAltri`, `disponibileNetto`
+  (giacenza meno l'impegno altrui), `sufficienteNetto`. Il pannello
+  Produzione mostra la riga netta solo quando c'è un impegno da mostrare —
+  un ordine da solo sul suo materiale non vede niente di nuovo.
+
+**Non impegna, non scrive**: come il rilascio 6, resta una lettura. Nessuna
+prenotazione persistita: il numero si ricalcola dagli ordini aperti
+correnti, quindi non può disallinearsi da loro.
+
+**Non ancora fatto, apposta**: nessun ordinamento per priorità fra ordini
+concorrenti sullo stesso materiale scarso — il pannello dice che non basta
+per tutti, non decide chi vince; è una scelta commerciale, non di
+magazzino.
+
+**Test**: `tests/qa/multitech-material-net-availability.mjs` (9, browser
+reale) — copertura di entrambe le direzioni (A vede B e viceversa),
+esclusione di un ordine consegnato, e del percorso via preventivo per un
+ordine senza distinta.
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 94/94 suite browser QA,
+0 errori JS, nessuna regressione. Login admin verificato esplicitamente
+prima del rilascio (`admin-primo-avvio.mjs`, `admin-console-accesso.mjs`).
+
 ## 2.2.0 — Multi-Tech BOM, rilascio 7: consumo materiale reale (ORDER → OPERAZIONE COMPLETATA → LEDGER → COSTO REALE)
 
 Chiude il gap più importante rimasto nel core produttivo: un'operazione

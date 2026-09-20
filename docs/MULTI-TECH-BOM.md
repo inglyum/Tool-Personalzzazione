@@ -302,6 +302,49 @@ già garantisce (un movimento scritto è definitivo, append-only — non è mai
 stato possibile né necessario "annullare" un movimento in questo registro,
 solo registrarne uno di segno opposto se serve una rettifica).
 
+## Rilascio 8 — fabbisogno netto: quanto impegnano GLI ALTRI ordini aperti
+
+Chiude il gap che il Rilascio 6 (2.0.0) rimandava esplicitamente: fino a
+qui `fabbisognoDaOrdine` diceva solo «quanto c'è oggi sullo scaffale»
+contro «quanto serve a questo ordine» — due ordini aperti che chiedono lo
+stesso materiale potevano risultare *entrambi* «disponibile», perché
+ciascuno veniva verificato da solo.
+
+`_impegnatoAltriOrdini(ordine, IDB)` legge tutti gli ordini, esclude
+`ordine` stesso, e per ognuno degli altri **aperti** (stessa definizione di
+`InglyFabbisogno.apertoPerImpegno` più il controllo "routing tutto chiuso
+non impegna più" — lo stesso motore usato da `InglyFabbisogno.impegnato`,
+non una seconda regola) somma il suo fabbisogno per articolo:
+
+- un ordine aperto **con distinta** contribuisce espandendo la sua
+  distinta (`Motore.espandiMateriali`, lo stesso di `fabbisognoDaOrdine`);
+- un ordine aperto **senza distinta** ma con un preventivo collegato
+  contribuisce tramite `InglyFabbisogno.daOrdine` (il motore esistente,
+  dalla Fase 31/32, che leggeva `costBreakdown.voci` e non aveva mai avuto
+  un consumatore — verificato con `grep`, zero occorrenze fuori dal
+  proprio file prima di questo rilascio).
+
+Ogni ordine impegna per **una sola** via, mai per entrambe: un ordine con
+distinta non passa anche dal preventivo, altrimenti lo stesso impegno
+verrebbe contato due volte.
+
+`fabbisognoDaOrdine` resta con lo stesso contratto di prima — nessuna
+regressione — e aggiunge tre campi per riga, puramente additivi:
+`impegnatoAltri`, `disponibileNetto` (`giacenza − impegnatoAltri`),
+`sufficienteNetto` (`disponibileNetto ≥ quantity`). Il pannello Produzione
+mostra la riga netta solo quando `impegnatoAltri > 0` — un ordine da solo
+sul suo materiale non vede niente di nuovo.
+
+**Non impegna, non scrive**: come il Rilascio 6, questa è ancora una
+lettura. Nessun movimento, nessuna prenotazione persistita — il numero
+si ricalcola ogni volta dagli ordini aperti correnti, quindi non può
+disallinearsi da loro.
+
+**Ancora non fatto, apposta**: nessun ordinamento per priorità fra ordini
+concorrenti (chi arriva prima, chi ha la consegna più vicina) — il pannello
+dice "non basta per tutti", non decide chi vince; quella è una scelta
+commerciale, non un fatto di magazzino.
+
 ## Test
 
 - `tests/product-bom.test.mjs` — 24 unit: validazione, congelamento,
@@ -355,6 +398,16 @@ solo registrarne uno di segno opposto se serve una rettifica).
   ricalcolato da capo; il pannello ordine mostra «Consumo reale
   registrato»; un ordine senza distinta non consuma nulla (nessuna
   regressione); tutto resta dopo un ricaricamento vero.
+- `tests/qa/multitech-material-net-availability.mjs` — 9 controlli in
+  browser reale: un ordine da solo sul suo materiale non vede nessun
+  impegno (nessuna regressione rispetto al rilascio 6); un secondo ordine
+  aperto sullo stesso materiale fa apparire l'impegno su **entrambi**, in
+  entrambe le direzioni, e il netto che non basta più; un ordine consegnato
+  con lo stesso materiale non impegna niente; un ordine senza distinta ma
+  con un preventivo collegato allo stesso materiale impegna comunque,
+  dalla via del motore esistente (`InglyFabbisogno.daOrdine`), sommandosi
+  correttamente a quello della distinta senza doppiare; tutto resta dopo
+  un ricaricamento vero.
 
 ## Prossimi rilasci di questo verticale
 
@@ -367,6 +420,6 @@ solo registrarne uno di segno opposto se serve una rettifica).
 | 5 | Orchestratore reale (`costoDaOrdine`, IDB) + percorso end-to-end verificato in browser: prodotto con distinta → ordine → routing reale → costo aggregato → pannello ordine | ✅ rilascio 5 |
 | 6 | Fabbisogno materiali reale dalla distinta, con giacenza dal registro di magazzino, nel Pannello Produzione | ✅ rilascio 6 |
 | 7 | Consumo materiale reale a operazione completata (parziale, idempotente, scarto compreso) → registro di magazzino → costo reale sull'operazione → pannello ordine | ✅ rilascio 7 |
-| 8 | Fabbisogno al netto degli impegni di **tutti** gli ordini aperti (incrociare `fabbisognoDaOrdine` con `InglyFabbisogno.impegnato`), non solo di questo ordine | ⬜ |
+| 8 | Fabbisogno al netto degli impegni di **tutti** gli ordini aperti (incrociare `fabbisognoDaOrdine` con `InglyFabbisogno.impegnato`/`.daOrdine`), non solo di questo ordine | ✅ rilascio 8 |
 | 9 | Un modo per portare il costo reale nel consuntivo misurato (`cost_entries`), con conferma dell'operatore — mai automatico | ⬜ |
 | 10 | Collegare la Qualità al percorso: un'operazione dedotta dalla distinta multi-tecnologia propone comunque una non conformità con scarto/rifacimento | ✅ già vero dal rilascio 1.4.0 — verificato: `_registraQualita` chiama `InglyQualityNCR.daOperazione` sulla stessa operazione normalizzata indipendentemente da dove viene il routing |

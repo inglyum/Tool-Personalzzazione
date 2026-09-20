@@ -17,6 +17,7 @@
 
   function B() { return global.InglyProductBOM; }
   function db() { return global.IDB; }
+  function arrTondo(v) { return v == null ? null : Math.round(v * 1000) / 1000; }
 
   async function tutte() {
     if (!db()) return [];
@@ -190,13 +191,55 @@
   }
 
   /**
+   * Quanto materiale è impegnato dagli ALTRI ordini aperti (esclude
+   * `ordine` stesso) — l'incrocio che `fabbisognoDaOrdine` rimandava a un
+   * rilascio a sé (Rilascio 6). Un ordine aperto con una distinta contribuisce
+   * espandendo la sua distinta (stesso motore di `fabbisognoDaOrdine`); un
+   * ordine aperto senza distinta contribuisce con `InglyFabbisogno.daOrdine`
+   * (il motore esistente, letto dal preventivo) — ogni ordine impegna per
+   * una sola via, mai per entrambe, altrimenti si conterebbe due volte.
+   * «Aperto» e «chiuso» usano la stessa definizione di `InglyFabbisogno.
+   * impegnato`: lo stesso motore, non una seconda regola.
+   */
+  async function _impegnatoAltriOrdini(ordine, IDB) {
+    var per = {};
+    if (!IDB) return per;
+    var F = global.InglyFabbisogno;
+    var OP = global.InglyOperazioni;
+    var Motore = B();
+    var tutti = await IDB.getAll('orders').catch(function () { return []; });
+    for (var i = 0; i < tutti.length; i++) {
+      var o = tutti[i];
+      if (!o || String(o.id) === String(ordine.id)) continue;
+      if (F && !F.apertoPerImpegno(o)) continue;
+      if (OP) {
+        var ops = OP.leggi(o);
+        if (ops.length && ops.every(function (x) { return OP.chiusa(x); })) continue;
+      }
+      var righeAltro = null;
+      var appAltro = await _bomApplicabile(o).catch(function () { return null; });
+      if (appAltro && Motore) {
+        righeAltro = Motore.espandiMateriali(appAltro.bom, appAltro.qty);
+      } else if (F) {
+        var fb = F.daOrdine(o);
+        righeAltro = fb.disponibile ? fb.righe : [];
+      }
+      (righeAltro || []).forEach(function (r) {
+        per[r.itemKey] = (per[r.itemKey] || 0) + (Number(r.quantity) || 0);
+      });
+    }
+    return per;
+  }
+
+  /**
    * Il fabbisogno materiali di un ordine dalla distinta base del suo
    * prodotto, se applicabile: le righe materiale espanse sulla quantità
    * ordinata (`InglyProductBOM.espandiMateriali`, già scarto compreso), con
    * la giacenza attuale letta dal registro di magazzino — quanto c'è oggi
-   * sullo scaffale, non quanto è impegnato da altri ordini aperti (quel
-   * conto, incrociato su tutti gli ordini, resta per un rilascio successivo:
-   * qui si vede solo se **questo** ordine potrebbe partire subito).
+   * sullo scaffale — e, dal Rilascio 8, anche quanto ne impegnano GLI ALTRI
+   * ordini aperti (`_impegnatoAltriOrdini`): `disponibileNetto` è quello che
+   * resta per questo ordine dopo aver tolto quegli impegni, non solo la
+   * giacenza fisica.
    *
    * Restituisce `null` quando non c'è una distinta applicabile o non
    * dichiara materiali — nessuna regressione per un ordine che non ha una
@@ -215,18 +258,24 @@
     var IDB = db();
     var L = global.InglyInventoryLedger;
     var movimenti = (IDB && L) ? await IDB.getAll('inventory_ledger').catch(function () { return []; }) : null;
+    var impegnatoAltri = await _impegnatoAltriOrdini(ordine, IDB);
 
     var righe = espanse.map(function (r) {
       var giacenza = null;
       if (movimenti && L) {
         try { giacenza = L.ricostruisci(movimenti, r.itemKey, null).quantity; } catch (e) {}
       }
+      var impAltri = impegnatoAltri[r.itemKey] || 0;
+      var disponibileNetto = giacenza != null ? arrTondo(giacenza - impAltri) : null;
       return {
         itemKey: r.itemKey, itemStore: r.itemStore, itemId: r.itemId,
         label: r.label, unit: r.unit,
         quantityPerPiece: r.quantityPerPiece, quantity: r.quantity,
         giacenza: giacenza,
         sufficiente: giacenza != null ? giacenza >= r.quantity : null,
+        impegnatoAltri: arrTondo(impAltri),
+        disponibileNetto: disponibileNetto,
+        sufficienteNetto: disponibileNetto != null ? disponibileNetto >= r.quantity : null,
       };
     });
 

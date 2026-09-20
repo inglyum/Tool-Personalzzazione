@@ -1311,15 +1311,21 @@ const GestioneOrdini = {
       const nota = r.sufficiente===false
         ? `<span style="color:#ef4444;font-weight:700">manca ${_esc((r.quantity-r.giacenza).toFixed ? (r.quantity-r.giacenza).toFixed(2) : (r.quantity-r.giacenza))} ${_esc(r.unit||'')}</span>`
         : (r.sufficiente===true ? `<span style="color:#22c55e">disponibile</span>` : `<span style="color:var(--text-dim)">giacenza N/D</span>`);
-      return `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-card2);border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:11px">
-        <div>${_esc(r.label||r.itemKey)} — <b>${_esc(r.quantity)}</b> ${_esc(r.unit||'')}</div>
-        <div>${nota}</div>
+      const netto = (r.impegnatoAltri>0)
+        ? `<div style="font-size:10px;margin-top:3px;${r.sufficienteNetto===false?'color:#ef4444;font-weight:700':'color:var(--text-muted)'}">altri ordini aperti impegnano ${_esc(r.impegnatoAltri)} ${_esc(r.unit||'')} — netto per questo ordine: ${_esc(r.disponibileNetto)} ${_esc(r.unit||'')}${r.sufficienteNetto===false?' (insufficiente)':''}</div>`
+        : '';
+      return `<div style="background:var(--bg-card2);border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:11px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>${_esc(r.label||r.itemKey)} — <b>${_esc(r.quantity)}</b> ${_esc(r.unit||'')}</div>
+          <div>${nota}</div>
+        </div>
+        ${netto}
       </div>`;
     }).join('');
     return `<div style="margin-bottom:2px">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px">🧱 Materiali necessari (dalla distinta base)</div>
       ${righe}
-      <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Quanto serve per questo ordine e quanto c'è oggi — non tiene conto degli altri ordini aperti che lo impegnano già.</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:2px">Quanto serve per questo ordine, quanto c'è oggi e — quando altri ordini aperti ne impegnano — quanto resta al netto dei loro impegni.</div>
     </div>`;
   },
 
