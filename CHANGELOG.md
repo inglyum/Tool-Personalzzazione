@@ -3,6 +3,60 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.2.0 — Multi-Tech BOM, rilascio 7: consumo materiale reale (ORDER → OPERAZIONE COMPLETATA → LEDGER → COSTO REALE)
+
+Chiude il gap più importante rimasto nel core produttivo: un'operazione
+completata ora consuma davvero il materiale dal magazzino, non solo
+dichiara buoni/scarti/rifacimenti.
+
+**Nuove funzionalità**
+- `InglyProductBOMStore.consumaDaOperazione(ordine, operazione, quantitaProcessataTotale)`:
+  registra il consumo reale — solo la **differenza** rispetto a quanto già
+  consumato per quell'operazione (tracciata su `ordine.production.
+  materialConsumption`, mai sull'operazione stessa) — tramite `InglyInventory.
+  registra`, l'unico scrittore di giacenza già esistente: nessun secondo
+  sistema di scrittura creato. Un pezzo scartato ha comunque consumato il
+  materiale del tentativo: buoni + scarti + rifacimenti, mai solo i buoni.
+  Accumula anche il costo reale (materiale dal resolver di magazzino +
+  lavorazione dalla tariffa macchina/manodopera) su `operazione.actualCost`/
+  `actualTime`.
+- Chiamata dalla stessa registrazione qualità (`_registraQualita`, patch
+  052) che già scrive buoni/scarti/rifacimenti dal rilascio Quality
+  (1.4.0): non un secondo punto d'ingresso, un secondo passo dello stesso.
+- `InglyProductBOMStore.consumoRealeDaOrdine(ordine)`: rilegge dal registro
+  vero (non da un totale calcolato altrove) quanto è stato consumato e
+  quanto costato finora. Il pannello Preventivato·Reale·Scostamento mostra
+  ora «🏭 Consumo reale registrato» — un quarto numero, misurato, distinto
+  dal preventivato (congelato), dal costo tecnico della distinta (una
+  stima) e dal consuntivo a mano.
+
+**Idempotenza senza un identificativo esterno**: registrare due volte lo
+stesso totale processato dà una differenza di zero — nessun movimento
+scritto, nessun costo raddoppiato. Verificato sia dal click reale ripetuto
+sia da una chiamata diretta alla funzione con lo stesso input.
+
+**Completamento parziale**: 4 pezzi oggi (un movimento), 6 domani (un
+secondo movimento, per la sola differenza) — mai il totale ricalcolato da
+capo, che avrebbe consumato due volte i primi 4.
+
+**Difetto trovato e corretto scrivendo il test**: una riga materiale della
+distinta non porta sempre `itemStore`/`itemId` separati (dipende da come è
+stata creata) — solo `itemKey`. Il primo tentativo chiamava la scorciatoia
+`InglyInventory.consuma(store, id, ...)`, che li richiede: con `itemKey`
+soltanto, scriveva zero movimenti in silenzio. Corretto a chiamare
+`InglyInventory.registra` direttamente con `itemKey` (che lo accetta), e a
+derivare `store`/`itemId` dalla stessa chiave quando non dichiarati, per
+tenere allineata anche la giacenza materializzata sull'archivio giusto.
+
+**Non ancora fatto, apposta**: nessuna scrittura automatica nei campi
+manuali del consuntivo (`cost_entries`) — restano una misura a mano,
+distinta da questa misura automatica.
+
+**Test**: `tests/qa/multitech-actual-consumption.mjs` (24, browser reale).
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 93/93 suite browser QA,
+0 errori JS, nessuna regressione.
+
 ## 2.1.0 — Release management: versione tracciabile in Admin, artefatti versionati
 
 **Trovato verificando l'architettura reale prima di scrivere codice**:

@@ -348,6 +348,22 @@
       + '</div>';
   }
 
+  /** Il consumo reale registrato dalla produzione
+      (`InglyProductBOMStore.consumoRealeDaOrdine`): non una stima — la
+      somma dei movimenti che il magazzino ha davvero registrato per questo
+      ordine (materiale) più il costo di lavorazione accumulato sulle
+      operazioni davvero completate (macchina/manodopera). Cresce mano a
+      mano che la produzione avanza; per un ordine appena entrato in
+      produzione, senza ancora nessuna registrazione, non compare. */
+  function rigaConsumoReale(consumoReale) {
+    if (!consumoReale || !consumoReale.registrato) return '';
+    return '<div style="font-size:11px;color:var(--text-muted);border-top:1px dashed var(--border);padding-top:8px;margin-top:2px">'
+      + '🏭 Consumo reale registrato (' + esc(consumoReale.pezziProcessati) + ' pezzi lavorati): '
+      + '<strong style="color:var(--text)">' + esc(eu(consumoReale.costoTotale)) + '</strong>'
+      + '<span style="color:var(--text-dim)"> (materiale ' + esc(eu(consumoReale.costoMateriale)) + ' + lavorazione ' + esc(eu(consumoReale.costoLavorazione)) + ')</span>'
+      + '</div>';
+  }
+
   /**
    * Il pannello del consuntivo di un ordine.
    *
@@ -357,6 +373,9 @@
    * @param {Object} bomCosto  opzionale, l'esito di
    *   `InglyProductBOMStore.costoDaOrdine()` — assente per un ordine senza
    *   distinta collegata, il pannello si comporta esattamente come prima
+   * @param {Object} consumoReale  opzionale, l'esito di
+   *   `InglyProductBOMStore.consumoRealeDaOrdine()` — assente finché nessuna
+   *   operazione è stata completata
    */
   /* ── I due lettori canonici ─────────────────────────────────────────────
      Il ricavo di un ordine viveva in quattro campi — `economic.revenueGross`,
@@ -400,7 +419,7 @@
     return { valore: 0, noto: false };
   }
 
-  function pannelloConsuntivo(ordine, reale, spese, bomCosto) {
+  function pannelloConsuntivo(ordine, reale, spese, bomCosto, consumoReale) {
     var S = global.InglyOrderSnapshot;
     var SC = global.InglyScostamento;
     var o = ordine || {};
@@ -505,6 +524,7 @@
       + '<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'
       + 'Il preventivo non cambia: resta quello promesso al cliente. Qui si scrive quanto è costato davvero.</div>'
       + rigaCostoDistinta(bomCosto)
+      + rigaConsumoReale(consumoReale)
       + '</div></div>';
   }
 

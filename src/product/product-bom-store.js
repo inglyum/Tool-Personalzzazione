@@ -127,17 +127,18 @@
    * Restituisce `null` quando non c'è una distinta applicabile — mai un
    * numero costruito su un ordine che non la dichiara.
    */
-  async function costoDaOrdine(ordine) {
+  /**
+   * Le tariffe che `InglyBOMCost` riceve già pronte, risolte da IDB — una
+   * funzione sola, usata sia dal costo tecnico (`costoDaOrdine`) sia dal
+   * costo reale (`consumaDaOperazione`): la stessa tariffa macchina o
+   * manodopera non deve avere due modi diversi di essere calcolata a
+   * seconda di chi la chiede, o divergerebbe alla prima modifica fatta su
+   * uno solo dei due punti — la stessa classe di difetto di CRM-05b.
+   */
+  async function _risorseCosto(app) {
     var Motore = B();
-    var Costo = global.InglyBOMCost;
-    if (!Motore || !Costo) return null;
-
-    var app = await _bomApplicabile(ordine);
-    if (!app) return null;
     var righeOp = Motore.righeOperazioni(app.bom);
     var righeMat = Motore.righeMateriali(app.bom);
-    if (!righeOp.length && !righeMat.length) return null;
-
     var IDB = db();
 
     var tariffeMacchina = {};
@@ -168,10 +169,23 @@
       });
     }
 
+    return { tariffeMacchina: tariffeMacchina, manodoperaOraria: manodoperaOraria, costiMateriali: costiMateriali, righeOp: righeOp, righeMat: righeMat };
+  }
+
+  async function costoDaOrdine(ordine) {
+    var Motore = B();
+    var Costo = global.InglyBOMCost;
+    if (!Motore || !Costo) return null;
+
+    var app = await _bomApplicabile(ordine);
+    if (!app) return null;
+    var risorse = await _risorseCosto(app);
+    if (!risorse.righeOp.length && !risorse.righeMat.length) return null;
+
     return Costo.espandi(app.bom, app.qty, {
-      tariffeMacchina: tariffeMacchina,
-      manodoperaOraria: manodoperaOraria,
-      costiMateriali: costiMateriali,
+      tariffeMacchina: risorse.tariffeMacchina,
+      manodoperaOraria: risorse.manodoperaOraria,
+      costiMateriali: risorse.costiMateriali,
     });
   }
 
@@ -219,6 +233,169 @@
     return { righe: righe, nonCollegate: [], pezzi: app.qty, disponibile: true, fonte: 'distinta base' };
   }
 
+  /**
+   * Il consumo reale dei materiali di un'operazione, quando cresce la
+   * quantità lavorata (buoni + scarti + rifacimenti — un pezzo scartato ha
+   * comunque consumato il materiale del tentativo, il consumo non nasconde
+   * mai lo scarto). Chiamata dalla stessa registrazione qualità che già
+   * scrive buoni/scarti/rifacimenti sull'operazione (patch 052,
+   * `_registraQualita`): non un secondo punto d'ingresso, un secondo passo
+   * dello stesso.
+   *
+   * Consuma solo la **differenza** rispetto a quanto già consumato per
+   * questa operazione — tracciata su `ordine.production.materialConsumption`,
+   * non sull'operazione stessa (che `InglyOperazioni.normalizza` ricostruisce
+   * con uno schema fisso: un campo in più lì sparirebbe alla prossima
+   * lettura). È questo che rende idempotente una seconda registrazione con
+   * lo stesso totale: la differenza è zero, non si scrive nessun movimento —
+   * senza bisogno di un identificativo di completamento esterno, perché lo
+   * stato «quanto è già stato consumato» vive nell'ordine stesso.
+   *
+   * Ogni movimento di consumo porta `referenceType:'PRODUCTION'`,
+   * `referenceId` (l'ordine) e `operationId` (l'operazione): la stessa
+   * tracciabilità che il registro di magazzino già usa per gli altri
+   * movimenti generati dal codice, non un formato a parte.
+   *
+   * @returns { ok, consumato:boolean, delta, movimenti, costoMaterialeDelta, costoLavorazioneDelta, motivo? }
+   */
+  async function consumaDaOperazione(ordine, operazione, quantitaProcessataTotale) {
+    var Motore = B();
+    var Inv = global.InglyInventory;
+    if (!Motore || !Inv || !db()) return { ok: false, motivo: 'motori non disponibili' };
+
+    var app = await _bomApplicabile(ordine);
+    if (!app) return { ok: false, motivo: 'nessuna distinta applicabile a questo ordine' };
+
+    var totale = Math.max(0, Number(quantitaProcessataTotale) || 0);
+    var stato = (ordine.production && ordine.production.materialConsumption) || {};
+    var precedente = (stato[operazione.id] && Number(stato[operazione.id].processedQty)) || 0;
+    var delta = totale - precedente;
+    if (!(delta > 0)) {
+      return { ok: true, consumato: false, delta: 0, movimenti: [], motivo: 'nessun incremento da registrare: già consumato per questa quantità' };
+    }
+
+    var risorse = await _risorseCosto(app);
+    var movimenti = [];
+    var costoMaterialeDelta = 0;
+
+    if (risorse.righeMat.length) {
+      var espanse = Motore.espandiMateriali(app.bom, delta);
+      for (var i = 0; i < espanse.length; i++) {
+        var r = espanse[i];
+        var movId = 'cons-' + ordine.id + '-' + operazione.id + '-' + r.itemKey + '-' + totale;
+        var unitCost = risorse.costiMateriali[r.itemKey] != null ? risorse.costiMateriali[r.itemKey] : null;
+        /* Una riga materiale della distinta non sempre porta `itemStore`/
+           `itemId` separati (dipende da come è stata creata) — ma `itemKey`
+           è sempre nella forma «store:id». Passare entrambi a `registra`
+           lascia scrivere il movimento anche se solo `itemKey` è noto, e
+           mantiene la giacenza materializzata sull'archivio giusto quando
+           store/id si possono ricavare. */
+        var parti = String(r.itemKey).split(':');
+        var itemStore = r.itemStore || parti[0];
+        var itemId = r.itemId != null ? r.itemId : parti[1];
+        var esito = await Inv.registra({
+          type: 'CONSUMPTION',
+          itemKey: r.itemKey,
+          store: itemStore,
+          itemId: itemId,
+          quantity: r.quantity,
+          id: movId,
+          unitCost: unitCost,
+          referenceType: 'PRODUCTION',
+          referenceId: String(ordine.id),
+          operationId: String(operazione.id),
+          note: 'Consumo automatico dalla distinta base — operazione ' + operazione.id + ' (' + delta + ' pezzi)',
+        });
+        if (esito.ok) {
+          movimenti.push(esito.movimento);
+          if (unitCost != null) costoMaterialeDelta += unitCost * r.quantity;
+        }
+      }
+    }
+
+    /* Il costo reale della lavorazione: lo stesso tempo per pezzo che la
+       distinta dichiara per questa tecnologia, moltiplicato sul delta appena
+       lavorato — mai sull'intero storico, o un avviamento già contato
+       tornerebbe a contarsi a ogni registrazione successiva. Il confronto fra
+       tecnologie passa dallo stesso normalizzatore su entrambi i lati:
+       la distinta dichiara «stampa3d», il routing la legge come «3d». */
+    var Prod = global.InglyProduction;
+    var tecOperazione = Prod ? Prod.normalizza(operazione.technology) : operazione.technology;
+    var rigaOp = risorse.righeOp.filter(function (r) {
+      var tecRiga = Prod ? Prod.normalizza(r.technology) : r.technology;
+      return tecRiga === tecOperazione;
+    })[0];
+    var costoLavorazioneDelta = 0;
+    var minutiLavorazioneDelta = 0;
+    if (rigaOp) {
+      var tariffa = (operazione.machineId != null && risorse.tariffeMacchina[operazione.machineId] != null)
+        ? risorse.tariffeMacchina[operazione.machineId]
+        : risorse.manodoperaOraria;
+      minutiLavorazioneDelta = (Number(rigaOp.timePerUnit) || 0) * delta;
+      costoLavorazioneDelta = (minutiLavorazioneDelta / 60) * (tariffa || 0);
+    }
+
+    var nuovoStato = Object.assign({}, stato);
+    nuovoStato[operazione.id] = { processedQty: totale, lastConsumedAt: new Date().toISOString() };
+    ordine.production = Object.assign({}, ordine.production, { materialConsumption: nuovoStato });
+
+    var lista = (ordine.production.operations && Array.isArray(ordine.production.operations))
+      ? ordine.production.operations
+      : (Array.isArray(ordine.operations) ? ordine.operations : []);
+    var idx = lista.findIndex(function (o) { return String(o.id) === String(operazione.id); });
+    if (idx >= 0) {
+      var opRec = lista[idx];
+      opRec.actualCost = Math.round(((Number(opRec.actualCost) || 0) + costoMaterialeDelta + costoLavorazioneDelta) * 100) / 100;
+      opRec.actualTime = Math.round(((Number(opRec.actualTime) || 0) + minutiLavorazioneDelta) * 100) / 100;
+    }
+
+    await db().put('orders', ordine);
+
+    return {
+      ok: true, consumato: true, delta: delta, movimenti: movimenti,
+      costoMaterialeDelta: Math.round(costoMaterialeDelta * 100) / 100,
+      costoLavorazioneDelta: Math.round(costoLavorazioneDelta * 100) / 100,
+    };
+  }
+
+  /**
+   * Il consumo reale registrato finora per un ordine, riletto dal registro
+   * di magazzino — non un secondo totale calcolato altrove: la somma dei
+   * movimenti che `consumaDaOperazione` ha davvero scritto per questo
+   * ordine, più il costo di lavorazione accumulato sulle operazioni
+   * (`actualCost`). È il numero che risponde a «quanto è già costato
+   * davvero», diverso sia dal preventivato (congelato) sia dal costo
+   * tecnico della distinta (una stima, mai misurata).
+   */
+  async function consumoRealeDaOrdine(ordine) {
+    var OP = global.InglyOperazioni;
+    var IDB = db();
+    if (!IDB || !OP) return null;
+    var routing = OP.leggi(ordine);
+    if (!routing.length) return null;
+
+    var movimenti = await IDB.getAll('inventory_ledger').catch(function () { return []; });
+    var delOrdine = movimenti.filter(function (m) {
+      return m.referenceType === 'PRODUCTION' && String(m.referenceId) === String(ordine.id);
+    });
+    var costoMateriale = delOrdine.reduce(function (a, m) {
+      return a + (m.totalCost != null ? Math.abs(m.totalCost) : 0);
+    }, 0);
+    var costoLavorazione = routing.reduce(function (a, op) { return a + (op.actualCost || 0); }, 0);
+    var pezziProcessati = routing.reduce(function (a, op) {
+      return a + (op.goodQuantity || 0) + (op.wasteQuantity || 0) + (op.reworkQuantity || 0);
+    }, 0);
+
+    return {
+      movimenti: delOrdine.length,
+      pezziProcessati: pezziProcessati,
+      costoMateriale: Math.round(costoMateriale * 100) / 100,
+      costoLavorazione: Math.round(costoLavorazione * 100) / 100,
+      costoTotale: Math.round((costoMateriale + costoLavorazione) * 100) / 100,
+      registrato: delOrdine.length > 0 || costoLavorazione > 0,
+    };
+  }
+
   global.InglyProductBOMStore = {
     STORE: STORE,
     tutte: tutte,
@@ -229,5 +406,7 @@
     routingDaOrdine: routingDaOrdine,
     costoDaOrdine: costoDaOrdine,
     fabbisognoDaOrdine: fabbisognoDaOrdine,
+    consumaDaOperazione: consumaDaOperazione,
+    consumoRealeDaOrdine: consumoRealeDaOrdine,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -246,6 +246,62 @@ realmente al netto degli impegni di tutti gli ordini aperti è un rilascio a
 sé: mescolarlo qui avrebbe reso questo rilascio più grande e più difficile
 da isolare in caso di problemi.
 
+## Rilascio 7 — consumo materiale reale: ORDER → OPERAZIONE COMPLETATA → LEDGER → COSTO REALE
+
+Chiude il percorso richiesto esplicitamente: un'operazione completata deve
+consumare davvero il materiale, non solo dichiarare buoni/scarti/rifacimenti.
+
+Verificato prima di scrivere codice (niente di nuovo inventato): il
+registro di magazzino ha già un solo scrittore, `InglyInventory.registra`
+(`inventory-store.js`) — «non legge-modifica-scrive: **aggiunge** un
+movimento e poi ricalcola» — con scorciatoie tipizzate (`consuma`, `scarta`,
+`acquista`...) e tipi di riferimento già pronti (`PRODUCTION`, `ORDER`) nel
+registro puro (`inventory-ledger.js`). Nessun secondo sistema di scrittura
+creato: `InglyProductBOMStore.consumaDaOperazione` chiama esattamente
+`InglyInventory.registra`, come farebbe qualunque altro modulo.
+
+**Il punto d'ingresso non è nuovo**: è la stessa registrazione qualità
+(`_registraQualita`, patch 052) che già scrive buoni/scarti/rifacimenti
+sull'operazione dal rilascio Quality (1.4.0). Non un secondo pulsante, un
+secondo passo della stessa azione.
+
+**Idempotenza senza un identificativo esterno**: la quantità già consumata
+per un'operazione si tiene su `ordine.production.materialConsumption[opId].
+processedQty` (non sull'operazione stessa — `InglyOperazioni.normalizza` la
+ricostruisce con uno schema fisso, un campo in più lì sparirebbe alla
+prossima lettura). Ogni registrazione consuma solo la **differenza** fra il
+nuovo totale (buoni + scarti + rifacimenti — un pezzo scartato ha comunque
+consumato il materiale del tentativo) e quello già consumato. Registrare
+due volte lo stesso totale dà una differenza di zero: non si scrive nessun
+movimento, non serve un `completionId` passato da fuori — lo stato «cosa è
+già stato fatto» vive nell'ordine, non in una chiave che qualcuno potrebbe
+sbagliare a costruire.
+
+**Completamento parziale**: 4 pezzi oggi, 6 domani — due registrazioni,
+due movimenti di consumo, ciascuno per la differenza, mai per il totale
+ricalcolato da capo (che avrebbe consumato due volte i primi 4).
+
+**Costo reale**: oltre al materiale (valorizzato con lo stesso resolver del
+costo tecnico — `InglyInventoryCostResolver`, mai un secondo modo di
+leggere un prezzo), la stessa registrazione accumula su `operazione.
+actualCost`/`actualTime` il costo di lavorazione per il delta appena
+lavorato — stessa tariffa (macchina o manodopera) e stesso tempo per pezzo
+che la distinta dichiara per quella tecnologia, mai sull'intero storico.
+`InglyProductBOMStore.consumoRealeDaOrdine` rilegge questi due numeri (dal
+registro vero, non da un totale calcolato altrove) e li mostra nel pannello
+Preventivato·Reale·Scostamento come «🏭 Consumo reale registrato» — un
+quarto numero, distinto da preventivato (congelato), da «secondo la
+distinta» (stima tecnica) e dal consuntivo a mano: questo è misurato, non
+stimato.
+
+**Ancora non fatto, apposta**: nessuna scrittura automatica nei campi
+manuali del consuntivo (`cost_entries`/`InglyActualCost`) — quei campi
+restano una misura a mano, distinta da questa misura automatica; nessuna
+gestione di rollback multi-fase oltre a quanto `InglyInventory.registra`
+già garantisce (un movimento scritto è definitivo, append-only — non è mai
+stato possibile né necessario "annullare" un movimento in questo registro,
+solo registrarne uno di segno opposto se serve una rettifica).
+
 ## Test
 
 - `tests/product-bom.test.mjs` — 24 unit: validazione, congelamento,
@@ -288,6 +344,17 @@ da isolare in caso di problemi.
   scarso non basta più (e lo dice con il numero esatto che manca), un
   ordine senza distinta che non mostra la sezione, persistenza dopo un
   ricaricamento vero.
+- `tests/qa/multitech-actual-consumption.mjs` — 24 controlli in browser
+  reale: completamento parziale (3 buoni + 1 scarto = 4 pezzi) che scrive
+  un movimento di consumo vero e riduce la giacenza esattamente di quanto
+  consumato; la stessa registrazione ripetuta due volte non scrive un
+  secondo movimento né raddoppia il costo (verificato sia dal click reale
+  sia da una chiamata diretta a `consumaDaOperazione`); il completamento
+  dei 6 pezzi rimanenti aggiunge un secondo movimento per la sola
+  differenza; il costo reale dell'operazione cresce in proporzione, mai
+  ricalcolato da capo; il pannello ordine mostra «Consumo reale
+  registrato»; un ordine senza distinta non consuma nulla (nessuna
+  regressione); tutto resta dopo un ricaricamento vero.
 
 ## Prossimi rilasci di questo verticale
 
@@ -299,6 +366,7 @@ da isolare in caso di problemi.
 | 4 | Aggregazione di costo multi-tecnologia (`InglyBOMCost`, dominio puro) | ✅ rilascio 4 |
 | 5 | Orchestratore reale (`costoDaOrdine`, IDB) + percorso end-to-end verificato in browser: prodotto con distinta → ordine → routing reale → costo aggregato → pannello ordine | ✅ rilascio 5 |
 | 6 | Fabbisogno materiali reale dalla distinta, con giacenza dal registro di magazzino, nel Pannello Produzione | ✅ rilascio 6 |
-| 7 | Fabbisogno al netto degli impegni di **tutti** gli ordini aperti (incrociare `fabbisognoDaOrdine` con `InglyFabbisogno.impegnato`), non solo di questo ordine | ⬜ |
-| 8 | Un modo per portare il costo dalla distinta nel consuntivo misurato (`cost_entries`), con conferma dell'operatore — mai automatico | ⬜ |
-| 9 | Collegare la Qualità al percorso: un'operazione dedotta dalla distinta multi-tecnologia propone comunque una non conformità con scarto/rifacimento | ⬜ |
+| 7 | Consumo materiale reale a operazione completata (parziale, idempotente, scarto compreso) → registro di magazzino → costo reale sull'operazione → pannello ordine | ✅ rilascio 7 |
+| 8 | Fabbisogno al netto degli impegni di **tutti** gli ordini aperti (incrociare `fabbisognoDaOrdine` con `InglyFabbisogno.impegnato`), non solo di questo ordine | ⬜ |
+| 9 | Un modo per portare il costo reale nel consuntivo misurato (`cost_entries`), con conferma dell'operatore — mai automatico | ⬜ |
+| 10 | Collegare la Qualità al percorso: un'operazione dedotta dalla distinta multi-tecnologia propone comunque una non conformità con scarto/rifacimento | ✅ già vero dal rilascio 1.4.0 — verificato: `_registraQualita` chiama `InglyQualityNCR.daOperazione` sulla stessa operazione normalizzata indipendentemente da dove viene il routing |

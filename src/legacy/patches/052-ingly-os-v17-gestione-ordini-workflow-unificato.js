@@ -963,15 +963,16 @@ const GestioneOrdini = {
     if (!E || !E.pannelloConsuntivo) { n.innerHTML = ''; return; }
     const A = window.InglyActualCost;
     try {
-      const [reale, spese, bomCosto] = await Promise.all([
+      const [reale, spese, bomCosto, consumoReale] = await Promise.all([
         A && A.perOrdine ? A.perOrdine(o.id, o.quoteId).catch(() => ({ registrato: false })) : Promise.resolve({ registrato: false }),
         E.vociRegistrate ? E.vociRegistrate(o.id).catch(() => ({})) : Promise.resolve({}),
         window.InglyProductBOMStore ? window.InglyProductBOMStore.costoDaOrdine(o).catch(() => null) : Promise.resolve(null),
+        window.InglyProductBOMStore ? window.InglyProductBOMStore.consumoRealeDaOrdine(o).catch(() => null) : Promise.resolve(null),
       ]);
       /* Il nodo può essere sparito nel frattempo: chi chiude il modale mentre
          la lettura è in volo non deve vedere un errore in console. */
       const vivo = document.getElementById('go-consuntivo');
-      if (vivo) vivo.innerHTML = E.pannelloConsuntivo(o, reale, spese, bomCosto);
+      if (vivo) vivo.innerHTML = E.pannelloConsuntivo(o, reale, spese, bomCosto, consumoReale);
     } catch (e) {
       if (window.Ingly && window.Ingly.Errors) window.Ingly.Errors.log('consuntivo ordine', e);
     }
@@ -1410,6 +1411,21 @@ const GestioneOrdini = {
       if(esito.ok){ if(typeof toast!=='undefined') toast('⚠️ Non conformità registrata: '+proposta.reason,'warning'); }
       else if(typeof toast!=='undefined') toast('Qualità salvata, non conformità non creata: '+esito.motivo,'warning');
     } else if(typeof toast!=='undefined') toast('✅ Qualità registrata','success');
+
+    /* Consumo reale: se l'ordine ha una distinta base applicabile, la
+       quantità appena registrata (buoni + scarti + rifacimenti, mai
+       nascosti) consuma davvero il materiale dal magazzino — solo la
+       differenza rispetto a quanto già consumato per questa operazione,
+       così una seconda registrazione con lo stesso totale non raddoppia
+       nulla. Un ordine senza distinta non fa niente qui: nessuna
+       regressione, la qualità si registra come prima. */
+    if(window.InglyProductBOMStore){
+      const totaleProcessato = (opNormalizzata.goodQuantity||0) + (opNormalizzata.wasteQuantity||0) + (opNormalizzata.reworkQuantity||0);
+      const consumo = await window.InglyProductBOMStore.consumaDaOperazione(order, opNormalizzata, totaleProcessato).catch(()=>null);
+      if(consumo && consumo.consumato && typeof toast!=='undefined'){
+        toast('🧱 Materiale consumato dal magazzino ('+consumo.delta+' pezzi)','info');
+      }
+    }
 
     this.openProductionPanel(orderId);
   },
