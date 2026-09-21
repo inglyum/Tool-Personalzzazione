@@ -3,6 +3,63 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.10.0 — Login: il wizard che si ripeteva e il cambio password che ti chiudeva fuori
+
+Segnalazione diretta dell'utente: «devo pulire cache e rifarmi l'account
+ogni volta», «il cambio password non funziona», «non mi lascia entrare se
+non faccio il restore». Riprodotto dal vero (profilo browser persistente,
+signup → chiudi → riapri → login), tre cause reali:
+
+**1. Il wizard di benvenuto si ripresentava ad ogni accesso.**
+`InglyPrimoAvvio.invia()` (il vero primo avvio — chiede laboratorio,
+referente, email, password) non segnava mai `ingly_wizard_done_v2`, il
+contrassegno del *secondo* onboarding (`Wizard`, settings/index.js — «2
+minuti per configurare tutto»). Un account già configurato si vedeva
+riproporre lo stesso modulo di benvenuto ad ogni login: sembrava che
+l'account non fosse mai stato creato davvero. Corretto in due punti: il
+primo avvio segna ora da solo il contrassegno; una migrazione una-tantum
+in `_successo()` (login, patch 117) lo segna anche per chi aveva già un
+account configurato prima di questa correzione, così chi lo sperimenta
+oggi non deve rifare nulla.
+
+**2. Il cambio password non era raggiungibile da nessuna parte.**
+`InglySicurezza` (src/product/sicurezza-view.js — cambio password,
+postazioni aperte, storico account) esisteva da tempo, completo e
+funzionante, ma `grep -rn "InglySicurezza" src/legacy` non dava nessun
+risultato fuori dal file che lo dichiara: nessun pulsante, nessuna rotta
+lo chiamava mai. La rotta `sicurezza` era già presa da un'altra sezione
+(Sicurezza & Ordine, lista acquisti) e non si poteva riusare. Aggiunto un
+pulsante vero («🔒 Sicurezza account») nella barra enterprise, con lo
+stesso pattern a modulo già in uso per White Label.
+
+**3. Cambiare la password chiudeva anche la postazione che la stava
+cambiando.** `cambiaPassword()` → `_revocaDispositivi()` revocava TUTTI i
+`device_sessions` dell'account, compresa la postazione corrente —
+nonostante il messaggio mostrato dopo il cambio dicesse esplicitamente
+«le altre postazioni sono state chiuse». La guardia (InglyGuardia), al
+giro di controllo successivo, buttava fuori anche chi aveva appena
+cambiato la propria password con successo — verificato dal vero: la
+sessione cadeva circa 6 secondi dopo un cambio riuscito. Corretto
+aggiungendo un parametro `escludiDeviceId` a `_revocaDispositivi()`,
+passato da `cambiaPassword(userId, attuale, nuova, { deviceCorrente })`:
+ora chiude solo le *altre* postazioni, come promesso. `device.revoked` su
+un vero cambio di dispositivo (subentro) e il logout forzato
+dall'amministratore restano invariati — solo il cambio password
+self-service esclude ora la propria postazione.
+
+**Test**: `tests/qa/login-persistenza-cambio-password.mjs` (11, browser
+reale) — primo avvio → logout → login reale senza rivedere il wizard;
+click vero sul pulsante Sicurezza account; cambio password che sopravvive
+al giro della guardia; vecchia password rifiutata, nuova password
+accettata; nessuna regressione sul primo avvio di un'installazione vuota.
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 101/101 suite browser
+QA, 0 errori JS, nessuna regressione (verificato in particolare
+`ciclo-account`, `device-takeover-due-contesti`, `admin-force-logout`,
+`cambio-account`: la revoca resta corretta per subentro di dispositivo e
+logout forzato dall'amministratore — solo il cambio password self-service
+è cambiato).
+
 ## 2.9.0 — Notifiche Admin→utente: ripristinato l'unico canale reale
 
 Regressione trovata rileggendo il proprio lavoro: il 2.7.0 ha tolto dalla

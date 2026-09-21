@@ -209,7 +209,10 @@
     try {
       var c = C();
       if (!c) { _errore('Servizio non disponibile'); return { ok: false }; }
-      var e = await c.cambiaPassword(s.user_id, attuale, nuova);
+      var d = D();
+      var e = await c.cambiaPassword(s.user_id, attuale, nuova, {
+        deviceCorrente: d ? d.corrente() : null,
+      });
       if (!e.ok) { _errore(e.motivo); return e; }
       _avvisa('Password cambiata. Le altre postazioni sono state chiuse.', 'success');
       _ridisegna();

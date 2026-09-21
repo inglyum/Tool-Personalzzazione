@@ -197,6 +197,13 @@
 
       if (esito && esito.ok) {
         if (btn) btn.textContent = 'Account creato';
+        /* Questa schermata ha già chiesto nome del laboratorio e referente:
+           è lo stesso contenuto del primo passo del Wizard di onboarding
+           (`ingly_wizard_done_v2`, settings/index.js). Senza questo segno,
+           chi ha appena finito qui si ritrovava lo stesso modulo — «Benvenuto,
+           configura il laboratorio» — riproposto a ogni accesso successivo,
+           come se l'account non fosse mai stato creato davvero. */
+        try { global.localStorage.setItem('ingly_wizard_done_v2', '1'); } catch (e) {}
         /* La sessione esiste già: applicarla direttamente evita di tornare
            su un modulo di accesso che questa schermata ha sostituito. */
         var G = global.SaaSGate;

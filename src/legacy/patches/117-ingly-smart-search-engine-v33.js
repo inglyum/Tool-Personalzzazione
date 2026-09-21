@@ -1826,6 +1826,18 @@ console.log('[INGLY OS v34] ✅ SaaS Auth Gate · Module Lock · Roadmap v34');
       session.labName = user.lab_name || user.labName || user.company || user.email;
       if(postazione) session.device_id = postazione.device_id;
 
+      /* Migrazione una-tantum: un account che ha gia' un laboratorio
+         configurato (cioe' ha gia' fatto il primo avvio, prima che quel
+         percorso segnasse `ingly_wizard_done_v2`) non deve vedersi riproporre
+         «Benvenuto, configura il laboratorio» ad ogni accesso. Chi quel
+         contrassegno non ce l'ha, e non ha ancora un laboratorio, lo vede
+         come sempre. */
+      try {
+        if (!localStorage.getItem('ingly_wizard_done_v2') && session.labName && session.labName !== user.email) {
+          localStorage.setItem('ingly_wizard_done_v2', '1');
+        }
+      } catch(e) {}
+
       /* La sessione non contiene: la password, il suo hash, il piano, i
          moduli, la scadenza della licenza. Chi apre `sessionStorage` vede chi
          e' connesso, non che cosa puo' fare. */
@@ -3090,6 +3102,9 @@ body.saas-active main {
          ('settings')) — qui restano solo White Label, profilo e uscita,
          le uniche funzioni che questa barra offre e la topbar no. */
       '<div class="_eh-right">' +
+        '<button class="_eh-icon-btn" title="Sicurezza account" onclick="_ehOpenSicurezza()">' +
+          '&#128274;' +
+        '</button>' +
         '<button class="_eh-icon-btn" title="White Label" onclick="_ehOpenWhiteLabel()">' +
           '&#127912;' +
         '</button>' +
@@ -3102,6 +3117,41 @@ body.saas-active main {
       '</div>'
     );
   }
+
+  /* ── SICUREZZA ACCOUNT MODAL ─────────────────────────────────
+     `InglySicurezza` (src/product/sicurezza-view.js) esiste da tempo — cambio
+     password, postazioni aperte, storico dell'account — ma nessuna rotta o
+     pulsante lo chiamava mai: `grep -rn "InglySicurezza" src/legacy` non dava
+     nessun risultato fuori dal file che lo dichiara. Un utente non aveva
+     nessun modo reale di cambiare la propria password: il modulo c'era, ma
+     era irraggiungibile — la stessa classe di difetto (dichiarato, mai
+     collegato) gia' vista altrove in questo progetto. La rotta di
+     navigazione 'sicurezza' non si poteva riusare: e' gia' presa da un'altra
+     sezione (Sicurezza & Ordine, lista acquisti). Qui si apre come modulo,
+     con lo stesso pattern gia' in uso per White Label; il contenitore ha
+     l'id `view-sicurezza` perche' `InglySicurezza._ridisegna()` lo cerca
+     con quel nome per aggiornarsi subito dopo un cambio password o la
+     chiusura di una postazione. */
+  window._ehOpenSicurezza = function() {
+    if (document.getElementById('_sic_modal')) return;
+    if (!window.InglySicurezza) return;
+    var modal = document.createElement('div');
+    modal.id = '_sic_modal';
+    modal.className = '_wl-modal';
+    modal.innerHTML =
+      '<div class="_wl-box" style="max-width:640px;max-height:82vh;overflow-y:auto">' +
+        '<div class="_wl-title">&#128274; Sicurezza account</div>' +
+        '<div id="view-sicurezza"></div>' +
+        '<div class="_wl-btns" style="margin-top:16px">' +
+          '<button class="_wl-btn cancel" onclick="document.getElementById(\'_sic_modal\').remove()">Chiudi</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) modal.remove();
+    });
+    window.InglySicurezza.render(document.getElementById('view-sicurezza'));
+  };
 
   /* ── WHITE LABEL MODAL ────────────────────────────────────── */
   window._ehOpenWhiteLabel = function() {

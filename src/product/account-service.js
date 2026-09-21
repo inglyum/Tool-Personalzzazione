@@ -391,11 +391,12 @@
      due non viene letta. Questa funzione esiste perché la scrittura di
      `InglyAccount` resta una sola, quindi non può delegare al modulo che
      scrive per conto proprio — ma il record che produce è identico. */
-  function _revocaDispositivi(db, userId, motivo, adesso) {
+  function _revocaDispositivi(db, userId, motivo, adesso, escludiDeviceId) {
     var n = 0;
     (db.device_sessions || []).forEach(function (d) {
       if (!d || String(d.user_id || '') !== String(userId)) return;
       if (d.active === false || d.revoked_at) return;
+      if (escludiDeviceId && d.device_id === escludiDeviceId) return;
       d.active = false;
       d.revoked_at = adesso;
       d.revoked_reason = motivo;
@@ -443,8 +444,19 @@
       : { ok: false, motivo: w.motivo };
   }
 
-  /** Cambio password: serve quella attuale. */
-  async function cambiaPassword(userId, attuale, nuova) {
+  /**
+   * Cambio password: serve quella attuale.
+   *
+   * `opzioni.deviceCorrente` è l'id di QUESTA postazione (da
+   * `InglyDispositivi.corrente()`). Chi cambia la propria password ha appena
+   * dimostrato di essere chi dice di essere: chiuderla fuori insieme alle
+   * altre postazioni contraddice il messaggio mostrato dopo il cambio
+   * («le altre postazioni sono state chiuse») — e la guardia (InglyGuardia),
+   * al controllo successivo, la buttava fuori davvero, subito dopo un cambio
+   * password riuscito.
+   */
+  async function cambiaPassword(userId, attuale, nuova, opzioni) {
+    var o = opzioni || {};
     var i = I();
     if (!i) return { ok: false, motivo: 'Servizio non disponibile' };
     var db = leggi();
@@ -464,8 +476,8 @@
     u.updated_at = u.password_changed_at;
 
     /* Cambiare password chiude le altre sessioni: è il motivo per cui la si
-       cambia quando si teme che qualcuno la conosca. */
-    _revocaDispositivi(db, userId, 'password cambiata', u.password_changed_at);
+       cambia quando si teme che qualcuno la conosca. Non chiude questa. */
+    _revocaDispositivi(db, userId, 'password cambiata', u.password_changed_at, o.deviceCorrente);
 
     _registra(db, { actor: userId, tenant_id: u.tenant_id,
       action: 'account.password_changed', target: userId, metadata: {} });

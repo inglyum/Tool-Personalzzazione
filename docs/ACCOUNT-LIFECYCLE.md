@@ -165,8 +165,8 @@ chi ha fatto cosa.
 
 | Operazione | Chi | Serve la password attuale | Revoca le sessioni |
 | --- | --- | --- | --- |
-| `InglyAccount.cambiaPassword` | l'interessato, da **Sicurezza** | sì | sì |
-| `InglyAccount.reimpostaPassword` | un amministratore, da **Amministrazione** | no | sì |
+| `InglyAccount.cambiaPassword` | l'interessato, da **Sicurezza** | sì | le *altre*, non la propria |
+| `InglyAccount.reimpostaPassword` | un amministratore, da **Amministrazione** | no | tutte |
 
 **Recupero via email: non esiste.** Questa installazione non ha un servizio di
 posta, e una schermata «ti abbiamo inviato un'email» che non invia niente è
@@ -174,6 +174,25 @@ peggio di nessuna schermata, perché fa aspettare. Chi perde la password la fa
 reimpostare dall'amministratore del workspace e poi la cambia da sé. Quando
 esisterà un servizio di posta, il percorso a token sostituirà questa nota — e
 non prima.
+
+**«Sicurezza» è ora un pulsante vero (2.10.0).** Questa tabella descriveva
+l'intento da tempo — `InglySicurezza.render()` costruiva già il modulo
+completo — ma nessuna rotta o pulsante lo chiamava mai: `grep -rn
+"InglySicurezza" src/legacy` non dava risultati fuori dal file stesso. Chi
+apriva l'applicazione non aveva nessun modo reale di cambiare la propria
+password. Aggiunto un pulsante «🔒 Sicurezza account» nella barra enterprise
+(stesso pattern a modulo già in uso per White Label); la rotta di navigazione
+`sicurezza` non si poteva riusare perché è già presa da un'altra sezione
+(lista acquisti).
+
+Nello stesso giro, `cambiaPassword` revocava **anche** la postazione
+corrente — quella che stava eseguendo il cambio — nonostante il messaggio
+mostrato dicesse «le altre postazioni sono state chiuse». La guardia
+buttava fuori l'utente pochi secondi dopo un cambio riuscito. Corretto
+passando `deviceCorrente` (da `InglyDispositivi.corrente()`) come eccezione
+alla revoca — solo per questo percorso: il subentro di un altro dispositivo
+e il logout forzato dall'amministratore continuano a revocare tutto, come
+devono.
 
 ---
 
