@@ -47,7 +47,7 @@ test('un colore appena sufficiente avvisa senza bloccare', () => {
   assert.ok(v.ok || v.avvisi.every((a) => a.livello !== 'errore') || true);
 });
 
-test('i sette accenti proposti sono tutti leggibili sul tema scuro', () => {
+test('gli otto accenti proposti sono tutti leggibili sul tema scuro', () => {
   /* Se un preset fallisse la propria verifica, il pannello proporrebbe una
      scelta che poi rimprovera. */
   T.ACCENTI.forEach((a) => {

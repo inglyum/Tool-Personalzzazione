@@ -45,7 +45,7 @@
   ];
 
   /* ── Gli accenti ──────────────────────────────────────────────────────────
-     Sette proposte più il colore libero. Non sono «temi»: sono un solo
+     Otto proposte più il colore libero. Non sono «temi»: sono un solo
      colore, quello che segna le azioni e i valori importanti. Cambiarlo non
      cambia lo sfondo — è la ragione per cui una scelta anche azzardata resta
      leggibile. */
@@ -57,6 +57,7 @@
     { id: 'corallo', label: 'Corallo', hex: '#f97316' },
     { id: 'magenta', label: 'Magenta', hex: '#ec4899' },
     { id: 'viola', label: 'Viola', hex: '#a855f7' },
+    { id: 'rosso', label: 'Rosso', hex: '#ef4444' },
   ];
 
   /* ── I caratteri ──────────────────────────────────────────────────────────

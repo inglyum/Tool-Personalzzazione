@@ -3,6 +3,25 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.11.0 — Un accento in più: Rosso
+
+Richiesta diretta dell'utente. Il motore Aspetto (`src/product/tema.js`)
+proponeva sette accenti — ciano, ambra, indaco, verde, corallo, magenta,
+viola — ma nessuno era un rosso vero: corallo è arancione, magenta è
+rosa/porpora. Aggiunto `{ id: 'rosso', label: 'Rosso', hex: '#ef4444' }`
+all'elenco `ACCENTI`; il pannello Aspetto lo elenca da solo, non serve
+nessuna modifica alla vista. Verificato il contrasto WCAG prima di
+proporlo: 5.1:1 su fondo scuro (nessun avviso), 3.8:1 su fondo chiaro
+(fascia di avviso, non di errore — meglio di `corallo`, che sul chiaro è
+sotto la soglia di leggibilità a 2.8:1). Test `tests/tema.test.mjs`
+aggiornato (il titolo diceva «sette accenti», ora sono otto).
+
+Verifica: 267 file sintassi, 2203/2203 unit, suite browser QA verde
+(due corse complete su tre; la terza ha rotto in `quoter3d-calcoli.mjs`
+FASE 16b-e, il flake noto di scrittura-poi-ricaricamento IndexedDB già
+documentato nelle release precedenti — riprodotto 3/3 pulito in
+isolamento, confermato non regressione).
+
 ## 2.10.0 — Login: il wizard che si ripeteva e il cambio password che ti chiudeva fuori
 
 Segnalazione diretta dell'utente: «devo pulire cache e rifarmi l'account
