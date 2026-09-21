@@ -256,6 +256,34 @@ design system. Tredici dichiarazioni fra le più dannose — quelle che
 ridefinivano le voci di menu con l'ambra e l'indaco scritti a mano — sono già
 state rimosse. Le altre si migrano insieme ai rispettivi moduli.
 
+### Due barre in alto, trovato con un vero screenshot (2.7.0)
+
+L'audit visivo — aprire davvero l'app e guardare lo schermo, non solo il
+codice — ha trovato due barre impilate su ogni pagina: la topbar
+principale e, sopra di essa, una «barra enterprise» (`#saas-session-bar`,
+piano/brand/uscita) che ogni account nuovo vede sempre, perché ogni
+account nasce con un abbonamento attivo (mai una prova). La barra
+enterprise duplicava ricerca, notifiche e impostazioni della topbar
+principale — due campane, due ricerche, due modi di aprire Impostazioni
+— e il suo breadcrumb non si è mai aggiornato: la funzione che lo doveva
+agganciare a `App.navigate` non viene chiamata da nessuna parte (un'altra
+funzione con un nome quasi identico lo è, ma è un'altra funzione — la
+stessa classe di difetto già vista altrove in questo progetto).
+
+Rimossi dalla barra enterprise ricerca, notifiche e impostazioni — tre
+funzioni già raggiungibili, meglio, dalla topbar principale — e il
+breadcrumb rotto. Restano solo le funzioni che quella barra offre e la
+topbar no: identità del laboratorio, piano e scadenza, White Label,
+uscita. `tests/qa/topbar-enterprise-non-duplicato.mjs` verifica che
+restino e funzionino davvero (click veri su White Label e su Esci).
+
+**Non ancora deciso**: se le due barre debbano diventare una sola, o se
+la barra enterprise debba restare una striscia d'identità sopra la
+topbar (un pattern comune nei prodotti SaaS multi-tenant). Unirle
+davvero è una decisione di layout, non un difetto da correggere di
+corsa — la duplicazione funzionale, quella sì, era un difetto, ed è
+quella che questo rilascio chiude.
+
 ---
 
 ## 9. Regole

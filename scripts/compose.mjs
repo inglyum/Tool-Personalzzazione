@@ -85,6 +85,17 @@ const INLINE_FAVICON =
   "%3Crect width='32' height='32' rx='7' fill='%231F2328'/%3E" +
   "%3Cpath d='M18.6 4 9 18h5.6L13 28l9.8-14.4H17L18.6 4z' fill='%2300E6D2'/%3E%3C/svg%3E";
 
+/* La versione reale del prodotto (`package.json`), non un numero scritto a
+   mano in una patch. Ogni «vNN» letterale nel codice storico (v37, v96…)
+   resta corretto solo finché nessuno rilascia una versione successiva —
+   questo diventa `window.INGLY_APP_VERSION`, letto da chi mostra la
+   versione all'utente (`save-indicator`), invece di un numero congelato
+   nel 2024. */
+function appVersionJs() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  return 'window.INGLY_APP_VERSION = ' + JSON.stringify(pkg.version) + ';\n';
+}
+
 export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
   const manifest = JSON.parse(fs.readFileSync(path.join(srcDir, 'manifest.json'), 'utf8'));
   const overrides = {};
@@ -101,8 +112,9 @@ export function composeInglyOs({ srcDir = 'src/legacy' } = {}) {
   /* Prima di tutto il resto: una scrittura che fallisce per spazio esaurito
      deve farsi sentire, non sparire dentro un `catch` vuoto. */
   /* Registro degli errori davanti alla guardia: la guardia gli riferisce i
-     fallimenti, quindi deve trovarlo già installato. */
-  overrides[STORAGE_GUARD_HOST] = errorLoggerJs() + '\n' +
+     fallimenti, quindi deve trovarlo già installato. La versione va prima
+     di entrambi: chi la legge non deve mai trovarla `undefined`. */
+  overrides[STORAGE_GUARD_HOST] = appVersionJs() + errorLoggerJs() + '\n' +
     storageGuardJs(fs.readFileSync(path.join(srcDir, STORAGE_GUARD_HOST), 'utf8'));
 
   overrides[SIDEBAR_HOST] = appShellJs();

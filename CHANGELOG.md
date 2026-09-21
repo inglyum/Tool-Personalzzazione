@@ -3,6 +3,42 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.7.0 — Visual QA: due barre in alto diventano una, versione vera nella status bar
+
+Primo giro di audit visivo reale del prodotto (aprire l'app, guardare lo
+schermo — non solo il codice) per la trasformazione premium. Due difetti
+concreti trovati e chiusi, entrambi visibili su ogni schermata:
+
+**La barra enterprise duplicava la topbar principale**. Ogni account
+nuovo nasce con un abbonamento attivo (mai una prova), quindi la barra
+`#saas-session-bar` (piano, brand, uscita) è sempre visibile — impilata
+sopra la topbar principale, con un secondo campo di ricerca (delegava a
+`GlobalSearch.open()`, la stessa della prima), un secondo pulsante
+notifiche (leggeva un archivio diverso, mai sincronizzato con quello
+vero) e un secondo pulsante impostazioni identico al primo. Il suo
+breadcrumb, in più, non si è mai aggiornato — la funzione che lo doveva
+agganciare a `App.navigate` non viene chiamata da nessuna parte. Rimossi
+i tre duplicati e il breadcrumb rotto; restano solo identità del
+laboratorio, piano/scadenza, White Label e uscita — le uniche funzioni
+che quella barra offre e la topbar principale no.
+
+**La status bar mostrava «Ingly OS v37»**, una versione scritta a mano
+anni fa, molte versioni indietro rispetto a quella davvero installata.
+`compose.mjs` incorpora ora `window.INGLY_APP_VERSION` (da
+`package.json`, la stessa fonte già usata per l'Admin) anche nel bundle
+Product; la status bar e il toast di benvenuto lo leggono invece di un
+numero congelato nel codice.
+
+**Test**: `tests/qa/topbar-enterprise-non-duplicato.mjs` (11, browser
+reale) — verifica dal click vero che White Label e Uscita funzionino
+ancora, che i duplicati non ci siano più, e che la topbar principale non
+abbia perso nulla.
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 98/98 suite browser QA,
+0 errori JS, nessuna regressione (incluso `aspetto.mjs` — White Label —
+e `ciclo-account.mjs`/`cambio-account.mjs` — sessione/logout). Login
+admin verificato esplicitamente prima del rilascio.
+
 ## 2.6.0 — Qualità in dashboard: le non conformità aperte diventano visibili
 
 Chiude un gap dichiarato in `docs/QUALITY.md`: `InglyQualityNCR.riepilogo()`

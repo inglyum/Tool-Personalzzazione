@@ -82,15 +82,19 @@
 // ─── SAVE INDICATOR ──────────────────────────────────────────────
 (function _saveIndicator(){
   if(document.getElementById('save-indicator')) return;
+  /* La versione la dice il build (`window.INGLY_APP_VERSION`, da
+     package.json), non un numero scritto qui a mano: era rimasta "v37"
+     da anni, molte versioni indietro rispetto a quella davvero installata. */
+  var v = window.INGLY_APP_VERSION ? ('INGLY OS v'+window.INGLY_APP_VERSION) : 'INGLY OS';
   var bar=document.createElement('div'); bar.id='save-indicator';
-  bar.textContent='⚡ Ingly OS v37 · Dati salvati localmente';
+  bar.textContent='⚡ '+v+' · Dati salvati localmente';
   document.body.appendChild(bar);
   window._inglyLastSave=function(msg){
     var b=document.getElementById('save-indicator');
     if(!b) return;
     b.innerHTML='<span style="color:var(--ds-success)">✅</span> '+(msg||'Salvato')
       +' — '+new Date().toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'})
-      +'&nbsp;&nbsp;|&nbsp;&nbsp;Ingly OS v37 · <span id="si-storage"></span>';
+      +'&nbsp;&nbsp;|&nbsp;&nbsp;'+v+' · <span id="si-storage"></span>';
     _updateStorageInfo();
   };
   function _updateStorageInfo(){
@@ -306,7 +310,7 @@ window.OnboardingWizard = {
   _complete:function(){
     localStorage.setItem(this._SK,'1');
     var modal=document.getElementById('onboarding-v37');if(modal)modal.remove();
-    if(typeof toast!=='undefined') toast('🚀 Setup completato! Benvenuto in Ingly OS v37','success');
+    if(typeof toast!=='undefined') toast('🚀 Setup completato! Benvenuto in INGLY OS','success');
   },
   reset:function(){ localStorage.removeItem(this._SK); this.show(); }
 };

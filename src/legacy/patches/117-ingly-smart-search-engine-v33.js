@@ -3077,30 +3077,19 @@ body.saas-active main {
         '<span id="_eh_exp" data-ingly-scadenza></span>' +
       '</div>' +
 
-      /* CENTER */
-      '<div class="_eh-center">' +
-        '<div class="_eh-bread" id="_eh_bread">' +
-          '<span>INGLY OS</span>' +
-          '<span class="sep">›</span>' +
-          '<span id="_eh_bread_current">Dashboard</span>' +
-        '</div>' +
-        '<div class="_eh-div"></div>' +
-        '<div class="_eh-search" onclick="_ehOpenSearch()">' +
-          '<span>&#128269;</span>' +
-          '<span>Cerca...</span>' +
-          '<kbd>&#8984;K</kbd>' +
-        '</div>' +
-      '</div>' +
+      /* CENTER: rimosso. Il breadcrumb non si è mai aggiornato — la
+         funzione che lo doveva agganciare a App.navigate (hookNavigate,
+         sotto) non viene mai chiamata, ne esiste una diversa con un altro
+         nome sullo stesso oggetto (SaaSGate._hookNavigate) — restava
+         sempre su "Dashboard". La ricerca duplicava GlobalSearch.open(),
+         già raggiungibile dalla topbar principale. Nessuna delle due
+         portava una funzione che l'altra barra non avesse già. */
 
-      /* RIGHT */
+      /* RIGHT: le notifiche e le impostazioni duplicavano quelle vere
+         della topbar principale (Notifications.toggle(), App.navigate
+         ('settings')) — qui restano solo White Label, profilo e uscita,
+         le uniche funzioni che questa barra offre e la topbar no. */
       '<div class="_eh-right">' +
-        '<button class="_eh-icon-btn" onclick="_ehOpenNotifications()" title="Notifiche" id="_eh_notif_btn">' +
-          '&#128276;' +
-          '<span class="badge" id="_eh_notif_count" style="display:none">0</span>' +
-        '</button>' +
-        '<button class="_eh-icon-btn" title="Impostazioni" onclick="_ehOpenSettings()">' +
-          '&#9881;' +
-        '</button>' +
         '<button class="_eh-icon-btn" title="White Label" onclick="_ehOpenWhiteLabel()">' +
           '&#127912;' +
         '</button>' +
