@@ -3,6 +3,35 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.5.0 — CRM-18: l'esportazione rispetta davvero la selezione
+
+Il motore e i pulsanti di esportazione selettiva (`CRMSmart._exportSelected`/
+`._exportAll`, patch 081) esistevano già — ma senza mai essere stati
+verificati da un click vero: zero occorrenze in `tests/`, verificato con
+`grep`, la stessa classe di difetto («dichiarato ma mai controllato dal
+click vero») già trovata più volte in questo progetto.
+
+**Verificato dal click vero, per la prima volta**: selezione di due contatti
+su tre, esportazione CSV e VCF che contengono solo quei due, «Esporta
+tutto» che ignora la selezione e prende tutti i contatti, la barra di
+esportazione selezione che sparisce quando la selezione si svuota.
+
+**Bug reale trovato scrivendo il test, non dalla lettura del codice**:
+`_getExportData(onlySelected)` con `onlySelected=true` ma **zero** contatti
+selezionati cadeva nel ramo «restituisci tutta la rubrica» invece di un
+elenco vuoto — la guardia era `onlySelected && size>0`, non solo
+`onlySelected`. Nella UI questo caso non è raggiungibile davvero (la barra
+con «Esporta CSV/VCF selezionati» sparisce quando la selezione è vuota),
+ma il ramo esisteva nel codice ed era la stessa classe di difetto che
+questa voce della roadmap CRM doveva chiudere. Corretto: una selezione
+vuota ora restituisce sempre un elenco vuoto.
+
+**Test**: `tests/qa/crm-export-selezione.mjs` (11, browser reale).
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 96/96 suite browser QA,
+0 errori JS, nessuna regressione. Login admin verificato esplicitamente
+prima del rilascio.
+
 ## 2.4.0 — Procurement: ricevimento parziale riga per riga
 
 Il motore (`InglyPurchaseOrder.ricevi`) e lo store hanno sempre supportato

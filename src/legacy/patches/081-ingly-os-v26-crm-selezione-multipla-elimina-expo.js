@@ -411,9 +411,14 @@
     };
 
     // ── Export operations ─────────────────────────────────────────
+    /* CRM-18: con `onlySelected` una selezione vuota deve restituire un
+       elenco vuoto, non l'intera rubrica — `size>0` come unica guardia
+       lasciava che «esporta i selezionati» con zero selezionati cadesse nel
+       ramo «restituisci tutto», esportando l'elenco intero senza avviso.
+       Trovato scrivendo il test, non dalla lettura del codice. */
     CRMSmart._getExportData = function(onlySelected){
       var data = this._load();
-      if(onlySelected && this._selected.size>0){
+      if(onlySelected){
         var sel = this._selected;
         return data.filter(function(c){ return sel.has(String(c.id)); });
       }
