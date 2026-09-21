@@ -3,6 +3,34 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.4.0 — Procurement: ricevimento parziale riga per riga
+
+Il motore (`InglyPurchaseOrder.ricevi`) e lo store hanno sempre supportato
+un ricevimento parziale per singola riga, testato a unità dal primo giorno
+— mancava solo la UI: «✅ Segna ricevuto» chiamava `ricevi()` passando
+sempre l'intero residuo di ogni riga, quindi chi riceveva tre casse su
+cinque ordinate doveva forzare un «tutto ricevuto» falso o aspettare
+l'arrivo completo.
+
+**Nuove funzionalità**
+- Nuovo pulsante «✏️ Parziale» nel registro ordini fornitore, accanto a
+  «✅ Segna ricevuto» (che resta, per il caso comune di ricevere tutto in
+  un click). Apre un modulo con una quantità per riga, precompilata al
+  **residuo di quella riga** e con un tetto che non lascia scrivere più di
+  quanto manca.
+- «Conferma ricevimento» costruisce l'elenco righe dai soli campi con una
+  quantità maggiore di zero e lo passa a `InglyPurchaseOrderStore.ricevi`
+  — la stessa funzione di sempre, nessun secondo motore di ricevimento.
+- Un ordine ricevuto in due volte genera due movimenti di magazzino
+  distinti per riga, mai un doppio conteggio: la seconda apertura del
+  modulo precompila il residuo rimasto, non il totale originale.
+
+**Test**: `tests/qa/ordine-fornitore-parziale.mjs` (12, browser reale).
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 95/95 suite browser QA,
+0 errori JS, nessuna regressione (incluso il test di ricevimento totale
+preesistente). Login admin verificato esplicitamente prima del rilascio.
+
 ## 2.3.0 — Multi-Tech BOM, rilascio 8: fabbisogno netto sugli ordini aperti
 
 Chiude il gap che il rilascio 6 (2.0.0) rimandava esplicitamente nella sua

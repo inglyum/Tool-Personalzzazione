@@ -531,7 +531,22 @@ const SuppliersManager = {
         </div>
         ${aperto?`<div style="display:flex;gap:6px;margin-top:8px">
           <button onclick="SuppliersManager._riceviTuttoOrdine('${o.id}')" style="flex:1;padding:6px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:6px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">✅ Segna ricevuto</button>
+          <button onclick="SuppliersManager._toggleRicevimentoParziale('${o.id}')" style="padding:6px 10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:6px;cursor:pointer;font-size:11px;color:#3b82f6;font-weight:700">✏️ Parziale</button>
           <button onclick="SuppliersManager._annullaOrdineUI('${o.id}')" style="padding:6px 10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;cursor:pointer;font-size:11px;color:#ef4444">✖ Annulla</button>
+        </div>
+        <div id="po-parziale-${o.id}" style="display:none;margin-top:8px;padding:9px 10px;background:var(--bg-card);border:1px dashed var(--border2);border-radius:8px">
+          ${o.righe.map((r,i)=>{
+            const residuo = (typeof InglyPurchaseOrder!=='undefined') ? InglyPurchaseOrder.quantitaResidua(r) : Math.max(0,(r.quantity||0)-(r.received||0));
+            if(residuo<=0) return '';
+            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px">
+              <div style="flex:1">${r.itemName||r.itemId} <span style="color:var(--text-dim)">(residuo ${residuo}${r.unit?(' '+r.unit):''})</span></div>
+              <input type="number" id="po-partial-qty-${o.id}-${i}" min="0" max="${residuo}" step="any" value="${residuo}" style="width:80px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);font-size:11px">
+            </div>`;
+          }).join('')}
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button onclick="SuppliersManager._confermaRicevimentoParziale('${o.id}')" style="flex:1;padding:6px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);border-radius:6px;cursor:pointer;font-size:11px;color:#3b82f6;font-weight:700">Conferma ricevimento</button>
+            <button onclick="SuppliersManager._toggleRicevimentoParziale('${o.id}')" style="padding:6px 10px;background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px;color:var(--text-muted)">Annulla</button>
+          </div>
         </div>`:''}
       </div>`;
     }).join('') : '<div style="text-align:center;padding:30px;color:var(--text-dim);font-size:12px">Nessun ordine registrato. Usa «🛒 Ordine» su un fornitore per crearne uno.</div>';
@@ -556,6 +571,38 @@ const SuppliersManager = {
     const esito = await InglyPurchaseOrderStore.ricevi(id, { righe });
     if(!esito.ok){ toast('Ricevimento non registrato: '+esito.motivo,'error'); return; }
     toast('✅ Ricevimento registrato, giacenza aggiornata','success');
+    document.getElementById('po-registry-modal')?.remove();
+    this.openOrders();
+    this.render();
+  },
+
+  /** Il motore (`InglyPurchaseOrder.ricevi`) e lo store supportano da sempre
+      un ricevimento parziale riga per riga — solo «✅ Segna tutto ricevuto»
+      lo usava, ricevendo sempre l'intero residuo. Questo apre/chiude il
+      modulo con una quantità per riga, precompilata al residuo e mai oltre
+      (`max`), così che chi riceve tre casse su cinque ordinate lo dichiari
+      invece di forzare un «tutto ricevuto» falso o aspettare le altre due. */
+  _toggleRicevimentoParziale(id) {
+    const box = document.getElementById('po-parziale-'+id);
+    if(box) box.style.display = box.style.display==='none' ? 'block' : 'none';
+  },
+
+  async _confermaRicevimentoParziale(id) {
+    if(typeof InglyPurchaseOrderStore==='undefined') return;
+    const ordini = await InglyPurchaseOrderStore.tutti();
+    const ordine = ordini.find(o=>String(o.id)===String(id));
+    if(!ordine) return;
+    const righe = [];
+    ordine.righe.forEach((r,i)=>{
+      const input = document.getElementById('po-partial-qty-'+id+'-'+i);
+      if(!input) return;
+      const q = parseFloat(input.value);
+      if(isFinite(q) && q>0) righe.push({ itemId: r.itemId, quantity: q });
+    });
+    if(!righe.length){ toast('Nessuna quantità da ricevere: tutti i campi sono a zero','warning'); return; }
+    const esito = await InglyPurchaseOrderStore.ricevi(id, { righe });
+    if(!esito.ok){ toast('Ricevimento non registrato: '+esito.motivo,'error'); return; }
+    toast('✅ Ricevimento parziale registrato, giacenza aggiornata','success');
     document.getElementById('po-registry-modal')?.remove();
     this.openOrders();
     this.render();

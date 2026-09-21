@@ -109,9 +109,41 @@ tabella di `InglyPurchaseOrder.confronta()`.
 | Non fatto | Perché |
 | --- | --- |
 | Unificare `SupplierIntelligence` e IDB `suppliers` in un'unica identità fornitore | è un intervento su un'altra area (CRM-04 applicato ai fornitori), non sul flusso di acquisto — vedi sopra |
-| Ricevimento parziale con quantità scelta riga per riga nella UI | il motore e lo store lo supportano già ed è testato a unità; «✅ Segna ricevuto» riceve per intero le righe residue — un form multi-riga con quantità parziali è un'estensione dell'esistente, non un blocco |
+| ~~Ricevimento parziale con quantità scelta riga per riga nella UI~~ | fatto — vedi «Rilascio 2» sotto |
 | Confronto prezzi fra fornitori per lo stesso articolo | nessuna storia prezzi multi-fornitore esiste in questo progetto: un confronto prezzi onesto richiederebbe prima raccogliere quel dato, non inventarlo qui |
 | Un ordine multi-riga dal modulo «🛒 Ordine» | il motore accetta più righe (`daSuggerimento` ne produce un array); la UI di creazione oggi ne accetta una per invio — più invii producono più ordini, non un limite dei dati |
+
+## Rilascio 2 — ricevimento parziale riga per riga (2.4.0)
+
+Il motore (`InglyPurchaseOrder.ricevi`) e lo store hanno sempre supportato
+un ricevimento parziale per singola riga — era testato a unità dal primo
+giorno. Solo la UI non lo esponeva: «✅ Segna ricevuto» chiamava `ricevi()`
+passando **sempre l'intero residuo** di ogni riga, quindi chi riceveva tre
+casse su cinque ordinate doveva forzare un «tutto ricevuto» falso (le altre
+due non sarebbero mai arrivate) o aspettare l'arrivo completo prima di
+registrare qualunque cosa.
+
+Aggiunto un secondo pulsante, «✏️ Parziale», accanto al primo — non lo
+sostituisce, perché ricevere tutto in un click resta il caso comune e non
+deve richiedere di ritoccare ogni riga. Apre un modulo con una riga per
+articolo, ciascuna con un campo quantità precompilato al **residuo di
+quella riga** (non un valore condiviso) e con un tetto (`max`) che non
+lascia scrivere più di quanto manca. «Conferma ricevimento» costruisce
+l'elenco righe dai soli campi con una quantità maggiore di zero e lo passa
+a `InglyPurchaseOrderStore.ricevi(id, {righe})` — la stessa funzione di
+sempre, nessun secondo motore di ricevimento.
+
+Un ordine ricevuto in due volte (25 di 40, poi i 15 restanti) genera due
+movimenti di magazzino distinti, mai un doppio conteggio: la seconda
+apertura del modulo precompila il **residuo rimasto** (15), non il totale
+originale (40), perché legge `quantitaResidua()` sulla riga aggiornata
+dell'ordine, non un valore salvato altrove.
+
+**Test**: `tests/qa/ordine-fornitore-parziale.mjs` (12, browser reale) —
+precompilazione per riga, due ricevimenti parziali consecutivi sullo stesso
+ordine senza doppio conteggio, transizione di stato (`ricevuto_parziale` →
+`ricevuto`), nessuna regressione su «✅ Segna ricevuto», persistenza dopo
+un ricaricamento vero.
 
 ## Test
 
