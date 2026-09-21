@@ -128,20 +128,24 @@
       var orders = await IDB.getAll('orders').catch(function(){ return []; });
       var c = QS.pipeline(quotes, { orders: orders });
       var eu = function(v){ return '€' + Math.round(v).toLocaleString('it-IT'); };
+      /* Un solo trattamento visivo (kpi-card del design system), niente
+         colori arbitrari per voce: erano otto tinte diverse tra questo
+         riquadro e quello sopra, senza alcun significato — non uno stato,
+         non una scala, solo decorazione. */
       var voci = [
-        { l:'Pipeline', v: eu(c.valore), c:'#6366f1', t:'Valore dei preventivi ancora in gioco' },
-        { l:'Preventivi aperti', v: c.aperti, c:'#3b82f6', t:'Bozze, inviati, visti e accettati' },
-        { l:'Convertiti', v: c.conteggi.CONVERTED, c:'#22c55e', t:'Diventati un ordine' },
-        { l:'Conversione', v: c.conversionePct==null ? '—' : Math.round(c.conversionePct)+'%', c:'#16a34a',
+        { l:'Pipeline', v: eu(c.valore), t:'Valore dei preventivi ancora in gioco' },
+        { l:'Preventivi aperti', v: c.aperti, t:'Bozze, inviati, visti e accettati' },
+        { l:'Convertiti', v: c.conteggi.CONVERTED, t:'Diventati un ordine' },
+        { l:'Conversione', v: c.conversionePct==null ? '—' : Math.round(c.conversionePct)+'%',
           t: c.conversionePct==null ? 'Nessun preventivo ancora deciso: il tasso non esiste'
             : 'Sui ' + c.decisi + ' preventivi decisi, non su tutti' },
       ];
-      if(c.scadutiDerivati) voci.push({ l:'Scaduti', v:c.scadutiDerivati, c:'#78716c',
+      if(c.scadutiDerivati) voci.push({ l:'Scaduti', v:c.scadutiDerivati,
         t:'Validità superata: derivato dalla data, non scritto nel preventivo' });
       box.innerHTML = voci.map(function(k){
-        return '<div title="'+esc(k.t)+'" style="background:var(--bg-card2);border:1px solid '+k.c+'30;border-radius:12px;padding:12px;text-align:center">'
-          +'<div style="font-size:9px;color:'+k.c+';font-weight:700;text-transform:uppercase;margin-bottom:3px">'+esc(k.l)+'</div>'
-          +'<div style="font-size:20px;font-weight:900;color:'+k.c+'">'+esc(k.v)+'</div></div>';
+        return '<div class="kpi-card" title="'+esc(k.t)+'">'
+          +'<div class="kpi-label">'+esc(k.l)+'</div>'
+          +'<div class="kpi-value">'+esc(k.v)+'</div></div>';
       }).join('');
     };
 
@@ -198,10 +202,10 @@
         +'<input id="crm-file-inp" type="file" accept=".vcf,.vcard,.csv,.xlsx,.xls,.txt" style="display:none" onchange="CRMSmart._processFile(this)">'
         +'</div></div>'
 
-        // KPI
-        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">'
-        +[{l:'Totale',v:total,c:'#6366f1'},{l:'Con Telefono',v:withPhone,c:'#10b981'},{l:'Importati',v:data.filter(function(x){return x._imported;}).length,c:'#f59e0b'},{l:'Aggiunti oggi',v:data.filter(function(x){return x.added&&x.added.slice(0,10)===new Date().toISOString().slice(0,10);}).length,c:'#ec4899'}]
-        .map(function(k){ return '<div style="background:var(--bg-card2);border:1px solid '+k.c+'30;border-radius:12px;padding:12px;text-align:center"><div style="font-size:9px;color:'+k.c+';font-weight:700;text-transform:uppercase;margin-bottom:3px">'+k.l+'</div><div style="font-size:20px;font-weight:900;color:'+k.c+'">'+k.v+'</div></div>'; }).join('')
+        // KPI — kpi-card del design system, non quattro tinte a caso
+        +'<div class="kpi-grid" style="margin-bottom:14px">'
+        +[{l:'Totale',v:total},{l:'Con Telefono',v:withPhone},{l:'Importati',v:data.filter(function(x){return x._imported;}).length},{l:'Aggiunti oggi',v:data.filter(function(x){return x.added&&x.added.slice(0,10)===new Date().toISOString().slice(0,10);}).length}]
+        .map(function(k){ return '<div class="kpi-card"><div class="kpi-label">'+esc(k.l)+'</div><div class="kpi-value">'+esc(k.v)+'</div></div>'; }).join('')
         +'</div>'
 
         // Preventivi: riempito da _kpiPreventivi(), che legge il database

@@ -3,6 +3,39 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.8.0 — CRM: le KPI usano il design system, non otto colori a caso
+
+Secondo giro di audit visivo per la trasformazione premium: la vista CRM
+Clienti (patch 081) disegnava le sue schede KPI con colori esadecimali
+letterali e diversi da scheda a scheda — `#6366f1`, `#10b981`, `#f59e0b`,
+`#ec4899` nella riga in alto (Totale/Con Telefono/Importati/Aggiunti
+oggi), poi `#6366f1`, `#3b82f6`, `#22c55e`, `#16a34a`, `#78716c` nel
+riquadro preventivi — otto tinte senza alcun significato di stato,
+semplice decorazione. La Dashboard (Operating Center) risolve lo stesso
+problema da tempo con `.kpi-card`/`.kpi-label`/`.kpi-value`, componenti
+già pronti in `src/design-system/components/surfaces.css` («il valore è
+il contenuto […] niente sfondi colorati»).
+
+**Corretto**: entrambe le righe KPI di `CRMSmart` (`_buildHTML` e
+`_kpiPreventivi`, in
+`src/legacy/patches/081-ingly-os-v26-crm-selezione-multipla-elimina-expo.js`)
+ora usano `.kpi-grid`/`.kpi-card`/`.kpi-label`/`.kpi-value` del design
+system al posto degli otto stili inline con colore letterale. Nessun
+cambiamento di dato o di comportamento: le stesse quattro più (fino a)
+cinque voci, con lo stesso `title` esplicativo sul riquadro preventivi.
+
+**Test**: `tests/qa/crm-kpi-design-system.mjs` (11, browser reale) —
+verifica dal DOM reale che entrambe le righe usino le classi del design
+system, che nessuna scheda porti più un colore inline, che i numeri
+mostrati restino corretti con dati seminati (totale, con telefono), e che
+la Dashboard resti sullo stesso stile (nessuna doppia convenzione
+nell'app).
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 99/99 suite browser QA,
+0 errori JS, nessuna regressione (CRM: `crm-riga-unica`,
+`crm-paginazione`, `clienti-unici`, `crm-export-selezione`,
+`crm-preventivi`, `crm-customer-360` tutti verdi).
+
 ## 2.7.0 — Visual QA: due barre in alto diventano una, versione vera nella status bar
 
 Primo giro di audit visivo reale del prodotto (aprire l'app, guardare lo

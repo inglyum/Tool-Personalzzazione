@@ -284,6 +284,23 @@ davvero è una decisione di layout, non un difetto da correggere di
 corsa — la duplicazione funzionale, quella sì, era un difetto, ed è
 quella che questo rilascio chiude.
 
+### Colori a caso nelle KPI del CRM (2.8.0)
+
+Stesso audit visivo, difetto successivo: la vista CRM Clienti disegnava
+le sue schede KPI con colori esadecimali letterali, diversi scheda per
+scheda — otto tinte in tutto fra la riga in alto e il riquadro
+preventivi (`#6366f1`, `#10b981`, `#f59e0b`, `#ec4899`, poi `#3b82f6`,
+`#22c55e`, `#16a34a`, `#78716c`). Nessuna di quelle tinte era uno stato
+(successo/allerta/pericolo): erano scelte arbitrarie, la stessa
+violazione di «colori casuali» già evitata altrove nel prodotto.
+
+Il componente giusto esisteva già — `.kpi-card`/`.kpi-label`/
+`.kpi-value` in `components/surfaces.css`, quello che la Dashboard usa —
+apposta perché «il valore è il contenuto […] niente sfondi colorati».
+Le due righe KPI del CRM (`CRMSmart._buildHTML`,
+`CRMSmart._kpiPreventivi`) ora usano quel componente invece di comporre
+ogni volta uno stile inline con colore letterale.
+
 ---
 
 ## 9. Regole
