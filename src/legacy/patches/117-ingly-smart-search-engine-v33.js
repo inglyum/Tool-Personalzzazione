@@ -3168,57 +3168,6 @@ body.saas-active main {
     if (el) el.textContent = pageName || 'Dashboard';
   }
 
-  /* ── NOTIFICATIONS PANEL ──────────────────────────────────── */
-  window._ehOpenNotifications = function() {
-    var existing = document.getElementById('_eh_notif_panel');
-    if (existing) { existing.remove(); return; }
-    var panel = document.createElement('div');
-    panel.id  = '_eh_notif_panel';
-    panel.style.cssText = [
-      'position:fixed;top:52px;right:12px;width:300px;max-height:400px',
-      'background:#111115;border:1px solid #2a2a35;border-radius:12px',
-      'z-index:99990;overflow-y:auto;box-shadow:0 12px 40px #00000088',
-      'font-family:Inter,system-ui;font-size:12px'
-    ].join(';');
-
-    /* Read notifications from localStorage */
-    var db = {};
-    try { db = JSON.parse(localStorage.getItem('ingly_saas_db')||'{}'); } catch(e) {}
-    var notifs = (db.notifications||[]).filter(function(n) {
-      var s = window.SaaSGate && window.SaaSGate._session;
-      return s && n.userId === s.userId;
-    }).slice(-10).reverse();
-
-    var rows = notifs.length
-      ? notifs.map(function(n) {
-          var icon = {email:'✉',inapp:'🔔',whatsapp:'💬',system:'⚙'}[n.type]||'🔔';
-          var time = n.sentAt ? new Date(n.sentAt).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '';
-          return '<div style="padding:10px 14px;border-bottom:1px solid #1e1e2e">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">' +
-              '<span style="font-weight:700;color:#e8e8f0">' + icon + ' ' + (n.title||n.message||'Notifica') + '</span>' +
-              '<span style="font-size:10px;color:#555">' + time + '</span>' +
-            '</div>' +
-            (n.message && n.title ? '<div style="color:#666;font-size:11px">' + n.message.slice(0,60) + '</div>' : '') +
-          '</div>';
-        }).join('')
-      : '<div style="padding:24px;text-align:center;color:#555">&#128276; Nessuna notifica</div>';
-
-    panel.innerHTML =
-      '<div style="padding:10px 14px;border-bottom:1px solid #2a2a35;display:flex;align-items:center;justify-content:space-between">' +
-        '<span style="font-weight:700;color:#e8e8f0">Notifiche</span>' +
-        '<button onclick="document.getElementById(\'_eh_notif_panel\').remove()" style="background:none;border:none;color:#555;cursor:pointer;font-size:15px">×</button>' +
-      '</div>' + rows;
-    document.body.appendChild(panel);
-    /* Close on outside click */
-    setTimeout(function() {
-      document.addEventListener('click', function closePanel(e) {
-        if (!panel.contains(e.target) && e.target.id !== '_eh_notif_btn') {
-          panel.remove(); document.removeEventListener('click', closePanel);
-        }
-      });
-    }, 100);
-  };
-
   /* ── SEARCH SHORTCUT ──────────────────────────────────────── */
   window._ehOpenSearch = function() {
     /* Delegate to existing GlobalSearch if available */
@@ -3230,10 +3179,6 @@ body.saas-active main {
               document.querySelector('input[placeholder*="erca"]');
       if (s) { s.focus(); s.select(); }
     }
-  };
-
-  window._ehOpenSettings = function() {
-    if (typeof App !== 'undefined' && App.navigate) App.navigate('settings');
   };
 
   window._ehOpenProfile = function() {

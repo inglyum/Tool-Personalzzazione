@@ -301,6 +301,23 @@ Le due righe KPI del CRM (`CRMSmart._buildHTML`,
 `CRMSmart._kpiPreventivi`) ora usano quel componente invece di comporre
 ogni volta uno stile inline con colore letterale.
 
+### Il secondo pannello notifiche non era solo un duplicato (2.9.0)
+
+Il 2.7.0 aveva tolto dalla barra enterprise il pulsante che apriva un
+secondo pannello notifiche, documentandolo come duplicazione visiva del
+vero campanello della topbar. Vero, ma incompleto: quel pannello era
+anche l'unico lettore di `ingly_saas_db.notifications`, il canale con
+cui l'Admin manda messaggi in-app a un utente (es. scadenza licenza).
+Tolto il pulsante senza spostare quella lettura, il canale è rimasto
+scritto ma mai letto — non più una duplicazione: un buco.
+
+Corretto migrando la lettura nell'unico pannello vero (`Notifications`
+in `settings/index.js`), non resuscitando il secondo. La lezione per il
+resto del debito di questa sezione (il `#topbar` da 60+ elementi, ancora
+da toccare): prima di rimuovere qualunque superficie duplicata bisogna
+verificare se porta anche un dato che nessun altro legge, non solo se
+sembra ridondante a schermo.
+
 ---
 
 ## 9. Regole

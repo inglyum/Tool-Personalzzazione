@@ -3463,6 +3463,30 @@ const Notifications = {
       const late=Math.floor((now-new Date(o.dueDate||o.deadline))/86400000);
       notifs.push({type:'danger',icon:'warning',msg:'Ordine "'+(o.name||o.title||'#'+o.id)+'" scaduto da '+late+'g',section:'gestione_ordini',time:new Date(o.dueDate||o.deadline)});
     });
+    // Messaggi mandati dall'Admin (InglyCloudAdmin.sendNotifInApp), letti dall'unico
+    // pannello notifiche reale. Prima finivano in un secondo pannello (la barra
+    // enterprise, `_ehOpenNotifications`) che il 2.7.0 ha tolto perché duplicava
+    // ricerca/notifiche/impostazioni — ma quel pannello era anche l'unico posto
+    // che li mostrava: senza questo, un messaggio dell'Admin non arrivava più da
+    // nessuna parte. L'id utente è quello della sessione, letto con l'accessor
+    // canonico SEC-009 (non `session.userId`, campo mai esistito).
+    try {
+      const sess = JSON.parse(sessionStorage.getItem('ingly_saas_session') || 'null');
+      const uid = (window.InglyIdentita && window.InglyIdentita.idUtente(sess)) || null;
+      if (uid) {
+        const saasDb = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+        (saasDb.notifications || [])
+          .filter(n => n && String(n.userId) === String(uid))
+          .slice(-10)
+          .forEach(n => {
+            notifs.push({
+              type: 'info', icon: '📣',
+              msg: n.title ? (n.message ? n.title + ' — ' + n.message : n.title) : (n.message || 'Notifica'),
+              section: null, time: new Date(n.sentAt || n.at || Date.now()),
+            });
+          });
+      }
+    } catch (e) {}
     return notifs.sort((a,b) => b.time - a.time).slice(0, 20);
   },
   _tab: 'all',

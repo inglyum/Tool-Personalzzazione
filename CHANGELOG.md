@@ -3,6 +3,40 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.9.0 — Notifiche Admin→utente: ripristinato l'unico canale reale
+
+Regressione trovata rileggendo il proprio lavoro: il 2.7.0 ha tolto dalla
+barra enterprise il secondo pannello notifiche (`_ehOpenNotifications`),
+corretto perché duplicava quello vero della topbar — stesso campanello, due
+letture mai sincronizzate. Ma quel secondo pannello era anche l'**unico**
+punto che leggeva `ingly_saas_db.notifications`, scritto da
+`InglyCloudAdmin.sendNotifInApp()` quando il superadmin manda un messaggio
+in-app a un utente (es. «Licenza in scadenza tra 5 giorni»). Tolto il
+pulsante, quel messaggio non arrivava più da nessuna parte: un canale reale
+dell'Admin, invisibile nel prodotto.
+
+**Corretto**: `Notifications.getAll()` — il motore dell'unico pannello
+notifiche reale (`#notif-btn`/`#notif-panel`) — include ora anche questi
+messaggi, filtrati per l'utente della sessione corrente con l'accessor
+canonico `InglyIdentita.idUtente()` (non `session.userId`, campo mai
+esistito — stessa classe SEC-009 già corretta altrove; il codice tolto
+usava proprio quel campo sbagliato, quindi non avrebbe mai funzionato
+nemmeno restando). Rimossi anche `_ehOpenNotifications` e `_ehOpenSettings`
+(quest'ultima duplicato morto di `_ehOpenProfile`): zero riferimenti in
+tutto `src/`, verificato con grep prima di toccarli.
+
+**Test**: `tests/qa/notifiche-admin-utente.mjs` (8, browser reale) — crea
+un account, simula un messaggio dell'Admin per quell'utente e uno per un
+altro, verifica dal click vero che solo il proprio compaia nel pannello
+reale, con badge e corpo del messaggio corretti.
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 100/100 suite browser
+QA, 0 errori JS, nessuna regressione (il giro completo ha incontrato
+`quoter3d-calcoli.mjs` FASE 16b-e, il flake «scrivi poi ricarica» già
+documentato in `docs/RELEASE-ACCOUNT-SUBSCRIPTION.md`; riprodotto tre
+volte in isolamento, sempre verde — non è la mia modifica, non tocca
+`quoter3d-calcoli.mjs` né il percorso di salvataggio preventivi).
+
 ## 2.8.0 — CRM: le KPI usano il design system, non otto colori a caso
 
 Secondo giro di audit visivo per la trasformazione premium: la vista CRM
