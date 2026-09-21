@@ -3,6 +3,34 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.6.0 — Qualità in dashboard: le non conformità aperte diventano visibili
+
+Chiude un gap dichiarato in `docs/QUALITY.md`: `InglyQualityNCR.riepilogo()`
+esisteva ed era pronto, ma non aveva mai avuto un consumatore fuori dal
+pannello Produzione del singolo ordine — la dashboard non segnalava mai
+nessun problema di qualità aperto.
+
+**Nuove funzionalità**
+- `InglyData.attention()` (la sezione «Richiede attenzione» dell'Operating
+  Center) guadagna un gruppo `quality`: conta le non conformità **aperte**
+  con lo stesso motore che il pannello Produzione già usa, e nomina motivo
+  e ordine delle più recenti.
+- Il renderer della card era già generico su qualunque gruppo — nessuna
+  modifica al disegno, solo il nuovo dato in `data.js`.
+
+**Test**: `tests/qa/dashboard-qualita-attenzione.mjs` (8, browser reale) —
+card assente senza non conformità aperte, presente con la giusta e con il
+cliente giusto, una chiusa non si somma, persistenza dopo un ricaricamento
+vero.
+
+**Verificato**: 267 file sintassi, 2203/2203 unit, 97/97 suite browser QA
+(`quoter3d-calcoli.mjs` FASE 16b-e è caduto tre volte nella catena
+completa — il flake «scrivi poi ricarica» già documentato in
+`docs/RELEASE-ACCOUNT-SUBSCRIPTION.md` — e ha passato pulito in isolamento
+ogni volta; il codice di questo rilascio non tocca Quoter 3D), 0 errori
+JS, nessuna regressione reale. Login admin verificato esplicitamente
+prima del rilascio.
+
 ## 2.5.0 — CRM-18: l'esportazione rispetta davvero la selezione
 
 Il motore e i pulsanti di esportazione selettiva (`CRMSmart._exportSelected`/

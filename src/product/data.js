@@ -253,10 +253,35 @@
     return { empty: false, centers, unassigned };
   }
 
+  /* Non conformità aperte, per la dashboard. `InglyQualityNCR.riepilogo()`
+     esisteva già ma non aveva mai avuto un consumatore fuori dal pannello
+     Produzione del singolo ordine — qui conta le aperte con lo stesso motore
+     che il pannello già usa, non un secondo modo di contarle. */
+  function qualityGroup(ncrs, orders) {
+    const NCR = global.InglyQualityNCR;
+    if (!NCR) return null;
+    const riepilogo = NCR.riepilogo(ncrs || []);
+    const ordineDi = {};
+    (orders || []).forEach((o) => { ordineDi[String(o.id)] = o; });
+    const aperte = (ncrs || []).filter((n) => n.status === 'aperta')
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    return {
+      id: 'quality', label: 'Non conformità aperte', tone: 'danger', section: 'gestione_ordini',
+      count: riepilogo.aperte,
+      items: aperte.slice(0, 5).map((n) => {
+        const o = ordineDi[String(n.orderId)];
+        return {
+          title: n.reason || 'Non conformità',
+          meta: (o ? (o.clientName || o.client || 'Ordine ' + n.orderId) : 'Ordine ' + n.orderId) + (n.technology ? ' · ' + n.technology : ''),
+        };
+      }),
+    };
+  }
+
   /* ══ Ordini che richiedono attenzione ══════════════════════════════════ */
   async function attention() {
-    const [orders, sales, quotes] = await Promise.all([
-      readStore('orders'), readStore('sales'), readStore('quotes'),
+    const [orders, sales, quotes, ncrs] = await Promise.all([
+      readStore('orders'), readStore('sales'), readStore('quotes'), readStore('quality_ncr'),
     ]);
 
     const activeOrders = orders.filter(isActive);
@@ -305,7 +330,8 @@
           meta: (s.clientName || '') + ' · ' + (s.date || ''),
         })),
       },
-    ].filter((g) => g.count > 0);
+      qualityGroup(ncrs, orders),
+    ].filter((g) => g && g.count > 0);
 
     if (!groups.length) {
       return { empty: true, reason: 'Nessun ordine in ritardo, nessun pagamento pendente.', tone: 'ok' };

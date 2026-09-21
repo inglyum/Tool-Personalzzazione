@@ -68,8 +68,22 @@ Il Pannello Produzione di un ordine (icona ⚙️ in lista, o
 | --- | --- |
 | Checklist di ispezione (elenco di controlli da spuntare prima del completamento) | nessun modello di checklist esiste in questo progetto per nessun processo — costruirne uno per la sola Qualità sarebbe la soluzione sbagliata; è un intervento più ampio, fuori da questo giro |
 | Un flusso di approvazione a più passaggi (proposta → revisione → approvazione) | `chiudi()` chiude con una disposizione e chi l'ha scelta: un secondo stato intermedio (`in_revisione`) non ha ancora un caso d'uso reale misurato in questo prodotto — aggiungerlo ora sarebbe un workflow immaginato, non richiesto dai dati |
-| Notifiche o KPI di qualità in dashboard | `InglyQualityNCR.riepilogo()` esiste ed è pronto; collegarlo alla dashboard è un'estensione dell'esistente, non un blocco — rimandato per restare su un verticale alla volta |
+| ~~Notifiche o KPI di qualità in dashboard~~ | fatto — vedi «Collegamento alla dashboard» sotto |
 | Blocco del completamento ordine senza qualità registrata | imporrebbe un obbligo su ordini che oggi non lo hanno mai avuto: un cambio di comportamento su tutta la produzione esistente, non una correzione — richiede una decisione di prodotto esplicita |
+
+## Collegamento alla dashboard (2.6.0)
+
+`InglyData.attention()` (la sezione «Richiede attenzione» dell'Operating
+Center) guadagna un gruppo `quality`: conta le non conformità **aperte**
+con lo stesso `InglyQualityNCR.riepilogo()` che il pannello Produzione
+dell'ordine già usa — non un secondo modo di contarle — e nomina motivo e
+ordine (cliente, se noto) delle più recenti. Il renderer della card
+(`renderAttention`) era già generico su qualunque gruppo `{count, label,
+items, section}`: non serve nessuna modifica lì, solo il nuovo gruppo in
+`data.js`. Una non conformità chiusa non conta più; senza nessuna aperta la
+card semplicemente non compare, come le altre card di questa sezione.
+
+**Test**: `tests/qa/dashboard-qualita-attenzione.mjs` (8, browser reale).
 
 ## Test
 
