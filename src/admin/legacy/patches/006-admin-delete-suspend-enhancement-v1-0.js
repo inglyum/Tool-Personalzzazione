@@ -138,6 +138,21 @@
           setTimeout(function() { confirmDeleteUserFull(id, name); }, 100);
         };
         footer.insertBefore(btn, footer.firstChild);
+        /* `doReactivate` (003) esiste ed è corretta, ma prima d'ora nessun
+           bottone raggiungibile la chiamava — solo `renderUserActions()`,
+           mai invocata da nessuna vista. Il solo modo per riattivare un
+           account sospeso era il menu a tendina Stato dentro «Modifica»,
+           un percorso indiretto per un'azione che il pannello Admin deve
+           offrire come le altre (ATTIVA/SOSPENDI/ELIMINA sono tre stati
+           dello stesso interruttore, non due). Stesso pattern di
+           iniezione già in uso per il bottone Elimina qui sopra. */
+        if (u && (u.status === 'suspended' || u.status === 'banned') && typeof doReactivate === 'function') {
+          var btnReactivate = document.createElement('button');
+          btnReactivate.className = 'btn btn-success btn-sm _reactivate_from_detail';
+          btnReactivate.innerHTML = '✔ Riattiva Account';
+          btnReactivate.onclick = function() { doReactivate(id); };
+          footer.insertBefore(btnReactivate, footer.firstChild);
+        }
       }, 100);
     };
   }

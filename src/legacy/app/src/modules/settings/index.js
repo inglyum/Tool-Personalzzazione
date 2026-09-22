@@ -2242,8 +2242,8 @@ const Backup={
   },
 
   async factoryReset(){
-    if(!confirm('⚠️ CANCELLA TUTTI I DATI\n\nQuesta operazione cancellerà PERMANENTEMENTE:\n- Tutti i clienti, ordini, prodotti, immagini\n- Tutti i preventivi, vendite, idee\n- Tutti i backup salvati\n\nOperazione IRREVERSIBILE.\n\nFai un backup prima!\n\nProcedere con la cancellazione totale?')) return;
-    if(!confirm('Sei sicuro al 100%?\n\nTutti i dati verranno eliminati definitivamente.')) return;
+    if(!confirm('⚠️ CANCELLA TUTTI I DATI\n\nQuesta operazione cancellerà PERMANENTEMENTE:\n- Tutti i clienti, ordini, prodotti, immagini\n- Tutti i preventivi, vendite, idee\n- Tutti i backup salvati\n- Impostazioni e preferenze locali\n\nNON cancella il tuo account INGLY: dopo il reset potrai accedere di nuovo con le stesse credenziali.\n\nOperazione IRREVERSIBILE sui dati applicativi.\n\nFai un backup prima!\n\nProcedere con la cancellazione totale?')) return;
+    if(!confirm('Sei sicuro al 100%?\n\nTutti i dati applicativi verranno eliminati definitivamente. L\'account resta attivo.')) return;
     try {
       toast('🗑️ Cancellazione in corso...', 'warning');
       await IDB.ensureOpen();
@@ -2253,10 +2253,19 @@ const Backup={
       for (const s of stores) {
         try { await IDB.clearStore(s); } catch(e) { console.warn('clearStore failed:', s, e); }
       }
-      // Clear localStorage keys
-      const lsKeys = Object.keys(localStorage).filter(k => k.startsWith('ingly'));
+      /* `ingly_saas_db` (InglyAccount/InglyDispositivi: users, tenant,
+         membership, ruolo, abbonamento, device_sessions, audit_log) e
+         `ingly_device_id` (l'identità di QUESTO dispositivo) non sono dati
+         applicativi: sono l'account. Un pulsante il cui avviso promette di
+         cancellare "clienti, ordini, prodotti..." non deve, di nascosto,
+         cancellare anche l'account — chi lo premeva si ritrovava al primo
+         avvio come se non si fosse mai registrato. `ingly_wizard_done_v2`
+         resta per lo stesso motivo per cui lo segna il login (2.10.0): un
+         account già configurato non deve rivedere il wizard di benvenuto. */
+      const PRESERVA = ['ingly_saas_db', 'ingly_device_id', 'ingly_wizard_done_v2'];
+      const lsKeys = Object.keys(localStorage).filter(k => k.startsWith('ingly') && !PRESERVA.includes(k));
       lsKeys.forEach(k => localStorage.removeItem(k));
-      toast('✅ Tutti i dati cancellati. Ricaricamento...', 'success');
+      toast('✅ Dati applicativi cancellati. Il tuo account resta attivo. Ricaricamento...', 'success');
       setTimeout(() => location.reload(), 1500);
     } catch(e) {
       toast('❌ Errore: ' + e.message, 'error');

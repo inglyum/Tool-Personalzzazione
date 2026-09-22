@@ -3792,24 +3792,12 @@ function doDeleteAdminFull(id) {
   renderAdminRolesFull();
 }
 
-/* ─────────────────────────────────────────────────────────────
-   2. USER MANAGEMENT — Riattiva / Elimina definitivo
-───────────────────────────────────────────────────────────── */
-function renderUserActions(userId) {
-  var u = (_db.users||[]).find(function(x){ return x.id===userId; });
-  if (!u) return '';
-  var isSusp = u.status === 'suspended' || u.status === 'banned';
-  var html = '<div style="display:flex;gap:4px;flex-wrap:wrap">';
-  html += '<button class="btn btn-ghost btn-xs" onclick="openEditUser(\'' + userId + '\')" title="Modifica"><i class="fas fa-edit"></i></button>';
-  if (isSusp) {
-    html += '<button class="btn btn-success btn-xs" onclick="doReactivate(\'' + userId + '\')" title="Riattiva"><i class="fas fa-check-circle"></i> Riattiva</button>';
-  } else {
-    html += '<button class="btn btn-warning btn-xs" onclick="confirmSuspend(\'' + userId + '\',\'' + (u.nome||'').replace(/'/g,"\\'") + ' ' + (u.cognome||'').replace(/'/g,"\\'") + '\')" title="Sospendi"><i class="fas fa-pause"></i></button>';
-  }
-  html += '<button class="btn btn-danger btn-xs" onclick="confirmDeleteUser(\'' + userId + '\',\'' + (u.nome||'').replace(/'/g,"\\'") + ' ' + (u.cognome||'').replace(/'/g,"\\'") + '\')" title="Elimina"><i class="fas fa-trash"></i></button>';
-  html += '</div>';
-  return html;
-}
+/* `renderUserActions()` — rimossa. Non era chiamata da nessuna vista (zero
+   punti di richiamo nel repository): generava una riga di bottoni
+   Modifica/Riattiva/Sospendi/Elimina che nessun pannello disegnava mai.
+   Sospendi ed Elimina hanno da tempo la loro strada vera in
+   006-admin-delete-suspend-enhancement-v1-0.js; Riattiva (`doReactivate`,
+   sotto) è ora agganciata lì, nello stesso pannello dettaglio utente. */
 
 /* ─────────────────────────────────────────────────────────────
    3. NOTIFICATIONS — in-app + email + WhatsApp
@@ -4329,50 +4317,16 @@ function doReactivate(id) {
   renderUsers();
 }
 
-function confirmDeleteUser(id, name) {
-  var html = '<div class="modal modal-sm">';
-  html += '<div class="modal-header"><div class="font-bold" style="color:var(--red)">Elimina Utente</div>';
-  html += '<button class="btn btn-ghost btn-xs" onclick="closeModal()">&#10005;</button></div>';
-  html += '<div class="modal-body">';
-  html += '<div class="alert a-red mb-12">Eliminare <strong>' + name + '</strong> definitivamente?</div>';
-  html += '<div class="form-group"><label>Scrivi ELIMINA per confermare</label>';
-  html += '<input id="del-confirm-input" placeholder="ELIMINA"></div>';
-  html += '</div><div class="modal-footer">';
-  html += '<button class="btn btn-ghost btn-sm" onclick="closeModal()">Annulla</button> ';
-  html += '<button class="btn btn-danger btn-sm" id="btn-del-confirm" onclick="checkAndDelete(\'' + id + '\')">'
-  html += '<i class="fas fa-trash"></i> Elimina definitivamente</button>';
-  html += '</div></div>';
-  openModal(html);
-}
-
-function checkAndDelete(id) {
-  var v = (document.getElementById('del-confirm-input')||{value:''}).value;
-  if (v !== 'ELIMINA') { toast('Scrivi ELIMINA per confermare', 'error'); return; }
-  doDeleteUser(id);
-}
-
-function doDeleteUser(id) {
-  var u = (_db.users||[]).find(function(x){ return x.id===id; });
-  if (!u) return;
-  var name = u.nome + ' ' + u.cognome;
-  _db.users    = (_db.users||[]).filter(function(x){ return x.id!==id; });
-  _db.sessions = (_db.sessions||[]).filter(function(x){ return x.userId!==id; });
-  _db.creations= (_db.creations||[]).filter(function(x){ return x.userId!==id; });
-  dbSave(_db);
-  addAuditLog('account_deleted', name, id);
-  AdminCommandBus.send('force_logout', { userId:id });
-  var sbUrl = localStorage.getItem('ingly_supabase_url')||'';
-  var sbKey = localStorage.getItem('ingly_supabase_anon_key')||'';
-  if (sbUrl && sbKey) {
-    fetch(sbUrl.replace(/\/$/,'')+'/rest/v1/ingly_users?id=eq.'+id, {
-      method:'DELETE',
-      headers:{'apikey':sbKey,'Authorization':'Bearer '+sbKey}
-    }).catch(function(){});
-  }
-  toast('&#128465; Utente eliminato: '+name, 'warning');
-  closeModal();
-  renderUsers();
-}
+/* `confirmDeleteUser`/`checkAndDelete`/`doDeleteUser` — rimosse. Erano una
+   seconda implementazione dello stesso «elimina utente» già coperto da
+   `confirmDeleteUserFull`/`doDeleteUserFull`
+   (src/admin/legacy/patches/006-admin-delete-suspend-enhancement-v1-0.js),
+   quella davvero raggiunta dal pannello (chiede di scrivere ELIMINA, come
+   questa, ma è quella agganciata al bottone reale nel dettaglio utente).
+   Questa versione non aveva nessun punto di chiamata rimasto nel markup —
+   solo `renderUserActions()`, anch'essa mai invocata — quindi non era una
+   seconda strada percorribile per cancellare un account: era codice morto
+   che duplicava, senza eseguire mai, la stessa responsabilità. */
 
 function doForceLogout(id, name) {
   AdminCommandBus.send('force_logout', { userId:id });

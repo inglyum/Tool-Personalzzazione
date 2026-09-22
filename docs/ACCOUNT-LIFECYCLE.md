@@ -226,6 +226,7 @@ proprio workspace, la sezione Sicurezza quella del proprio account.
 | Recupero password automatico | come sopra. |
 | Pagamenti automatici | vedi `BILLING-ARCHITECTURE.md`: niente in questo prodotto può dichiarare pagato un abbonamento senza un riferimento del fornitore. |
 | RLS vera | `localStorage` non ha righe né politiche. L'isolamento per `tenant_id` è applicato nel codice ed è verificato dai test; diventa reale quando i dati passano a Supabase (`SUPABASE-READINESS.md`). |
+| Account che sopravvive a un azzeramento fatto da fuori l'app | Vedi §9: l'identità vive solo in `localStorage`, su quel browser. DevTools «Clear site data», un altro browser o un altro dispositivo cancellano l'unica copia — non risolvibile senza un backend reale. |
 
 Dirlo qui è il punto: una funzione che manca e si sa che manca è un pezzo di
 strada; una funzione che sembra esserci e non funziona è un difetto.
@@ -243,3 +244,33 @@ strada; una funzione che sembra esserci e non funziona è un difetto.
 | `tests/fatturazione.test.mjs` | idempotenza, nessuna attivazione senza fornitore |
 | `tests/auth-identita.test.mjs` | hashing, sessioni senza diritti |
 | `tests/qa/ciclo-account.mjs` | il percorso completo nel file consegnato, in un browser vero |
+| `tests/qa/reset-non-cancella-account.mjs` | il reset dei dati applicativi non cancella l'account (vedi §9) |
+| `tests/qa/admin-riattiva-account.mjs` | ATTIVA/SOSPENDI/ELIMINA sono tre stati dello stesso interruttore |
+
+---
+
+## 9. Reset dei dati e cancellazione dell'account non sono la stessa cosa
+(2.12.0)
+
+`ingly_saas_db` (`localStorage`) è l'unico posto dove vivono `users`,
+`tenants`, `subscriptions`, `memberships`, `device_sessions`, `audit_log` —
+tutto l'account, in un solo blob JSON, distinto dalle IndexedDB business
+(`orders`, `catalog`, `clients`…). `InglyPrimoAvvio.serve()` decide
+«mostra login» o «mostra crea account» leggendo solo
+`ingly_saas_db.users.length`: per questo svuotare quella singola chiave da
+qualunque punto del codice equivale, agli occhi dell'app, a un'istallazione
+mai avviata.
+
+«Reset di fabbrica» (Backup & Ripristino) cancellava anche quella chiave
+insieme ai dati applicativi che l'avviso prometteva di cancellare — un
+account cancellato di nascosto da un pulsante che non lo dichiarava.
+Corretto: il reset ora esclude esplicitamente `ingly_saas_db` e
+`ingly_device_id` dalla cancellazione, e l'avviso lo dice.
+
+**Questo vale solo per i reset fatti da dentro l'applicazione.** Un
+azzeramento fatto da fuori — DevTools «Clear site data», un altro browser,
+un altro dispositivo — cancella comunque l'unica copia dell'account, perché
+non esiste una seconda copia da nessuna parte finché non c'è un backend
+reale. Non è un difetto di questo modulo: è la conseguenza diretta di non
+avere un server. Dettaglio completo, incluso lo stato del Cloud Sync
+opzionale e perché resta bloccato, in `docs/RELEASE-AUTH-SECURITY-4.md`.

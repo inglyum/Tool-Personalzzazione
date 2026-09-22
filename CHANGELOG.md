@@ -3,6 +3,69 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.12.0 — Il reset dei dati non è la cancellazione dell'account
+
+Continuazione del mandato «FIX DEFINITIVO AUTH / ACCOUNT / LOGIN / PIANI /
+BILLING / DEVICE SESSION» (parti 1-3: commit `a99b250`, `c172a1b`,
+`69bce35`/`afa76c6` — vedi `docs/RELEASE-AUTH-SECURITY-2.md` e `-3.md`).
+Dettaglio completo, incluso ciò che resta bloccato e perché, in
+`docs/RELEASE-AUTH-SECURITY-4.md`. In sintesi:
+
+**1. Il difetto reale.** «Backup & Ripristino → Reset di fabbrica» cancellava
+`localStorage` con un filtro `startsWith('ingly')`, che catturava anche
+`ingly_saas_db` — l'unica riga che contiene utenti, tenant, abbonamento,
+postazioni e registro. L'avviso mostrato prima del click prometteva di
+cancellare «clienti, ordini, prodotti…»: mai l'account. Chi confermava si
+ritrovava, al ricaricamento, alla schermata di primo avvio come se non si
+fosse mai registrato — l'esatto sintomo segnalato: «ogni volta devo pulire
+i dati e rifare l'account». Corretto escludendo `ingly_saas_db` e
+`ingly_device_id` dal filtro; l'avviso ora dichiara esplicitamente che
+l'account non viene toccato. Verificato con un account vero, un dato
+applicativo vero, un click vero sul bottone vero: l'account sopravvive, il
+dato applicativo no, e le stesse credenziali riaprono una sessione dopo il
+reset (`tests/qa/reset-non-cancella-account.mjs`, 10/10).
+
+**2. Il limite architetturale, dichiarato e non aggirato.** Questa
+installazione non ha un backend raggiungibile: l'identità vive solo in
+`localStorage`, sullo stesso dispositivo. Un azzeramento completo dei dati
+del browser (DevTools «Clear site data», un altro browser, un altro
+dispositivo) cancella anche l'unica copia dell'account — non è un bug
+risolvibile lato client, è la definizione stessa di «nessun server».
+Renderlo davvero cloud-autorevole richiede un progetto Supabase reale;
+questo ambiente non ha una anon key valida per nessuno dei due progetti
+nominati (produzione «Ingly 91», esclusa per mandato; staging «INGLY OS V2
+STAGING», trovato l'URL, mai la chiave — stesso blocco già documentato in
+`docs/CLOUD-SYNC-STATUS.md` §9 e `docs/RELEASE-AUTH-SECURITY-3.md` §9, non
+riverificato qui perché non è cambiato nulla che lo sblocchi).
+
+**3. `SingleDeviceEnforcement` — ritirata.** Terza implementazione,
+duplicata e dormiente, dello stesso limite a una postazione che
+`InglyDispositivi` già applica correttamente. Segnalata per il ritiro fin
+da `docs/RELEASE-AUTH-SECURITY-3.md` §3, mai eseguita: rimossa ora (287
+righe, `src/legacy/patches/117-...js`), zero punti di richiamo nel resto
+del repository (verificato), sua stessa `init()` già disattivata a mano
+in una release precedente.
+
+**4. Admin → Utenti: un'implementazione duplicata di «Elimina», rimossa;
+«Riattiva», prima irraggiungibile, ora agganciata.** `confirmDeleteUser`/
+`checkAndDelete`/`doDeleteUser` duplicavano, senza essere mai chiamate da
+nessuna vista, lo stesso «elimina account» già coperto da
+`confirmDeleteUserFull`/`doDeleteUserFull` (006) — quella vera, dietro
+conferma scritta «ELIMINA». `doReactivate` esisteva ed era corretta, ma il
+solo bottone che la chiamava (`renderUserActions()`) non era mai disegnato
+da nessuna vista: un account sospeso non aveva, nel pannello dettaglio,
+nessuna via diretta per tornare attivo. Aggiunto un bottone «Riattiva
+Account» nello stesso pannello dove già vive «Elimina Account», stesso
+pattern di iniezione. Verificato con un account vero: creato attivo →
+sospeso davvero (`doSuspend`) → «Riattiva» compare solo ora → click vero →
+account di nuovo attivo, scadenza rinnovata (`tests/qa/
+admin-riattiva-account.mjs`, 7/7).
+
+Verifica: 267 file sintassi, 2203/2203 unit, suite QA browser verde
+(vedi `docs/RELEASE-AUTH-SECURITY-4.md` per il dettaglio completo, inclusi
+i test già esistenti rieseguiti per escludere regressioni su device
+takeover, force logout, cambio account, admin console).
+
 ## 2.11.0 — Un accento in più: Rosso
 
 Richiesta diretta dell'utente. Il motore Aspetto (`src/product/tema.js`)
