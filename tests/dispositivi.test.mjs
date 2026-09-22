@@ -97,6 +97,24 @@ test('un piano con più postazioni ne accetta più di una', () => {
   assert.equal(D.registra(UTENTE, { limite: 3, device_id: 'dev_d' }).conflitto, true);
 });
 
+test('il limite di postazioni si legge dal piano, non è sempre uno', () => {
+  const { ctx } = carica('{}');
+  const D = ctx.InglyDispositivi;
+  assert.equal(D.limiteDi('standard'), 1);
+  assert.equal(D.limiteDi('premium'), 3);
+  assert.equal(D.limiteDi('business'), 10);
+  assert.equal(D.limiteDi('piano-inesistente'), D.LIMITE_PREDEFINITO, 'un piano sconosciuto non apre più del minimo');
+});
+
+test('registrarsi senza passare un limite esplicito usa quello del proprio piano', () => {
+  const { D } = carica('{}');
+  assert.equal(D.registra(UTENTE, { piano: 'premium' }).ok, true);
+  assert.equal(D.registra(UTENTE, { piano: 'premium', device_id: 'dev_b' }).ok, true);
+  assert.equal(D.registra(UTENTE, { piano: 'premium', device_id: 'dev_c' }).ok, true);
+  assert.equal(D.registra(UTENTE, { piano: 'premium', device_id: 'dev_d' }).conflitto, true,
+    'premium concede 3 postazioni, non di più');
+});
+
 test('la postazione di un altro utente non occupa la mia', () => {
   const { D } = carica('{}');
   D.registra({ id: 'usr_altro' }, { device_id: 'dev_x' });

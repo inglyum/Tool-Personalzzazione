@@ -88,7 +88,17 @@
       target: 'Maker e piccolo laboratorio',
       sintesi: 'Preventivi, ordini e clienti in un posto solo.',
       funzioni: _set(STANDARD),
-      limiti: { orders_month: 100, users: 1, workspaces: 1, locations: 1 },
+      /* `dispositivi` e `storage_gb` mancavano: `InglyDispositivi.limiteDi()`
+         (src/product/device-sessions.js) già cercava `limite(piano,
+         'dispositivi')` da prima che questa chiave esistesse qui, quindi
+         ogni piano — Business incluso — riceveva sempre lo stesso limite
+         di una sola postazione. `storage_gb` è dichiarato per lo stesso
+         motivo per cui lo sono `orders_month`/`users`: un limite che vive
+         solo nel catalogo dell'Admin (`PLANS_CFG`) non è un limite del
+         prodotto, è un numero scritto in un pannello che nessun controllo
+         applica davvero. Non ancora imposto da nessun controllo di
+         quota — dichiararlo qui è il primo passo, non l'ultimo. */
+      limiti: { orders_month: 100, users: 1, workspaces: 1, locations: 1, dispositivi: 1, storage_gb: 5 },
       badge: null,
     },
     {
@@ -98,7 +108,7 @@
       target: 'Laboratorio professionale',
       sintesi: 'Produzione, magazzino e costi reali: il laboratorio intero.',
       funzioni: _set(PREMIUM),
-      limiti: { orders_month: 500, users: 3, workspaces: 1, locations: 1 },
+      limiti: { orders_month: 500, users: 3, workspaces: 1, locations: 1, dispositivi: 3, storage_gb: 25 },
       badge: 'Più scelto',
     },
     {
@@ -109,8 +119,12 @@
       sintesi: 'Più sedi, più persone, API e integrazioni.',
       funzioni: _set(BUSINESS),
       /* `null` vuol dire senza limite. Non `Infinity`, che si trasforma in
-         `null` appena passa da JSON e smette di volere dire la stessa cosa. */
-      limiti: { orders_month: null, users: null, workspaces: null, locations: null },
+         `null` appena passa da JSON e smette di volere dire la stessa cosa.
+         `dispositivi` resta un numero finito anche qui, deliberatamente:
+         il prodotto applica «un abbonamento, una postazione» come regola
+         di sicurezza, non solo commerciale — un piano senza limite di
+         dispositivi contraddirebbe quella regola invece di scalarla. */
+      limiti: { orders_month: null, users: null, workspaces: null, locations: null, dispositivi: 10, storage_gb: 100 },
       badge: null,
     },
   ];

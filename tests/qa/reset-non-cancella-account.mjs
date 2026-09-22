@@ -15,7 +15,10 @@
  * pulsante vero: si crea un account, si aggiunge un dato applicativo, si
  * fa reset, e dopo il ricaricamento l'account esiste ancora — si vede
  * ACCEDI, non CREA ACCOUNT — e le credenziali della sessione precedente
- * aprono davvero una nuova sessione.
+ * aprono davvero una nuova sessione, con lo stesso tenant, lo stesso
+ * ruolo, lo stesso piano e lo stesso abbonamento di prima (il caso critico
+ * del mandato SaaS: non basta rientrare, deve rientrare LA STESSA identità,
+ * non un'identità nuova che sembra la stessa).
  *
  *   node tests/qa/reset-non-cancella-account.mjs [file]
  */
@@ -54,6 +57,22 @@ const creazione = await page.evaluate(async () => {
 });
 dico('l\'account si crea', creazione.risolto && creazione.utenti === 1, 'utenti=' + creazione.utenti);
 dico('la sessione è attiva dopo la creazione', creazione.sessione);
+
+/* ── 1b · Fotografia dell'identità PRIMA del reset: tenant, ruolo, piano,
+   abbonamento. Non basta che l'account «esista» dopo — deve essere
+   esattamente lo stesso, non un secondo account con lo stesso nome. ──── */
+const primaDelReset = await page.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+  const u = (db.users || [])[0];
+  const sub = (db.subscriptions || []).find((s) => s.tenant_id === u.tenant_id);
+  return {
+    userId: u.id, tenantId: u.tenant_id, ruolo: u.ruolo,
+    subId: sub ? sub.id : null, planId: sub ? sub.plan_id : null, subStatus: sub ? sub.status : null,
+  };
+});
+dico('prima del reset l\'account ha un tenant, un ruolo e un abbonamento veri',
+  !!primaDelReset.tenantId && !!primaDelReset.ruolo && !!primaDelReset.planId,
+  JSON.stringify(primaDelReset));
 
 /* ── 2 · Un dato applicativo vero, da perdere col reset ─────────────────── */
 const datoScritto = await page.evaluate(async () => {
@@ -121,6 +140,32 @@ const rientro = dopoReset.formLogin ? await page.evaluate(async () => {
 }) : { sessione: false, gate: 'n/d', errore: 'form di login assente' };
 dico('login dopo il reset: le stesse credenziali aprono la sessione', rientro.sessione && rientro.gate === 'none',
   rientro.errore || rientro.gate);
+
+/* ── 6 · La stessa identità, non una nuova: tenant, ruolo, abbonamento
+   invariati — il caso critico del mandato SaaS (§34). Un account che
+   "esiste" ma è ripartito da un tenant/piano diverso non ha superato
+   il test: è un secondo account che porta lo stesso nome. ─────────────── */
+const dopoRientro = rientro.sessione ? await page.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('ingly_saas_db') || '{}');
+  const u = (db.users || [])[0];
+  const sub = (db.subscriptions || []).find((s) => s.tenant_id === u.tenant_id);
+  return {
+    userId: u.id, tenantId: u.tenant_id, ruolo: u.ruolo,
+    subId: sub ? sub.id : null, planId: sub ? sub.plan_id : null, subStatus: sub ? sub.status : null,
+  };
+}) : null;
+dico('dopo il rientro è lo STESSO utente (stesso id), non un secondo account',
+  !!dopoRientro && dopoRientro.userId === primaDelReset.userId);
+dico('lo stesso tenant', !!dopoRientro && dopoRientro.tenantId === primaDelReset.tenantId,
+  primaDelReset.tenantId + ' → ' + (dopoRientro && dopoRientro.tenantId));
+dico('lo stesso ruolo', !!dopoRientro && dopoRientro.ruolo === primaDelReset.ruolo,
+  primaDelReset.ruolo + ' → ' + (dopoRientro && dopoRientro.ruolo));
+dico('lo stesso abbonamento (stesso id, non uno nuovo)',
+  !!dopoRientro && dopoRientro.subId === primaDelReset.subId);
+dico('lo stesso piano', !!dopoRientro && dopoRientro.planId === primaDelReset.planId,
+  primaDelReset.planId + ' → ' + (dopoRientro && dopoRientro.planId));
+dico('l\'abbonamento è ancora nello stato giusto (non scaduto per il reset)',
+  !!dopoRientro && dopoRientro.subStatus === primaDelReset.subStatus);
 
 console.log('\nRESET NON CANCELLA L\'ACCOUNT\n');
 const problemi = [];

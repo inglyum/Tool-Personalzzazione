@@ -116,6 +116,45 @@ test('giorno 0, 13, 14, 15 della prova', () => {
   assert.equal(S.stato(t, g(15)).stato, 'expired');
 });
 
+test('estendere una prova sposta la scadenza e la traccia', () => {
+  const t = S.creaTrial({ adesso: g(0) });
+  const e = S.estendiTrial(t, 7, { adesso: g(10), chi: 'admin@ingly.it' });
+  assert.equal(e.ok, true);
+  assert.equal(Math.round((Date.parse(e.abbonamento.trial_end) - Date.parse(t.trial_end)) / 86400000), 7);
+  assert.equal(e.abbonamento.current_period_end, e.abbonamento.trial_end);
+  assert.equal(e.abbonamento.trial_extension_count, 1);
+  assert.equal(e.abbonamento.trial_extended_by, 'admin@ingly.it');
+  assert.ok(e.abbonamento.trial_extended_at);
+  assert.equal(S.stato(e.abbonamento, g(18)).stato, 'trial', 'i 7 giorni in più valgono davvero');
+});
+
+test('estendere due volte accumula il conteggio, non lo resetta', () => {
+  const t = S.creaTrial({ adesso: g(0) });
+  const e1 = S.estendiTrial(t, 5, { adesso: g(1) }).abbonamento;
+  const e2 = S.estendiTrial(e1, 5, { adesso: g(2) }).abbonamento;
+  assert.equal(e2.trial_extension_count, 2);
+});
+
+test('non si estende una prova già scaduta: è una scelta diversa, non un\'estensione', () => {
+  const t = S.creaTrial({ adesso: g(0) });
+  const scaduto = Object.assign({}, t, { status: 'expired' });
+  const e = S.estendiTrial(scaduto, 7);
+  assert.equal(e.ok, false);
+  assert.match(e.motivo, /non è in prova/);
+});
+
+test('non si estende un abbonamento a pagamento', () => {
+  const a = S.creaAttivo('premium', 'monthly', { adesso: g(0) });
+  const e = S.estendiTrial(a, 7);
+  assert.equal(e.ok, false);
+});
+
+test('zero o giorni negativi vengono rifiutati, non ignorati in silenzio', () => {
+  const t = S.creaTrial({ adesso: g(0) });
+  assert.equal(S.estendiTrial(t, 0).ok, false);
+  assert.equal(S.estendiTrial(t, -3).ok, false);
+});
+
 test('nessun abbonamento significa scaduto, non attivo', () => {
   assert.equal(S.stato(null).stato, 'expired');
   assert.equal(S.stato(null).accesso, false);

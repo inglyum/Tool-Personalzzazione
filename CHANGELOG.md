@@ -3,6 +3,79 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.13.0 — Account, piani e fatturazione: numeri veri, non stimati
+
+Seguito del mandato «COMPLETE ACCOUNT, SAAS BILLING & ACCESS CONTROL» sulla
+base di `docs/RELEASE-AUTH-SECURITY-4.md` (2.12.0). Dettaglio completo,
+inclusa la mappa dei cinque cataloghi piano non ancora unificati e il
+limite architetturale sul backend, in
+`docs/RELEASE-SAAS-BILLING-ACCESS-CONTROL.md`. In sintesi, sei difetti
+reali trovati e corretti in questo giro:
+
+**1. Il periodo di prova non si poteva estendere.** Non esisteva nessuna
+funzione per prolungare un trial: `InglyAbbonamento.estendiTrial(sub,
+giorni, opzioni)` sposta `trial_end`/`current_period_end`, rifiuta un
+abbonamento già scaduto o già pagante, e traccia `trial_extension_count`,
+`trial_extended_by`, `trial_extended_at`. 5 test nuovi in
+`tests/saas-piani.test.mjs`.
+
+**2. Il limite di postazioni era sempre 1, per ogni piano.**
+`InglyDispositivi.limiteDi()` leggeva già `PIANI[piano].limiti.dispositivi`,
+ma quella chiave non esisteva in nessun piano: ogni tenant, anche
+Business, restava fermo a una sola postazione. Aggiunti `dispositivi` e
+`storage_gb` a ciascun piano in `src/product/plan-catalog.js` (standard 1,
+premium 3, business 10 — deliberatamente finito anche per Business, non
+illimitato, per rispettare la politica «un abbonamento, un dispositivo»).
+2 test nuovi in `tests/dispositivi.test.mjs`.
+
+**3. Cambiare piano da Admin non aggiornava l'abbonamento vero.**
+`doSaveUser()` e il cambio piano in massa (`_bulk.act('plan:...')`)
+scrivevano solo `u.plan` — mai `db.subscriptions[].plan_id`, il campo che
+`InglyEntitlements` legge davvero. Il pannello mostrava un piano, il
+prodotto ne applicava un altro. Corretto in entrambi i punti con lo stesso
+ponte `MAPPA_PIANO_CANONICO`.
+
+**4. La dashboard Admin escludeva gli utenti autoregistrati.** MRR, utenti
+attivi, «Scadono 7gg», scaduti e nuovi del mese leggevano solo
+`u.plan`/`u.expires_at`/`u.created_at` — campi che un account creato dalla
+console admin porta, ma che un utente registrato da sé (il vero
+abbonamento vive solo in `db.subscriptions`) non ha mai avuto. Spariva
+silenziosamente da ogni conteggio. Corretto con funzioni di risoluzione
+che risalgono al vero abbonamento quando i campi diretti mancano.
+
+**5. Lo storico pagamenti era generato con `Math.random()`.** Il pannello
+«Pagamenti» inventava transazioni finte con un bottone «Retry» che
+marcava «pagato» un pagamento mai avvenuto. Sostituito con la lettura
+reale di `db.billing_events` (scritti da `InglyFatturazione`), incluso
+uno stato vuoto onesto quando non ci sono eventi.
+
+**6. L'Audit Trail del dettaglio utente ignorava gli eventi di prodotto,
+e andava in errore sugli utenti autoregistrati.** `openUserDetail()`
+leggeva solo `db.auditLog` (gli eventi della console); ora unisce anche
+`db.audit_log` (gli eventi veri di account/billing/dispositivi). La
+scheda «Utilizzo» lanciava un `TypeError` su `u.aiUsage.toLocaleString()`
+per qualsiasi account senza quei campi di bookkeeping — un crash reale,
+non solo un artefatto di test, scoperto scrivendo la suite di collaudo.
+
+**Il caso critico del mandato (§34)** — stessa identità (stesso utente,
+tenant, ruolo, abbonamento, piano, stato) dopo un ciclo reset-locale →
+ricreazione → login — ha ora collaudo permanente esteso a 17 controlli in
+`tests/qa/reset-non-cancella-account.mjs`. Nuova suite dedicata,
+`tests/qa/admin-kpi-e-fatturazione-reali.mjs` (12 controlli), copre i
+punti 3-6 con un browser vero.
+
+**Non toccato in questo giro, per scelta esplicita e documentata**: la
+duplicazione fra i cinque cataloghi piano esistenti (`InglyPiani`,
+`PLANS_CFG`, `MAPPA_PIANO_CANONICO`, `InglyLicensing`, `PLAN_MODULES`) non
+è stata unificata — troppo estesa per questo giro, vietata dal mandato
+stesso («non fare una riscrittura distruttiva»); qualunque integrazione
+reale con un fornitore di pagamento resta strutturalmente impossibile,
+perché questo repository non ha alcun server in grado di ricevere un
+webhook (verificato: nessuna cartella `server/`, `functions/`, `api/`);
+la chiave anon Supabase di staging resta assente da questo ambiente,
+stesso blocco già documentato in tre release precedenti, non
+riverificato qui perché nulla lo sblocca.
+
 ## 2.12.0 — Il reset dei dati non è la cancellazione dell'account
 
 Continuazione del mandato «FIX DEFINITIVO AUTH / ACCOUNT / LOGIN / PIANI /

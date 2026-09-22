@@ -74,12 +74,27 @@
         d.users=d.users.filter(function(u){return !SEL.has(u.id);}); save(); SEL.clear(); rerender(); setTimeout(injectCheckboxes,50); return; }
       if(action==='export'){ _bulk.exportCSV(d.users.filter(function(u){return SEL.has(u.id);})); return; }
       var addYear=function(iso){ var dt=iso?new Date(iso):new Date(); dt.setFullYear(dt.getFullYear()+1); return dt.toISOString(); };
+      /* Stesso ponte di doSaveUser() (003): un cambio piano bulk scriveva
+         solo u.plan (il piano di questa console) e non toccava mai
+         _db.subscriptions[].plan_id — quello che InglyEntitlements legge
+         davvero. Un cambio piano di massa lasciava tutti gli utenti
+         selezionati con gli entitlement del piano di prima, mentre il
+         pannello mostrava già quello nuovo. */
       d.users.forEach(function(u){
         if(!SEL.has(u.id)) return;
         if(action==='activate') u.status='active';
         else if(action==='suspend') u.status='suspended';
         else if(action==='renew'){ u.expiresAt=addYear(u.expiresAt); u.status='active'; }
-        else if(action.indexOf('plan:')===0){ u.plan=action.split(':')[1]; }
+        else if(action.indexOf('plan:')===0){
+          u.plan=action.split(':')[1];
+          if(typeof MAPPA_PIANO_CANONICO!=='undefined' && u.tenant_id){
+            var subUtente=(d.subscriptions||[]).find(function(s){return s.tenant_id===u.tenant_id;});
+            if(subUtente){
+              subUtente.plan_id=MAPPA_PIANO_CANONICO[u.plan]||'standard';
+              subUtente.updated_at=new Date().toISOString();
+            }
+          }
+        }
       });
       save(); rerender(); setTimeout(function(){ injectCheckboxes(); toolbar(); },50);
     },

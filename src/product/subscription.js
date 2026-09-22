@@ -295,6 +295,36 @@
     }) };
   }
 
+  /** Estende una prova in corso di N giorni. Non fa rivivere una prova già
+      scaduta (quella è una scelta commerciale diversa, non un'estensione) —
+      e non fa niente per un abbonamento che non è in prova: la funzione dice
+      di no invece di spostare una scadenza che non esiste. Traccia chi,
+      quando, e quante volte: senza questi tre campi un'estensione è
+      indistinguibile da una data scritta a mano. */
+  function estendiTrial(sub, giorni, opzioni) {
+    var o = opzioni || {};
+    if (!sub) return { ok: false, motivo: 'nessun abbonamento' };
+    if (sub.status !== 'trial') {
+      return { ok: false, motivo: 'non è in prova: stato attuale «' + infoStato(sub.status).label + '»',
+        abbonamento: sub };
+    }
+    var n = Number(giorni);
+    if (!isFinite(n) || n <= 0) {
+      return { ok: false, motivo: 'i giorni di estensione devono essere un numero positivo', abbonamento: sub };
+    }
+    var quando = _t(o.adesso) || Date.now();
+    var baseFine = _t(sub.trial_end) || quando;
+    var nuovaFine = new Date(baseFine + n * GIORNO).toISOString();
+    return { ok: true, abbonamento: Object.assign({}, sub, {
+      trial_end: nuovaFine,
+      current_period_end: nuovaFine,
+      trial_extension_count: (sub.trial_extension_count || 0) + 1,
+      trial_extended_by: o.chi || null,
+      trial_extended_at: new Date(quando).toISOString(),
+      updated_at: new Date(quando).toISOString(),
+    }) };
+  }
+
   /** Il rinnovo sposta il periodo in avanti: non ne apre uno nuovo. */
   function rinnova(sub, opzioni) {
     var o = opzioni || {};
@@ -326,5 +356,6 @@
     segnaNonPagato: segnaNonPagato,
     sospendi: sospendi,
     rinnova: rinnova,
+    estendiTrial: estendiTrial,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1129,7 +1129,21 @@ function openUserDetail(id){
   if(!u) return;
   const sessions=(db.sessions||[]).filter(s=>s.userId===id);
   const creations=(db.creations||[]).filter(c=>c.userId===id);
-  const auditEntries=(db.auditLog||[]).filter(e=>e.user===id).slice(0,10);
+  /* Questo pannello leggeva solo db.auditLog (camelCase) — gli eventi che
+     la console stessa scrive quando un admin clicca Sospendi/Ban/etc. Il
+     registro vero, scritto dal prodotto (InglyAccount, InglyFatturazione,
+     InglyDispositivi: creazione account, cambio password, avanzamento
+     pagamento, revoca dispositivo…) vive in db.audit_log (snake_case, un
+     campo per fascicolo) e non compariva mai qui: chi apriva il dettaglio
+     di un account vedeva solo le azioni fatte da questa console, mai
+     quelle avvenute nel prodotto vero. Uniti entrambi, ordinati per data,
+     normalizzati sulla stessa forma che il pannello già sapeva disegnare. */
+  const auditEntriesConsole=(db.auditLog||[]).filter(e=>e.user===id);
+  const auditEntriesProdotto=(db.audit_log||[]).filter(e=>String(e.target)===String(id)).map(e=>({
+    ts:e.at, action:e.action, severity:'low', ip:'—', browser:'—', user:id,
+  }));
+  const auditEntries=auditEntriesConsole.concat(auditEntriesProdotto)
+    .sort((a,b)=>new Date(b.ts||0)-new Date(a.ts||0)).slice(0,10);
   const days=getDaysRemaining(u.expiresAt);
   openModal(`
     <div class="modal modal-xl">
@@ -1232,10 +1246,10 @@ function openUserDetail(id){
             <div class="card-title mb-8"><i class="fas fa-chart-bar" style="color:var(--purple)"></i> Utilizzo</div>
             <div class="g2">
               ${[
-                {l:'Progetti',v:u.projects,i:'fas fa-folder'},
-                {l:'AI Tokens',v:u.aiUsage.toLocaleString(),i:'fas fa-robot'},
-                {l:'Accessi',v:u.loginCount,i:'fas fa-sign-in-alt'},
-                {l:'Storage',v:fmtBytes(u.storage_used),i:'fas fa-database'},
+                {l:'Progetti',v:u.projects||0,i:'fas fa-folder'},
+                {l:'AI Tokens',v:(u.aiUsage||0).toLocaleString(),i:'fas fa-robot'},
+                {l:'Accessi',v:u.loginCount||0,i:'fas fa-sign-in-alt'},
+                {l:'Storage',v:fmtBytes(u.storage_used||0),i:'fas fa-database'},
               ].map(s=>`<div style="background:var(--bg3);border-radius:var(--r);padding:10px;text-align:center"><i class="${s.i}" style="color:var(--text3);font-size:14px;margin-bottom:6px;display:block"></i><div class="font-black" style="font-size:16px">${s.v}</div><div class="text-2xs text-dim">${s.l}</div></div>`).join('')}
             </div>
           </div>
@@ -1362,6 +1376,24 @@ async function doSaveUser(id){
   const expVal=document.getElementById('eu-exp').value;
   if(expVal) u.expiresAt=new Date(expVal).toISOString();
   u.avatarInitials=(u.nome[0]+u.cognome[0]).toUpperCase();
+  /* doCreateUser() traduce il piano di questa console (PLANS_CFG:
+     starter/pro/business/enterprise) nel piano reale del prodotto
+     (InglyPiani: standard/premium/business) con MAPPA_PIANO_CANONICO, e
+     scrive l'abbonamento in _db.subscriptions — quello che
+     InglyEntitlements legge davvero per decidere cosa un utente può
+     usare. Qui, dopo un cambio piano, si aggiornava solo u.plan: il
+     pannello Admin mostrava il piano nuovo, ma l'abbonamento restava
+     fermo su quello vecchio. Un admin che "declassava" un utente da
+     Business a Starter lo lasciava con gli entitlement di Business — o
+     viceversa, un "promosso" restava bloccato sul piano di prima. */
+  if (oldPlan !== u.plan) {
+    var pianoCanonicoNuovo = MAPPA_PIANO_CANONICO[u.plan] || 'standard';
+    var subUtente = (_db.subscriptions || []).find(function(s){ return s.tenant_id === u.tenant_id; });
+    if (subUtente) {
+      subUtente.plan_id = pianoCanonicoNuovo;
+      subUtente.updated_at = new Date().toISOString();
+    }
+  }
   dbSave(_db);
   InglyCloudAdmin.syncUser(u).catch(function(){});
   // P1: sync modules_json to Supabase when plan changes
@@ -2898,88 +2930,68 @@ function renderRoadmap(){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   STORICO PAGAMENTI (per user detail modal tab)
-═══════════════════════════════════════════════════════════ */
-function makePaymentHistory(userId){
-  const statuses=['paid','paid','paid','paid','failed','pending'];
-  const methods=['stripe','paypal','bonifico'];
-  const plans=Object.keys(PLANS_CFG);
-  return Array.from({length:rndInt(3,12)},(_,i)=>{
-    const plan=rnd(plans);
-    const months=i+1;
-    const dt=new Date(); dt.setMonth(dt.getMonth()-months);
-    return {
-      id:'pay-'+userId+'-'+i,
-      date:dt.toISOString(),
-      amount:PLANS_CFG[plan].price,
-      plan,
-      method:rnd(methods),
-      status:rnd(statuses),
-      invoice:'INV-'+String(Math.floor(Math.random()*100000)).padStart(6,'0'),
-    };
-  });
-}
+   EVENTI DI FATTURAZIONE (per user detail modal tab)
+   ─────────────────────────────────────────────────────────
+   Prima di qui, questo pannello inventava da zero uno storico
+   pagamenti — importi, fatture, esiti — con Math.random(), e offriva
+   un bottone "Retry" che si limitava a scrivere p.status='paid' su
+   quel dato finto: un click che sembrava riuscire a incassare un
+   pagamento mai davvero tentato. Il divieto esplicito di stati di
+   produzione falsi rende questo un difetto, non un placeholder
+   accettabile.
 
+   `InglyFatturazione` (src/product/billing.js) è reale, testata, e
+   scrive `db.billing_events` ogni volta che `applica()` riceve un
+   evento vero dal fornitore — ma qui non arriva mai nessun evento,
+   perché non esiste un backend che riceva i webhook (vedi
+   docs/BILLING-ARCHITECTURE.md). Il pannello ora legge quella stessa
+   riga (Admin e Prodotto condividono `ingly_saas_db` quando aperti
+   dalla stessa origine) invece di inventarne una propria: se non è
+   mai arrivato un evento vero, lo dice — uno storico vero che è
+   vuoto, non uno storico finto che sembra pieno. */
 function openPaymentHistory(userId){
   const u=_db.users.find(x=>x.id===userId); if(!u) return;
-  // Generate or retrieve from DB
-  if(!_db.paymentHistory) _db.paymentHistory={};
-  if(!_db.paymentHistory[userId]) { _db.paymentHistory[userId]=makePaymentHistory(userId); dbSave(_db); }
-  const hist=_db.paymentHistory[userId];
-  const totalPaid=hist.filter(p=>p.status==='paid').reduce((a,p)=>a+p.amount,0);
+  const eventi=(_db.billing_events||[])
+    .filter(e=>e.tenant_id===u.tenant_id)
+    .slice().sort((a,b)=>new Date(b.at)-new Date(a.at));
+  const AZIONE_LABEL={attiva:'Attivazione',rinnova:'Rinnovo',non_pagato:'Pagamento fallito',disdici:'Disdetta'};
+  const AZIONE_BADGE={attiva:'b-paid',rinnova:'b-paid',non_pagato:'b-failed',disdici:'b-pending'};
   openModal(`
     <div class="modal modal-lg">
       <div class="modal-header">
         <div>
-          <div class="font-bold" style="font-size:15px">💳 Storico Pagamenti — ${u.nome} ${u.cognome}</div>
-          <div class="text-2xs text-dim">${hist.length} transazioni · Totale pagato: <strong style="color:var(--green)">${fmtMoney(totalPaid)}</strong></div>
+          <div class="font-bold" style="font-size:15px">💳 Eventi di fatturazione — ${u.nome} ${u.cognome}</div>
+          <div class="text-2xs text-dim">${eventi.length} eventi ricevuti dal fornitore di pagamento</div>
         </div>
         <button class="btn btn-ghost btn-xs" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body" style="padding:0">
+        ${eventi.length===0 ? `
+          <div class="alert-row alert-yellow" style="margin:16px">
+            <i class="fas fa-info-circle"></i>
+            Nessun evento di pagamento reale registrato per questo account. Questa installazione non ha un backend collegato a un fornitore di pagamento: finché nessun evento reale viene applicato, qui non c'è niente da mostrare — non uno storico inventato, uno storico vero che è ancora vuoto.
+          </div>
+        ` : `
         <table>
-          <thead><tr><th>Data</th><th>Piano</th><th>Importo</th><th>Metodo</th><th>Stato</th><th>Fattura</th><th>Azioni</th></tr></thead>
+          <thead><tr><th>Data</th><th>Evento</th><th>Fornitore</th><th>Rif. abbonamento presso il fornitore</th></tr></thead>
           <tbody>
-            ${hist.map(p=>`
+            ${eventi.map(e=>`
               <tr>
-                <td class="text-sm">${fmtDate(p.date)}</td>
-                <td>${getPlanBadge(p.plan)}</td>
-                <td class="font-bold" style="color:${p.status==='paid'?'var(--green)':p.status==='failed'?'var(--red)':'var(--yellow)'}">${fmtMoney(p.amount)}</td>
-                <td><span class="tag"><i class="fas fa-${p.method==='stripe'?'stripe-s':p.method==='paypal'?'paypal':'university'}"></i> ${p.method}</span></td>
-                <td><span class="badge ${p.status==='paid'?'b-paid':p.status==='failed'?'b-failed':'b-pending'}">${p.status}</span></td>
-                <td style="font-family:monospace;font-size:11px;color:var(--text3)">${p.invoice}</td>
-                <td><div class="td-actions">
-                  <button class="btn btn-ghost btn-xs" onclick="toast('📄 Fattura ${p.invoice} scaricata','success')"><i class="fas fa-download"></i></button>
-                  ${p.status==='failed'?`<button class="btn btn-success btn-xs" onclick="retryPayment('${p.id}','${userId}')"><i class="fas fa-redo"></i> Retry</button>`:''}
-                </div></td>
+                <td class="text-sm">${fmtDateTime(e.at)}</td>
+                <td><span class="badge ${AZIONE_BADGE[e.applicato]||'b-pending'}">${AZIONE_LABEL[e.applicato]||e.applicato}</span></td>
+                <td><span class="tag">${e.provider||'—'}</span></td>
+                <td style="font-family:monospace;font-size:11px;color:var(--text3)">${e.provider_subscription_id||'—'}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
+        `}
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost btn-sm" onclick="exportPaymentCSV('${userId}')"><i class="fas fa-download"></i> Export CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="closeModal()">Chiudi</button>
       </div>
     </div>
   `);
-}
-
-function retryPayment(payId, userId){
-  if(!(_db.paymentHistory && _db.paymentHistory[userId])) return;
-  const p=_db.paymentHistory[userId].find(x=>x.id===payId);
-  if(p){ p.status='paid'; dbSave(_db); addAuditLog('payment_retry',p.invoice,userId); toast('✅ Pagamento riuscito: '+p.invoice,'success'); closeModal(); openPaymentHistory(userId); }
-}
-
-function exportPaymentCSV(userId){
-  const u=_db.users.find(x=>x.id===userId); if(!u) return;
-  const hist=(_db.paymentHistory && _db.paymentHistory[userId])||[];
-  const rows=[['Data','Piano','Importo','Metodo','Stato','Fattura']];
-  hist.forEach(p=>rows.push([fmtDate(p.date),p.plan,p.amount,p.method,p.status,p.invoice]));
-  const csv=rows.map(r=>r.map(v=>'"'+(v||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download='pagamenti-'+u.username+'-'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
-  toast('📥 CSV scaricato','success');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -4746,28 +4758,50 @@ function renderDashboardWithChart() {
 
   dataPromise.then(function(allUsers) {
     var now = new Date();
-    var MRR_MAP = {starter:19,pro:49,business:99,enterprise:199};
+    /* Prezzi per id di questa console (starter/pro/business/enterprise) E
+       per id del catalogo reale del prodotto (standard/premium/business —
+       src/product/plan-catalog.js, prezzo mensile) sulla stessa mappa: un
+       utente registrato da sé (non creato da questa console) non ha mai
+       u.plan/u.plan_id — solo un abbonamento vero in db.subscriptions, con
+       plan_id già nello spazio del prodotto. Senza queste tre chiavi in
+       più, ogni utente reale che si è registrato da solo spariva dall'MRR
+       e dal conteggio attivi: non un numero sbagliato, un numero che
+       ometteva silenziosamente chi non era passato da qui. */
+    var MRR_MAP = {starter:19,pro:49,business:99,enterprise:199,standard:19,premium:39};
+    /* L'abbonamento vero di un utente, per tenant_id — la sola fonte per
+       chi non ha un piano scritto sul proprio record utente. */
+    var subDi=function(u){ return (_db.subscriptions||[]).filter(function(s){return s.tenant_id===u.tenant_id;})[0]||null; };
+    /* Stessa causa, stesso rimedio del pannello dettaglio: expires_at/
+       created_at (snake_case, la forma Supabase) non sono mai valorizzati
+       su un utente creato da questa console (che scrive expiresAt/
+       createdAt, camelCase) — quindi «Scadono 7gg» e «Scaduti» leggevano
+       sempre un campo assente e mostravano sempre 0, qualunque fosse lo
+       stato reale degli account. */
+    var scadenzaDi=function(u){ var s=subDi(u); return u.expires_at||u.expiresAt||(s&&s.current_period_end)||null; };
+    var pianoDi=function(u){ var s=subDi(u); return u.plan_id||u.plan||(s&&s.plan_id)||null; };
+    var creatoDi=function(u){ var s=subDi(u); return u.created_at||u.createdAt||(s&&s.created_at)||null; };
     var active  = allUsers.filter(function(u){ return u.status==='active'||u.status==='trial'; });
-    var expired = allUsers.filter(function(u){ return u.expires_at&&new Date(u.expires_at)<now; });
+    var expired = allUsers.filter(function(u){ var sc=scadenzaDi(u); return sc&&new Date(sc)<now; });
     var exp7    = allUsers.filter(function(u){
-      if(!u.expires_at)return false;
-      var d=(new Date(u.expires_at)-now)/86400000;
+      var sc=scadenzaDi(u); if(!sc)return false;
+      var d=(new Date(sc)-now)/86400000;
       return d>=0&&d<=7;
     });
-    var mrr  = active.reduce(function(s,u){ return s+(MRR_MAP[u.plan_id||u.plan]||0); },0);
+    var mrr  = active.reduce(function(s,u){ return s+(MRR_MAP[pianoDi(u)]||0); },0);
     var arr  = mrr*12;
-    var newM = allUsers.filter(function(u){ return (u.created_at||'').startsWith(now.toISOString().slice(0,7)); }).length;
+    var newM = allUsers.filter(function(u){ return (creatoDi(u)||'').startsWith(now.toISOString().slice(0,7)); }).length;
     var byPlan={};
-    allUsers.forEach(function(u){ var p=u.plan_id||u.plan||'starter'; byPlan[p]=(byPlan[p]||0)+1; });
+    allUsers.forEach(function(u){ var p=pianoDi(u)||'starter'; byPlan[p]=(byPlan[p]||0)+1; });
 
-    /* Build 12-month simulated MRR (real data from DB) */
+    /* MRR mese per mese, dai dati veri (nessun Math.random(): la versione
+       precedente di questo grafico lo era davvero — vedi CHANGELOG). */
     var mrrHistory = [];
     for (var i=11; i>=0; i--) {
       var d2 = new Date(now.getFullYear(), now.getMonth()-i, 1);
       var iso = d2.toISOString().slice(0,7);
-      var usersAtMonth = allUsers.filter(function(u){ return (u.created_at||'') <= iso+'T23:59:59'; });
+      var usersAtMonth = allUsers.filter(function(u){ return (creatoDi(u)||'') <= iso+'T23:59:59'; });
       var activeAtMonth = usersAtMonth.filter(function(u){ return u.status==='active'||u.status==='trial'; });
-      var mrrAt = activeAtMonth.reduce(function(s,u){ return s+(MRR_MAP[u.plan_id||u.plan]||0); },0);
+      var mrrAt = activeAtMonth.reduce(function(s,u){ return s+(MRR_MAP[pianoDi(u)]||0); },0);
       mrrHistory.push({ month: d2.toLocaleDateString('it-IT',{month:'short',year:'2-digit'}), mrr: mrrAt });
     }
 
@@ -4835,11 +4869,11 @@ function renderDashboardWithChart() {
           '<div class="card-title mb-8" style="color:var(--yellow)">&#9201; Licenze in scadenza nei prossimi 7 giorni</div>' +
           '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Utente</th><th>Piano</th><th>Scade</th><th>Azioni</th></tr></thead><tbody>' +
           exp7.map(function(u) {
-            var days = Math.ceil((new Date(u.expires_at||u.expiresAt) - now) / 86400000);
+            var days = Math.ceil((new Date(scadenzaDi(u)) - now) / 86400000);
             var uName = u.username || u.email || u.id;
             return '<tr>' +
               '<td class="font-bold">'+uName+'</td>' +
-              '<td>'+getPlanBadge(u.plan_id||u.plan||'starter')+'</td>' +
+              '<td>'+getPlanBadge(pianoDi(u)||'starter')+'</td>' +
               '<td style="color:var(--yellow);font-weight:700">'+days+'gg</td>' +
               '<td><div style="display:flex;gap:4px">' +
                 '<button class="btn btn-ghost btn-xs" onclick="openSendReminderModal(\''+u.id+'\')">&#128276; Reminder</button>' +
