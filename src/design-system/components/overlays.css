@@ -127,7 +127,10 @@
 .ds-toast-region {
   position: fixed;
   right: var(--space-5);
-  bottom: var(--space-5);
+  /* Sopra il dock AI fisso in basso a destra (patch 113): senza questa
+     distanza un toast copre i suoi pulsanti, o viceversa — trovato con
+     uno screenshot reale della dashboard, non leggendo il codice. */
+  bottom: calc(var(--space-5) + 64px);
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;

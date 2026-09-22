@@ -13,8 +13,17 @@
 #ingly-breadcrumb .bc-home:hover{color:var(--text)}
 
 /* ── F1.4 Toast upgrade ──────────────────────────────────── */
+/* A destra vivono già due elementi fissi in basso: #toast-container
+   (helpers.js — il toast primario, a cui tutto il resto rimanda) e il
+   pulsante circolare #engine-toggle del Cost Engine (009, bottom:20px,
+   50px di diametro). Con 2+ toast in ciascuno dei due stack toast, le
+   colonne si toccano; misurato con le rect reali via Playwright, non a
+   occhio. Spostato a sinistra: la AI Quick Bar è centrata, non tocca né
+   il bordo destro né quello sinistro. #toast-container è stato comunque
+   alzato a bottom:110px (vedi 009-favs-quickbar-display-none.css) per
+   lasciare margine reale sopra #engine-toggle, non solo i 10px che aveva. */
 #ingly-toasts {
-  position:fixed;bottom:24px;right:20px;
+  position:fixed;bottom:24px;left:20px;
   z-index:10000;display:flex;flex-direction:column;
   gap:8px;pointer-events:none;
 }
@@ -28,7 +37,7 @@
   pointer-events:all;cursor:pointer;
   transition:transform .15s;position:relative;overflow:hidden;
 }
-.itoast:hover{transform:translateX(-4px)}
+.itoast:hover{transform:translateX(4px)}
 .itoast.success{border-left:3px solid var(--green)}
 .itoast.error  {border-left:3px solid var(--red)}
 .itoast.warning{border-left:3px solid #f59e0b}
@@ -40,7 +49,7 @@
 .itoast .it-close{opacity:.5;flex-shrink:0;cursor:pointer;font-size:14px}
 .itoast .it-close:hover{opacity:1}
 .itoast .it-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--primary);animation:itbar 3s linear forwards}
-@keyframes itoastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+@keyframes itoastIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:none}}
 @keyframes itbar{from{width:100%}to{width:0%}}
 
 /* ── F2.1 AI Quick Bar ───────────────────────────────────── */

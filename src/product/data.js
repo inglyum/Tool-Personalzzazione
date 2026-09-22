@@ -169,6 +169,42 @@
     };
   }
 
+  /* ══ Andamento fatturato ═══════════════════════════════════════════════
+     Sei mesi di fatturato reale, mese per mese — la stessa fonte e lo stesso
+     filtro (`status === 'pagato'`) che `KPIEngine` usa per il KPI «Fatturato»
+     in cima alla dashboard: non è un secondo modo di contare gli incassi, è
+     lo stesso conteggio spalmato su più mesi invece che su uno solo. Se il
+     laboratorio non ha ancora un incasso registrato, non c'è un grafico da
+     disegnare — c'è uno stato vuoto che lo dice.                          */
+  async function revenueHistory(monthsBack) {
+    const n = monthsBack || 6;
+    const sales = await readStore('sales');
+    const paid = sales.filter((s) => s.status === 'pagato' && s.date);
+    if (!paid.length) return { empty: true, reason: 'Nessun incasso registrato ancora.' };
+
+    const now = new Date();
+    const buckets = [];
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ y: d.getFullYear(), m: d.getMonth(), label: d.toLocaleDateString('it-IT', { month: 'short' }), total: 0 });
+    }
+    for (const s of paid) {
+      const d = new Date(s.date);
+      if (isNaN(d)) continue;
+      const b = buckets.find((x) => x.y === d.getFullYear() && x.m === d.getMonth());
+      if (b) b.total += num(s.amount, 0);
+    }
+    const anyRevenue = buckets.some((b) => b.total > 0);
+    if (!anyRevenue) return { empty: true, reason: 'Nessun incasso negli ultimi ' + n + ' mesi.' };
+
+    return {
+      empty: false,
+      labels: buckets.map((b) => b.label),
+      values: buckets.map((b) => Math.round(b.total)),
+      total: Math.round(buckets.reduce((a, b) => a + b.total, 0)),
+    };
+  }
+
   /* ══ Work Center ═══════════════════════════════════════════════════════
      Un centro di lavoro esiste se il laboratorio ha almeno una macchina di
      quella tecnologia **oppure** almeno un lavoro che la richiede. Non si
@@ -727,6 +763,7 @@
     isActive,
     isOverdue,
     kpis,
+    revenueHistory,
     workCenters,
     attention,
     inventory,

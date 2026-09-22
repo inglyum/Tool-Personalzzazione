@@ -3,6 +3,63 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.19.0 — Dashboard: non più una griglia di card, un centro operativo
+
+Le cinque release precedenti (2.14.0–2.18.0) erano manutenzione del design
+system — token, icone, collisioni di classi. Utile, ma non il ridisegno
+visivo richiesto: aprire la Dashboard prima e dopo doveva mostrare un
+prodotto diverso, non la stessa griglia con colori più coerenti. Questa
+release cambia la composizione della Dashboard, non la sua tinta.
+
+**Prima**: quattro KPI, poi un grande stato-vuoto "produzione" con
+un'icona enorme e sproporzionata, poi due banner "va tutto bene" che
+occupavano quanto una card piena anche senza nulla da dire dentro, poi le
+stesse tabelle di dettaglio di sempre — nessuna gerarchia fra "voglio
+saperlo in tre secondi" e "voglio il dettaglio".
+
+**Dopo**: sotto ai KPI (ora con una barra di accento colorata e cifre più
+grandi), una riga a due colonne — andamento fatturato (grafico a barre
+Chart.js, sei mesi reali, stesso filtro `status === 'pagato'` che
+`KPIEngine` già usa per il KPI Fatturato, letto da una nuova funzione
+`InglyData.revenueHistory()` che non inventa un incasso se il registro
+`sales` è vuoto) e produzione dal vivo in forma di lista compatta, non più
+uno stato-vuoto gigante. Sotto, richiede-attenzione e scorte/macchine
+combinati in pannelli compatti, cliccabili, senza sprecare altezza sullo
+stato "tutto ok". Poi un separatore esplicito ("Dettaglio") prima delle
+tabelle complete di magazzino e macchine, che restano — la Dashboard non
+perde informazione, la riordina per priorità di lettura.
+
+**Bug reale trovato verificando con screenshot, non a occhio sul
+codice**: sulla stessa schermata convivevano quattro elementi fissi in
+basso a destra/centro — il toast primario (`#toast-container`, bottom:
+80px), il toast "upgrade" della patch 113 (`#ingly-toasts`, bottom: 24px,
+stesso lato), la AI Quick Bar (centrata) e il pulsante circolare del
+Cost Engine (`#engine-toggle`, 50px, bottom: 20px). Misurate le rect
+reali con Playwright: `#toast-container` e `#engine-toggle` avevano solo
+10px di margine reale, meno del blur dell'ombra del toast (30px) — e
+`#toast-container`/`#ingly-toasts` si toccavano con 2+ toast per stack
+(56px di distanza dichiarata, meno dell'altezza di un solo toast).
+Spostato `#ingly-toasts` a sinistra (spazio libero, la AI Quick Bar è
+centrata) e alzato `#toast-container` a bottom:110px per lasciare margine
+vero sopra il pulsante del Cost Engine. Verificato nel caso peggiore (4
+toast per stack + AI Quick Bar aperta): zero sovrapposizioni, rect alla
+mano.
+
+Non toccati: Cost Engine, Auth, Supabase, logica ERP/MES — solo
+composizione, dati letti (mai inventati) e CSS.
+
+npm test: 2210/2210 (nuova voce in `baseline/deliberate-changes.json` per
+il primo tocco a `styles/112-f1-3-breadcrumb.css`) · npm run qa: tutte le
+suite verdi — un fallimento iniziale in `dashboard-qualita-attenzione.mjs`
+non era una regressione ma un test che interrogava i vecchi nomi di
+classe (`.att-card`, `.att-card__count`) sostituiti dal nuovo markup
+(`.oc__alert-group`, `.oc__alert-badge`); il comportamento sotto era
+identico (contatore corretto, pulsante di navigazione, persistenza dopo
+ricaricamento) e il test è stato aggiornato ai nuovi selettori, non la
+funzione. Verificato responsive reale a 1440/1280/1024/768/390px: nessun
+overflow orizzontale, e a 390px il layout si impila su una colonna sola
+(non è il desktop rimpicciolito).
+
 ## 2.18.0 — Design System 2.0, quinto milestone: risolta la collisione .ds-toast, e un crash trovato per strada
 
 Chiude la collisione di nomi fra `window.DS.toast()` (patch 139,

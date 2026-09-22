@@ -141,6 +141,271 @@
   color: var(--color-warning-text);
 }
 
+/* Sulla dashboard il numero è il motivo per cui la scheda esiste: più grande
+   del resto del prodotto, con un filo di accento sopra invece di un bordo
+   colorato intero — la superficie resta neutra, il segnale è la linea. */
+.oc__kpis .kpi-card {
+  position: relative;
+  padding-top: calc(var(--card-padding-compact) + 3px);
+  overflow: hidden;
+}
+
+.oc__kpis .kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-primary);
+  opacity: 0.55;
+}
+
+.oc__kpis .kpi-card:nth-child(2)::before { background: var(--color-info); }
+.oc__kpis .kpi-card:nth-child(3)::before { background: var(--color-success); }
+.oc__kpis .kpi-card:nth-child(4)::before { background: var(--color-warning); }
+
+.oc__kpis .kpi-value {
+  font-size: var(--text-3xl);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Riga performance: grafico + produzione dal vivo ────────────────────── */
+.oc__row-performance {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.oc__row-alerts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .oc__row-performance,
+  .oc__row-alerts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.oc__chart-wrap {
+  position: relative;
+  height: 220px;
+  margin-top: var(--space-2);
+}
+
+.oc__panel--production .oc__panel,
+.oc__panel--production {
+  display: flex;
+  flex-direction: column;
+}
+
+.oc__prod-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.oc__prod-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.oc__prod-row:last-child {
+  border-bottom: none;
+}
+
+.oc__prod-row i {
+  color: var(--color-text-subtle);
+  width: 16px;
+  text-align: center;
+}
+
+.oc__prod-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.oc__prod-dot--ready { background: var(--color-success); }
+.oc__prod-dot--running { background: var(--color-info); }
+.oc__prod-dot--warning { background: var(--color-warning); }
+.oc__prod-dot--error { background: var(--color-danger); }
+
+.oc__prod-name {
+  flex: 1;
+  font-weight: var(--weight-medium);
+}
+
+.oc__prod-count {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.oc__prod-count.is-late {
+  color: var(--color-danger-text);
+}
+
+.oc__prod-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+/* ── Alert compatti (attenzione, scorte, macchine) ──────────────────────── */
+.oc__alert-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.oc__alert-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.oc__alert-head:hover {
+  background: var(--color-surface-hover);
+}
+
+.oc__alert-head i {
+  margin-left: auto;
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+.oc__alert-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.oc__alert-badge--danger { background: var(--color-danger-surface); color: var(--color-danger-text); }
+.oc__alert-badge--warning { background: var(--color-warning-surface); color: var(--color-warning-text); }
+.oc__alert-badge--info { background: var(--color-info-surface); color: var(--color-info-text); }
+
+.oc__alert-label {
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+}
+
+.oc__alert-value {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.oc__alert-items {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0 0 0 var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oc__alert-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  padding: 2px 0;
+}
+
+.oc__alert-meta {
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+}
+
+.oc__alert-simple {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oc__alert-simple-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.oc__alert-simple-row:last-child {
+  border-bottom: none;
+}
+
+.oc__alert-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.oc__alert-dot--danger { background: var(--color-danger); }
+.oc__alert-dot--warning { background: var(--color-warning); }
+
+.oc__alert-simple-text {
+  flex: 1;
+}
+
+.oc__alert-simple-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.oc__detail-title {
+  margin: var(--space-4) 0 calc(var(--space-4) * -1 + var(--space-2));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-subtle);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
 /* ── Work Center ──────────────────────────────────────────────────────────  */
 .wc-grid {
   display: grid;

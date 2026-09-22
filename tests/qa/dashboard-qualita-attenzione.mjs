@@ -75,8 +75,8 @@ dico('con una non conformità aperta, la dashboard mostra la card «Non conformi
 dico('la card nomina il motivo dichiarato', dopo.includes('Bordo bruciato'));
 dico('la card nomina il cliente dell\'ordine collegato', dopo.includes('Cliente Dashboard Qualità'));
 const contoUno = await page.evaluate(() => {
-  const card = [...document.querySelectorAll('.att-card')].find((c) => c.textContent.includes('Non conformità aperte'));
-  return card ? card.querySelector('.att-card__count')?.textContent.trim() : null;
+  const card = [...document.querySelectorAll('.oc__alert-group')].find((c) => c.textContent.includes('Non conformità aperte'));
+  return card ? card.querySelector('.oc__alert-badge')?.textContent.trim() : null;
 });
 dico('il contatore della card è 1, non un numero inventato', contoUno === '1', contoUno);
 
@@ -91,14 +91,14 @@ await page.evaluate(async (a) => {
 await page.evaluate(() => App.navigate('dashboard'));
 await page.waitForTimeout(1200);
 const contoConChiusa = await page.evaluate(() => {
-  const card = [...document.querySelectorAll('.att-card')].find((c) => c.textContent.includes('Non conformità aperte'));
-  return card ? card.querySelector('.att-card__count')?.textContent.trim() : null;
+  const card = [...document.querySelectorAll('.oc__alert-group')].find((c) => c.textContent.includes('Non conformità aperte'));
+  return card ? card.querySelector('.oc__alert-badge')?.textContent.trim() : null;
 });
 dico('una non conformità chiusa non si somma alle aperte (resta 1, non 2)', contoConChiusa === '1', contoConChiusa);
 
 /* ── il pulsante «Apri» della card è presente e collegato a una sezione reale ── */
 const pulsanteApri = await page.evaluate(() => {
-  const card = [...document.querySelectorAll('.att-card')].find((c) => c.textContent.includes('Non conformità aperte'));
+  const card = [...document.querySelectorAll('.oc__alert-group')].find((c) => c.textContent.includes('Non conformità aperte'));
   const b = card ? card.querySelector('button[data-nav]') : null;
   return b ? b.getAttribute('data-nav') : null;
 });
@@ -111,8 +111,8 @@ await page.evaluate(() => App.navigate('dashboard'));
 await page.waitForTimeout(1200);
 const dopoReload = await page.evaluate(() => {
   const testo = document.getElementById('ingly-operating-center')?.innerText || '';
-  const card = [...document.querySelectorAll('.att-card')].find((c) => c.textContent.includes('Non conformità aperte'));
-  return { haCard: /Non conformità aperte/.test(testo), conteggio: card ? card.querySelector('.att-card__count')?.textContent.trim() : null };
+  const card = [...document.querySelectorAll('.oc__alert-group')].find((c) => c.textContent.includes('Non conformità aperte'));
+  return { haCard: /Non conformità aperte/.test(testo), conteggio: card ? card.querySelector('.oc__alert-badge')?.textContent.trim() : null };
 });
 dico('dopo un ricaricamento vero, la card resta e conta ancora 1 aperta', dopoReload.haCard && dopoReload.conteggio === '1', dopoReload);
 

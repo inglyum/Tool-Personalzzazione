@@ -88,40 +88,147 @@
     }).join('') + '</section>';
   }
 
-  /* ── Produzione oggi ────────────────────────────────────────────────────  */
-  function renderProduction(wc) {
-    return '<section class="oc__section">' +
-      UI.sectionHeader('Produzione oggi', 'Centri di lavoro attivi nel laboratorio',
-        wc.empty ? null : { label: 'Ordini', section: 'gestione_ordini' }) +
-      WC.grid(wc, { queueLimit: 3 }) +
-      '</section>';
+  /* ── Andamento fatturato + Produzione dal vivo ──────────────────────────
+     Riga a due colonne: a sinistra il grafico, a destra lo stato dei centri
+     di lavoro in forma compatta. È la prima cosa che risponde a "come sto
+     andando" e "cosa sta succedendo adesso" — nello stesso sguardo, non due
+     scorrimenti più giù. */
+  let chartInstance = null;
+
+  function renderChartPanel(history) {
+    if (history.empty) {
+      return '<article class="oc__panel oc__panel--chart">' +
+        UI.sectionHeader('Andamento fatturato', 'Ultimi 6 mesi') +
+        UI.emptyState({ icon: 'fa-chart-column', title: 'Ancora nessun incasso', body: history.reason }) +
+        '</article>';
+    }
+    return '<article class="oc__panel oc__panel--chart">' +
+      UI.sectionHeader('Andamento fatturato', fmt.currency(history.total) + ' negli ultimi 6 mesi') +
+      '<div class="oc__chart-wrap"><canvas id="oc-revenue-chart" height="220"></canvas></div>' +
+      '</article>';
   }
 
-  /* ── Richiede attenzione ────────────────────────────────────────────────  */
-  function renderAttention(att) {
+  function mountChart(history) {
+    const canvas = document.getElementById('oc-revenue-chart');
+    if (!canvas || !global.Chart || history.empty) return;
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    const css = getComputedStyle(document.documentElement);
+    const accent = css.getPropertyValue('--color-primary').trim() || '#00e6d2';
+    const gridColor = css.getPropertyValue('--color-border-subtle').trim() || 'rgba(255,255,255,.06)';
+    const textColor = css.getPropertyValue('--color-text-muted').trim() || '#9aa4b2';
+    chartInstance = new global.Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: history.labels,
+        datasets: [{
+          data: history.values,
+          backgroundColor: accent + '33',
+          borderColor: accent,
+          borderWidth: 1.5,
+          borderRadius: 6,
+          maxBarThickness: 42,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: { label: (ctx) => '€ ' + ctx.parsed.y.toLocaleString('it-IT') },
+        } },
+        scales: {
+          y: { beginAtZero: true, ticks: { color: textColor, callback: (v) => '€' + v }, grid: { color: gridColor } },
+          x: { ticks: { color: textColor }, grid: { display: false } },
+        },
+      },
+    });
+  }
+
+  /* ── Produzione dal vivo, compatta ──────────────────────────────────────
+     Non la scheda intera di ogni centro — solo il polso: quanti lavori in
+     coda, quante macchine, se c'è ritardo. Il dettaglio resta a un click,
+     nella vista Ordini o nel centro di lavoro stesso.                     */
+  function renderProductionCompact(wc) {
+    if (wc.empty) {
+      return '<article class="oc__panel oc__panel--production">' +
+        UI.sectionHeader('Produzione dal vivo') +
+        UI.emptyState({ icon: 'fa-microchip', title: 'Nessun centro attivo', body: wc.reason, action: wc.action }) +
+        '</article>';
+    }
+    return '<article class="oc__panel oc__panel--production">' +
+      UI.sectionHeader('Produzione dal vivo', null, { label: 'Tutti', section: 'gestione_ordini' }) +
+      '<ul class="oc__prod-list">' + wc.centers.map(function (c) {
+        const st = WC.STATUS[c.status] || WC.STATUS.ready;
+        return '<li class="oc__prod-row">' +
+          '<span class="oc__prod-dot oc__prod-dot--' + st.dot + '" aria-hidden="true"></span>' +
+          '<i class="fas ' + esc(c.icon) + '" aria-hidden="true"></i>' +
+          '<span class="oc__prod-name">' + esc(c.label) + '</span>' +
+          '<span class="oc__prod-count' + (c.late > 0 ? ' is-late' : '') + '">' +
+          fmt.number(c.queueLength) + ' in coda' + (c.late > 0 ? ' · ' + c.late + ' in ritardo' : '') + '</span>' +
+          '</li>';
+      }).join('') + '</ul>' +
+      (wc.unassigned > 0
+        ? '<p class="oc__prod-note">' + wc.unassigned + (wc.unassigned === 1 ? ' lavoro non assegnato' : ' lavori non assegnati') + ' a una tecnologia.</p>'
+        : '') +
+      '</article>';
+  }
+
+  /* ── Richiede attenzione + Alert magazzino/macchine ─────────────────────
+     Seconda riga a due colonne: quello che riguarda ordini/incassi a
+     sinistra, quello che riguarda scorte e parco macchine a destra — due
+     domande diverse («cosa devo consegnare» e «cosa devo riordinare o
+     riparare»), non un'unica lista indistinta.                            */
+  function renderAttentionCompact(att) {
     if (att.empty) {
-      return '<section class="oc__section">' +
+      return '<article class="oc__panel oc__panel--attention">' +
         UI.sectionHeader('Richiede attenzione') +
         '<div class="oc__allgood"><i class="fas fa-circle-check" aria-hidden="true"></i> ' +
-        esc(att.reason) + '</div></section>';
+        esc(att.reason) + '</div></article>';
     }
-
-    return '<section class="oc__section">' +
+    return '<article class="oc__panel oc__panel--attention">' +
       UI.sectionHeader('Richiede attenzione', 'Ordini, preventivi e incassi che non possono aspettare') +
-      '<div class="oc__attention">' + att.groups.map(function (g) {
-        return '<article class="att-card att-card--' + esc(g.tone) + '">' +
-          '<div class="att-card__head">' +
-          '<span class="att-card__count">' + fmt.number(g.count) + '</span>' +
-          '<span class="att-card__label">' + esc(g.label) + '</span>' +
-          (g.value ? '<span class="att-card__value">' + fmt.currency(g.value) + '</span>' : '') +
-          '</div>' +
-          '<ul class="att-card__list">' + g.items.map(function (i) {
-            return '<li><span class="att-card__item-title">' + esc(i.title) + '</span>' +
-              (i.meta ? '<span class="att-card__item-meta">' + esc(i.meta) + '</span>' : '') + '</li>';
-          }).join('') + '</ul>' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-nav="' + esc(g.section) + '">Apri</button>' +
-          '</article>';
-      }).join('') + '</div></section>';
+      '<ul class="oc__alert-list">' + att.groups.map(function (g) {
+        return '<li class="oc__alert-group">' +
+          '<button type="button" class="oc__alert-head" data-nav="' + esc(g.section) + '">' +
+          '<span class="oc__alert-badge oc__alert-badge--' + esc(g.tone) + '">' + fmt.number(g.count) + '</span>' +
+          '<span class="oc__alert-label">' + esc(g.label) + '</span>' +
+          (g.value ? '<span class="oc__alert-value">' + fmt.currency(g.value) + '</span>' : '') +
+          '<i class="fas fa-chevron-right" aria-hidden="true"></i>' +
+          '</button>' +
+          '<ul class="oc__alert-items">' + g.items.slice(0, 3).map(function (i) {
+            return '<li><span>' + esc(i.title) + '</span>' +
+              (i.meta ? '<span class="oc__alert-meta">' + esc(i.meta) + '</span>' : '') + '</li>';
+          }).join('') + '</ul></li>';
+      }).join('') + '</ul></article>';
+  }
+
+  function renderAlertsCompact(inv, mac) {
+    const rows = [];
+    if (!inv.empty && (inv.outCount || inv.lowCount)) {
+      (inv.out || []).forEach((i) => rows.push({ tone: 'danger', text: esc(i.name), meta: fmt.number(i.stock) + ' ' + esc(i.unit) + ' — esaurito' }));
+      (inv.low || []).forEach((i) => rows.push({ tone: 'warning', text: esc(i.name), meta: fmt.number(i.stock) + ' ' + esc(i.unit) + ' — sotto scorta' }));
+    }
+    if (!mac.empty) {
+      const bad = (mac.list || []).filter((m) => m.state === 'maintenance' || m.state === 'offline');
+      bad.forEach((m) => {
+        const st = WC.MACHINE_STATE[m.state];
+        rows.push({ tone: st.tone === 'danger' ? 'danger' : 'warning', text: esc(m.name), meta: esc(st.label) });
+      });
+    }
+    if (!rows.length) {
+      return '<article class="oc__panel oc__panel--alerts">' +
+        UI.sectionHeader('Scorte e macchine') +
+        '<div class="oc__allgood"><i class="fas fa-circle-check" aria-hidden="true"></i> ' +
+        'Nessuna scorta esaurita, nessuna macchina in manutenzione o offline.</div></article>';
+    }
+    return '<article class="oc__panel oc__panel--alerts">' +
+      UI.sectionHeader('Scorte e macchine', rows.length + ' da controllare',
+        { label: 'Magazzino', section: 'items' }) +
+      '<ul class="oc__alert-simple">' + rows.slice(0, 6).map(function (r) {
+        return '<li class="oc__alert-simple-row">' +
+          '<span class="oc__alert-dot oc__alert-dot--' + r.tone + '"></span>' +
+          '<span class="oc__alert-simple-text">' + r.text + '</span>' +
+          '<span class="oc__alert-simple-meta">' + r.meta + '</span></li>';
+      }).join('') + '</ul></article>';
   }
 
   /* ── Magazzino ──────────────────────────────────────────────────────────  */
@@ -435,11 +542,12 @@
     if (!el.dataset.rendered) el.innerHTML = '<div class="oc__loading">' + UI.skeleton(4) + '</div>';
 
     try {
-      /* Tutte le letture in parallelo: la dashboard interroga sette store e
+      /* Tutte le letture in parallelo: la dashboard interroga otto store e
          farlo in sequenza si vedrebbe. */
-      const [ws, k, wc, att, inv, mac, prof, ins] = await Promise.all([
+      const [ws, k, wc, att, inv, mac, prof, ins, hist] = await Promise.all([
         Data.workspace(), Data.kpis(), Data.workCenters(), Data.attention(),
         Data.inventory(), Data.machines(), Data.profitability(), Data.insights(),
+        Data.revenueHistory(6),
       ]);
 
       /* Gli ordini per l'aggregato di tecnologia: una lettura sola, e se
@@ -462,8 +570,13 @@
       el.innerHTML =
         renderHeader(ws) +
         renderKpis(k) +
-        renderProduction(wc) +
-        renderAttention(att) +
+        '<section class="oc__section oc__row-performance">' +
+        renderChartPanel(hist) + renderProductionCompact(wc) +
+        '</section>' +
+        '<section class="oc__section oc__row-alerts">' +
+        renderAttentionCompact(att) + renderAlertsCompact(inv, mac) +
+        '</section>' +
+        '<h2 class="oc__detail-title">Dettaglio</h2>' +
         '<section class="oc__section oc__two">' + renderInventory(inv) + renderMachines(mac) + '</section>' +
         renderProfitability(prof) +
         renderTecnologie(tec) +
@@ -471,6 +584,7 @@
         renderInsights(ins);
 
       el.dataset.rendered = '1';
+      mountChart(hist);
     } catch (e) {
       console.error('[OperatingCenter]', e);
       el.innerHTML = UI.emptyState({
