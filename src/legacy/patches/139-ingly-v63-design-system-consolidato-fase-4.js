@@ -62,14 +62,22 @@
   .ds-modal-bd{ padding:20px; }
   .ds-modal-ft{ display:flex; gap:10px; justify-content:flex-end; padding:16px 20px; border-top:1px solid var(--border,#333); }
 
-  .ds-toast-wrap{ position:fixed; right:18px; bottom:18px; z-index:99999; display:flex; flex-direction:column; gap:10px; max-width:min(360px,90vw); }
-  .ds-toast{ display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:var(--radius,12px);
+  /* .legacy-ds-toast*, non .ds-toast*: il design system vero (src/product/ui.js)
+     crea toast reali con la classe base .ds-toast, stesso angolo (basso a
+     destra) — due sistemi sullo stesso nome, quello che carica per ultimo
+     vince sullo scatolotto condiviso. Qui e' il caso raro: non un colore o
+     un'icona diversi, la STESSA classe base con due definizioni diverse.
+     ATTENZIONE: questo commento vive dentro un template literal (var css = ,
+     seguito da un accento grave) — nessun accento grave qui dentro, per
+     nessun motivo: chiuderebbe la stringa a metà e rompe tutto lo script. */
+  .legacy-ds-toast-wrap{ position:fixed; right:18px; bottom:18px; z-index:99999; display:flex; flex-direction:column; gap:10px; max-width:min(360px,90vw); }
+  .legacy-ds-toast{ display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:var(--radius,12px);
     background:var(--bg-card,#1c1c1c); border:1px solid var(--border,#333); box-shadow:var(--shadow-lg,0 10px 30px rgba(0,0,0,.4));
     color:var(--text,#fff); font-size:13px; transform:translateX(120%); transition:transform .25s var(--ease-out,ease); }
-  .ds-toast.ds-in{ transform:translateX(0); }
-  .ds-toast--ok{ border-left:3px solid var(--green,#22c55e); }
-  .ds-toast--err{ border-left:3px solid var(--red,#ef4444); }
-  .ds-toast--info{ border-left:3px solid var(--ds-accent); }
+  .legacy-ds-toast.ds-in{ transform:translateX(0); }
+  .legacy-ds-toast--ok{ border-left:3px solid var(--green,#22c55e); }
+  .legacy-ds-toast--err{ border-left:3px solid var(--red,#ef4444); }
+  .legacy-ds-toast--info{ border-left:3px solid var(--ds-accent); }
 
   .ds-table{ width:100%; border-collapse:collapse; font-size:13px; }
   .ds-table th{ text-align:left; font:600 12px/1 inherit; color:var(--text-muted,#9ca3af);
@@ -80,7 +88,7 @@
   .ds-table-wrap{ overflow-x:auto; border:1px solid var(--border,#333); border-radius:var(--radius,12px); }
 
   @media (prefers-reduced-motion: reduce){
-    .ds-btn,.ds-modal,.ds-modal-ov,.ds-toast{ transition:none !important; }
+    .ds-btn,.ds-modal,.ds-modal-ov,.legacy-ds-toast{ transition:none !important; }
   }`;
   var st=document.createElement('style'); st.id='ds-styles-v63'; st.textContent=css;
   (document.head||document.documentElement).appendChild(st);
@@ -141,9 +149,9 @@
       return api;
     },
     toast:function(msg, kind, ms){ kind=kind||'info'; ms=ms||3200;
-      var wrap=document.getElementById('ds-toast-wrap');
-      if(!wrap){ wrap=el('div','ds-toast-wrap'); wrap.id='ds-toast-wrap'; document.body.appendChild(wrap); }
-      var t=el('div','ds-toast ds-toast--'+kind);
+      var wrap=document.getElementById('legacy-ds-toast-wrap');
+      if(!wrap){ wrap=el('div','legacy-ds-toast-wrap'); wrap.id='legacy-ds-toast-wrap'; document.body.appendChild(wrap); }
+      var t=el('div','legacy-ds-toast legacy-ds-toast--'+kind);
       var ic={ok:'✓',err:'✕',info:'ℹ'}[kind]||'ℹ';
       var i=el('span',null,ic); i.setAttribute('aria-hidden','true'); t.appendChild(i);
       t.appendChild(el('span',null,msg));

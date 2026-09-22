@@ -267,16 +267,36 @@ quelle senza sovrapposizioni. La prima, patch 160 («Consolidatore
 Strumenti», `.ingly-tools*`), è migrata nel 2.17.0. Le altre si migrano
 insieme ai rispettivi moduli.
 
-**Trovata nella stessa mappatura, non ancora corretta**: la patch 139
-(«design system consolidato fase 4») definisce le proprie `.ds-toast`,
-`.ds-modal`, `.ds-btn` ecc. tramite `window.DS`, iniettate a runtime — nomi
-identici a componenti reali del design system (`src/product/ui.js` crea
-elementi con `class="ds-toast ds-toast--…"` usando gli stessi nomi). Non è
-solo debito da migrare: è una collisione di nomi attiva, la stessa classe di
-difetto «due sistemi, un nome» già vista altrove in questo progetto. Dieci
-altre patch (140,141,143,145,149,151,152,153,155,157) dipendono da
-`window.DS`, quindi non è la prima da toccare (rischio ampio), ma è la più
-urgente da programmare.
+**La collisione .ds-toast, risolta (2.18.0)**: la patch 139 («design
+system consolidato fase 4») definisce `window.DS`, con `.ds-toast`/
+`.ds-modal`/`.ds-btn` ecc. iniettate a runtime. Verificato con cura prima
+di toccare nulla: solo `.ds-toast` collideva davvero con un nome reale
+del design system (`src/product/ui.js` crea toast con
+`class="ds-toast ds-toast--…"`, stesso angolo dello schermo) —
+`.ds-modal` non collide affatto (il sistema vero usa `.modal`/
+`.modal-overlay`), e `.ds-btn`, pur condividendo il nome, è
+**load-bearing** per `product-builder.js` (file reale attuale, non
+legacy) che lo usa senza che il design system ne definisca ancora uno
+stile di base proprio — toccarlo ora avrebbe rotto quei bottoni.
+Rinominate solo `.ds-toast*` in `.legacy-ds-toast*` (CSS e riferimenti
+JS), confermato che nessuna delle 10 patch dipendenti da `window.DS`
+(140,141,143,145,149,151,152,153,155,157) referenzia la classe
+letterale — usano solo l'API `window.DS.toast()`.
+
+Nella verifica con un browser vero (non bastava il diff) è emerso un
+secondo difetto, introdotto e corretto nello stesso rilascio: un
+commento con accenti gravi scritto dentro il template literal della CSS
+di patch 139 ne chiudeva la stringa a metà, mandando in crash l'intero
+script. `window.DS` non veniva più impostato dalla patch corretta, e la
+fattory duplicata dormiente di patch 151 (vedi sopra, «un rischio da non
+toccare ora») prendeva il suo posto silenziosamente — con le classi
+vecchie, ripristinando esattamente la collisione in corso di
+correzione. La lezione: un template literal CSS non è un commento
+normale — un solo accento grave al posto sbagliato rompe tutto, senza
+un errore di sintassi visibile al build.
+
+`.ds-btn` e il badge di piano per livello (§ sopra) restano debito
+dichiarato, non ancora chiuso.
 
 ### Due barre in alto, trovato con un vero screenshot (2.7.0)
 

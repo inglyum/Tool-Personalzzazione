@@ -3,6 +3,44 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.18.0 — Design System 2.0, quinto milestone: risolta la collisione .ds-toast, e un crash trovato per strada
+
+Chiude la collisione di nomi fra `window.DS.toast()` (patch 139,
+`src/legacy/patches/139-ingly-v63-design-system-consolidato-fase-4.js`) e
+il toast reale del design system (`src/product/ui.js`), già mappata e
+dichiarata nel 2.17.0 come priorità successiva. Rinominate le sole
+classi del toast (`.legacy-ds-toast*`), verificato che nessuna delle 10
+patch che chiamano `window.DS.toast()` referenzi la classe letterale
+(usano solo l'API) — non toccati `.ds-btn`/`.ds-modal`/`.ds-field` perché
+`.ds-btn` è load-bearing per `product-builder.js`, un file reale attuale,
+e `.ds-modal` non collide affatto con il sistema vero (che usa
+`.modal`/`.modal-overlay`, nomi diversi).
+
+**Il difetto trovato verificando, non scrivendo**: durante la verifica
+con un browser vero, il primo tentativo di correzione conteneva un
+proprio errore — un commento con accenti gravi (backtick) scritto
+dentro il template literal della CSS di patch 139 (`var css = \`...\``,
+sintassi JavaScript, non un dettaglio stilistico) ne chiudeva la
+stringa a metà, mandando in crash l'intero script. Il sintomo era
+subdolo: nessun errore visibile nella build, ma a runtime `window.DS`
+non veniva mai impostato dalla patch 139 corretta — una fattory
+duplicata dormiente (patch 151, già mappata nel 2.17.0 come "rischio da
+non toccare ora") prendeva il suo posto silenziosamente, con le classi
+vecchie, ripristinando esattamente la collisione che si stava
+correggendo. Trovato confrontando il codice sorgente (corretto) con il
+comportamento reale a schermo (sbagliato) — non bastava leggere il
+diff, serviva un browser vero. Corretto rimuovendo gli accenti gravi dal
+commento; verificato di nuovo con lo stesso confronto, questa volta
+concorde.
+
+npm test: 2210/2210 (nuova voce dichiarata in
+`baseline/deliberate-changes.json` per il primo tocco a questo file) ·
+npm run verify: 267 file · npm run qa: tutte le suite verdi tranne un
+flake di timing scrittura-poi-ricarica in `apparel-scaglioni-
+consuntivo.mjs`, stessa classe già documentata altrove in questo
+progetto (`quoter3d-calcoli.mjs` FASE 16b-e), riprodotto pulito 3/3 in
+isolamento — non una regressione di questo rilascio.
+
 ## 2.17.0 — Design System 2.0, quarto milestone: la prima delle patch storiche migrata
 
 Fase 3 del mandato «NEXT-GENERATION ERP UI/UX & VISUAL TRANSFORMATION»
