@@ -3,6 +3,49 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.17.0 — Design System 2.0, quarto milestone: la prima delle patch storiche migrata
+
+Fase 3 del mandato «NEXT-GENERATION ERP UI/UX & VISUAL TRANSFORMATION»
+(componenti condivisi). `docs/DESIGN-SYSTEM.md` §8 dichiara 26 patch
+storiche che iniettano CSS a runtime con un `<style>` in `<head>`, non
+stratificato. Prima di toccarne una sola: mappate tutte e 24 quelle
+elencabili (non 26 — 4 di quelle nominate nel documento, 147/156/158/159,
+risultano già escluse dal build tramite `RETIRED_SIDEBAR_PATCHES` in
+`src/app-shell/index.mjs`, sostituite dall'app-shell generato; la 117 è
+già in gran parte migrata nelle due release precedenti). Delle 20 che
+restano davvero, quelle che toccano `#sidebar`/`#topbar` dipendono
+dall'ordine di caricamento reciproco per sapere chi vince in cascata —
+migrarne una sola avrebbe rischiato di cambiare silenziosamente quale
+regola vince per un selettore condiviso. Si comincia da quella con zero
+sovrapposizioni: patch 160 (v86, «Consolidatore Strumenti»).
+
+**Cosa faceva**: raggruppa in un menu «Strumenti» i pulsanti-azione di
+una sezione quando sono ≥2, per ridurre l'affollamento. La sua CSS
+(`.ingly-tools*`) viveva in un `document.createElement('style')` iniettato
+a ogni caricamento, con colori letterali (incluso l'ambra `#fbbf24`,
+il vecchio accento che questo stesso documento racconta di aver
+sostituito) e `!important` ovunque nella regola che ripuliva lo stile
+in linea dei pulsanti spostati.
+
+**Migrata** in `src/design-system/components/overlays.css`, accanto al
+componente `.ds-menu` già esistente che le somiglia: stessi selettori,
+stesso comportamento (posizione, apertura/chiusura, animazione),
+soli token — nessun colore letterale, nessun `!important` (il design
+system non è in un `@layer`, vince già di suo). Il trigger «🧰 Strumenti»
+era anche un'emoji come icona-azione: sostituita con
+`<i class="fas fa-toolbox">` e la freccetta con `fa-chevron-down`, stessa
+correzione della regola 5 già applicata al resto della chrome.
+
+**Verificato**: `npm test` conferma la logica di raggruppamento invariata
+(nessun test dedicato esisteva prima per questo widget — non introdotto
+qui). La resa visiva è stata confrontata a comportamento parità:
+uno stesso scenario sintetico riprodotto identico sul codice prima e dopo
+la migrazione (via `git stash`) mostra lo stesso risultato — la CSS
+migrata è equivalente, non solo per lettura del diff ma per prova A/B.
+
+npm test: 2210/2210 · npm run verify: 267 file · npm run qa: tutte le
+suite verdi.
+
 ## 2.16.0 — Design System 2.0, terzo milestone: chiuso il debito dichiarato nella barra d'identità
 
 Continuazione diretta del 2.15.0, che aveva dichiarato esplicitamente

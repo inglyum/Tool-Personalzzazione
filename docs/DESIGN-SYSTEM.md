@@ -250,11 +250,33 @@ creati da JavaScript e le stelline di aggancio. Vedi `docs/PHASE-2.md` §5.
 
 ### Debito residuo, misurato
 
-26 patch storiche iniettano CSS a runtime creando un `<style>` in `<head>`.
-Quel CSS non è stratificato, quindi per i selettori che tocca vince ancora sul
-design system. Tredici dichiarazioni fra le più dannose — quelle che
-ridefinivano le voci di menu con l'ambra e l'indaco scritti a mano — sono già
-state rimosse. Le altre si migrano insieme ai rispettivi moduli.
+26 patch storiche nominate iniettano (o iniettavano) CSS a runtime creando un
+`<style>` in `<head>`, non stratificato — per i selettori che tocca vince
+ancora sul design system. Tredici dichiarazioni fra le più dannose — quelle
+che ridefinivano le voci di menu con l'ambra e l'indaco scritti a mano — sono
+già state rimosse. Mappatura completa (2.17.0): di quelle 26, quattro
+(147/156/158/159) sono già escluse dal build tramite
+`RETIRED_SIDEBAR_PATCHES` in `src/app-shell/index.mjs`, sostituite
+dall'app-shell generato — non compilano più, non è debito da migrare, solo da
+disimparare dal conteggio. La 117 è in gran parte già migrata (2.15.0,
+2.16.0). Delle restanti ~20, molte toccano `#sidebar`/`#topbar` e dipendono
+dall'ordine di caricamento reciproco per sapere chi vince in cascata:
+migrarne una senza le altre rischia di cambiare silenziosamente quale regola
+vince per un selettore condiviso — si migrano una alla volta, cominciando da
+quelle senza sovrapposizioni. La prima, patch 160 («Consolidatore
+Strumenti», `.ingly-tools*`), è migrata nel 2.17.0. Le altre si migrano
+insieme ai rispettivi moduli.
+
+**Trovata nella stessa mappatura, non ancora corretta**: la patch 139
+(«design system consolidato fase 4») definisce le proprie `.ds-toast`,
+`.ds-modal`, `.ds-btn` ecc. tramite `window.DS`, iniettate a runtime — nomi
+identici a componenti reali del design system (`src/product/ui.js` crea
+elementi con `class="ds-toast ds-toast--…"` usando gli stessi nomi). Non è
+solo debito da migrare: è una collisione di nomi attiva, la stessa classe di
+difetto «due sistemi, un nome» già vista altrove in questo progetto. Dieci
+altre patch (140,141,143,145,149,151,152,153,155,157) dipendono da
+`window.DS`, quindi non è la prima da toccare (rischio ampio), ma è la più
+urgente da programmare.
 
 ### Due barre in alto, trovato con un vero screenshot (2.7.0)
 

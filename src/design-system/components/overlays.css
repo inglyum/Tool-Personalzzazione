@@ -244,6 +244,40 @@
   background: var(--color-divider);
 }
 
+/* ── Consolidatore strumenti (patch 160) ──────────────────────────────────
+   Raggruppa i pulsanti-strumento di una sezione in un menu solo quando sono
+   ≥2. Questa CSS viveva iniettata a runtime da `document.createElement
+   ('style')` nella patch stessa — non stratificata, colori letterali,
+   `!important` ovunque per battere lo stile in linea che la patch stessa
+   cancellava un momento prima. Spostata qui: vince per cascata senza
+   `!important` (il design system non è in un layer), e legge solo token. */
+.ingly-tools { position: relative; display: inline-block; margin: var(--space-2) var(--space-1); }
+.ingly-tools-trigger {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  border: 1px solid var(--color-border); background: var(--color-surface-elevated);
+  color: var(--color-text); cursor: pointer; font: 600 var(--text-sm) inherit;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+.ingly-tools-trigger:hover {
+  background: var(--color-primary-surface); border-color: var(--color-primary-border); color: var(--color-primary);
+}
+.ingly-tools-trigger .chev { font-size: var(--text-2xs); opacity: .7; }
+.ingly-tools-menu {
+  position: absolute; top: calc(100% + var(--space-2)); left: 0; z-index: var(--z-dropdown);
+  min-width: 220px; background: var(--color-surface-elevated); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: var(--space-1); display: none;
+}
+.ingly-tools.open .ingly-tools-menu { display: block; animation: ds-menu-in var(--duration-fast) var(--ease-out); }
+.ingly-tools-menu > * {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left;
+  margin: var(--space-1) 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); border: none;
+  background: none; color: var(--color-text); cursor: pointer; font: 500 var(--text-sm) inherit;
+}
+.ingly-tools-menu > *:hover { background: var(--color-primary-surface); color: var(--color-primary); }
+@keyframes ds-menu-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+
 /* ── Command palette ──────────────────────────────────────────────────────  */
 .ds-palette {
   width: var(--palette-width);
