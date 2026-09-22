@@ -192,19 +192,19 @@
      vuole una tabella senza «elimina» ne passa un'altra lista. */
   var AZIONI_CRM = [
     {
-      icona: '💬', titolo: 'WhatsApp',
+      icona: '<i class="fab fa-whatsapp"></i>', titolo: 'WhatsApp',
       quando: function (c) { return !!c.telefono; },
       comando: function (c) { return "WAQuick&&WAQuick.openPanel('" + cifre(c.telefono) + "','Ciao " + String(c.nome).replace(/'/g, '') + "! ')"; },
-      stile: 'padding:4px 8px;background:#25D36615;color:#25D366;border:1px solid #25D36630;border-radius:6px;cursor:pointer;font-size:11px',
+      stile: 'padding:4px 8px;background:color-mix(in srgb, var(--brand-whatsapp) 12%, transparent);color:var(--brand-whatsapp);border:1px solid color-mix(in srgb, var(--brand-whatsapp) 30%, transparent);border-radius:6px;cursor:pointer;font-size:11px',
     },
     {
-      icona: '✏️', titolo: 'Modifica',
+      icona: '<i class="fas fa-pen"></i>', titolo: 'Modifica',
       comando: function (c) { return "CRMSmart._editClient('" + c.id + "')"; },
     },
     {
-      icona: '🗑', titolo: 'Elimina',
+      icona: '<i class="fas fa-trash"></i>', titolo: 'Elimina',
       comando: function (c) { return "CRMSmart._deleteClient('" + c.id + "')"; },
-      stile: 'padding:4px 8px;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);border-radius:6px;cursor:pointer;font-size:11px',
+      stile: 'padding:4px 8px;background:var(--color-danger-surface);color:var(--color-danger-text);border:1px solid var(--color-danger-border);border-radius:6px;cursor:pointer;font-size:11px',
     },
   ];
 

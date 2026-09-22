@@ -144,9 +144,9 @@
       + riga('Ricavo lordo', eur(e.revenueGross), true)
       + '<tr><td colspan="2" style="height:8px"></td></tr>'
       + riga('Profitto previsto', eur(e.profit), true,
-          num(e.profit) >= 0 ? '#22c55e' : '#ef4444')
+          num(e.profit) >= 0 ? 'var(--color-success-text)' : 'var(--color-danger-text)')
       + riga('Margine previsto', pct(e.marginPct), false,
-          num(e.marginPct) >= 20 ? '#22c55e' : '#f59e0b')
+          num(e.marginPct) >= 20 ? 'var(--color-success-text)' : 'var(--color-warning-text)')
       + '</table>'
       + '<div style="font-size:9px;color:var(--text-muted,#888);margin-top:6px;line-height:1.5">'
       + 'Questi numeri non compaiono in nessun documento per il cliente. '
@@ -169,8 +169,8 @@
     var celle = [
       ['Costo reale', eur(t.costoTotale), 'var(--text,#e8e8f0)'],
       ['Prezzo di vendita', eur(t.netto), 'var(--primary,#6366f1)'],
-      ['Margine', eur(t.margine), num(t.margine) >= 0 ? '#22c55e' : '#ef4444'],
-      ['Margine %', pct(t.marginePct), num(t.marginePct) >= 20 ? '#22c55e' : '#f59e0b'],
+      ['Margine', eur(t.margine), num(t.margine) >= 0 ? 'var(--color-success-text)' : 'var(--color-danger-text)'],
+      ['Margine %', pct(t.marginePct), num(t.marginePct) >= 20 ? 'var(--color-success-text)' : 'var(--color-warning-text)'],
     ];
     return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px">'
       + celle.map(function (c) {
@@ -242,8 +242,8 @@
       + esc(fonte(v.source)) + '</td>'
       + '<td style="padding:7px 6px;text-align:right;white-space:nowrap">'
       + (v.editable !== false
-        ? '<button type="button" data-mod="' + esc(v.id) + '" title="Modifica" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px">✏️</button>'
-          + '<button type="button" data-rim="' + esc(v.id) + '" title="Rimuovi" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;color:#ef4444">🗑</button>'
+        ? '<button type="button" data-mod="' + esc(v.id) + '" title="Modifica" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px"><i class="fas fa-pen"></i></button>'
+          + '<button type="button" data-rim="' + esc(v.id) + '" title="Rimuovi" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;color:var(--color-danger-text)"><i class="fas fa-trash"></i></button>'
         : '')
       + '</td></tr>';
   }

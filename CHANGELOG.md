@@ -3,6 +3,51 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.14.0 — Design System 2.0, primo milestone: le icone sono icone
+
+Primo passo del mandato «INGLY OS — NEXT-GENERATION ERP UI/UX & VISUAL
+TRANSFORMATION». Prima di scrivere una riga di codice, verificato che cosa
+esiste già: `docs/DESIGN-SYSTEM.md` documenta un sistema di token a tre
+livelli (primitive/semantic/component) già completo, un motore White
+Label con tema chiaro/scuro vero e verifica di contrasto WCAG, Font
+Awesome incorporato come unico sistema di icone per la chrome, una
+command palette funzionante (Ctrl/Cmd+K), e componenti JS condivisi
+(`ui.js`). Non è una tela bianca: è un sistema reale, con le sue regole
+già scritte al §9 dello stesso documento. Questo rilascio non lo
+riscrive — estende la sua regola 5 («le icone sono icone, le emoji
+restano nei contenuti, non nella chrome») e la sua regola 1 («un colore
+letterale può stare solo in `primitive.css`») ai punti dove il codice
+corrente (non legacy) le violava ancora, per un vero verificabile, non
+per «più bello a occhio».
+
+**Trovato e corretto**: la riga cliente del CRM (`cliente-riga.js`, il
+renderer unico di CRM-05) disegnava i pulsanti WhatsApp/Modifica/Elimina
+con emoji (`💬 ✏️ 🗑`) e un rosso scritto a mano per Elimina; la card
+«Economia ordine» (`order-economics-view.js`) aveva lo stesso difetto sui
+suoi due pulsanti riga, più quattro celle (profitto e margine, sia nel
+riepilogo sia nel dettaglio preventivato) colorate con verde/rosso/ambra
+letterali leggermente diversi dai token `--color-success`/`--color-
+warning`/`--color-danger` già in uso nel resto del prodotto. Sostituite
+le emoji-azione con `<i class="fas fa-whatsapp/fa-pen/fa-trash">`
+(rilanciato `scripts/vendor-fonts.mjs` per incorporare il glifo
+`fa-pen`, mancante) e i colori letterali con i token esistenti. Il verde
+WhatsApp, identità di un servizio terzo e non uno stato applicativo, ha
+ricevuto il proprio primitivo dedicato (`--brand-whatsapp`) invece di
+diventare impropriamente `--color-success`.
+
+**Deliberatamente non toccato**: le icone tecnologia di
+`quote-templates.js` restano emoji perché la stessa stringa finisce anche
+dentro un `<option>` di un `<select>` nativo, che non può renderizzare
+markup — lì l'emoji è un vincolo tecnico del controllo, non un difetto,
+e sono comunque icone di categoria/contenuto, non di un'azione. Dettaglio
+completo in `docs/DESIGN-SYSTEM.md` §8.
+
+npm test: 2210/2210 · npm run verify: 267 file · npm run qa: tutte le
+suite verdi tranne un flake già documentato e non causato da questa
+modifica — `quoter3d-calcoli.mjs` FASE 16b-e (scrittura-poi-ricarica),
+riprodotto isolato 2 volte su 3 esattamente come nelle release
+precedenti che lo hanno già registrato.
+
 ## 2.13.0 — Account, piani e fatturazione: numeri veri, non stimati
 
 Seguito del mandato «COMPLETE ACCOUNT, SAAS BILLING & ACCESS CONTROL» sulla

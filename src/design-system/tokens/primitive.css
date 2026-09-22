@@ -88,6 +88,12 @@
   --gold-700: #7a6216;
   --gold-900: #2b2209;
 
+  /* ── Marchi esterni ─────────────────────────────────────────────────────
+     Non è un accento INGLY: è il colore che identifica un servizio terzo
+     integrato nel prodotto. Va usato solo per l'azione/icona che porta
+     davvero a quel servizio, mai come tinta decorativa.                    */
+  --brand-whatsapp: #25d366;
+
   /* ── Spaziatura ─────────────────────────────────────────────────────────
      Base 4px. Non esistono valori intermedi: se serve 13px, il layout è
      sbagliato, non la scala.                                              */

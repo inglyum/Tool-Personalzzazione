@@ -318,6 +318,40 @@ da toccare): prima di rimuovere qualunque superficie duplicata bisogna
 verificare se porta anche un dato che nessun altro legge, non solo se
 sembra ridondante a schermo.
 
+### Emoji come icona di un'azione, non di un contenuto (2.14.0)
+
+La regola 5 di questo documento dice «le icone sono icone, le emoji
+restano nei contenuti, non nella chrome». La navigazione e la palette
+comandi la rispettavano già. La riga cliente del CRM (`cliente-riga.js`,
+il renderer unico usato da rubrica e archivio — vedi CRM-05) no: i tre
+pulsanti azione — WhatsApp, Modifica, Elimina — erano emoji (`💬 ✏️ 🗑`),
+e «Elimina» portava anche un rosso scritto a mano (`#ef4444`) invece del
+token `--color-danger`. Stesso difetto, stesso file, nella card «Economia
+ordine» (`order-economics-view.js`): i due pulsanti riga (modifica/rimuovi
+voce) erano emoji, e le quattro celle che coloravano profitto/margine in
+verde o rosso secondo il segno usavano `#22c55e`/`#ef4444`/`#f59e0b`
+letterali — un verde e un rosso leggermente diversi da `--color-success`/
+`--color-danger` già in uso ovunque nel resto del prodotto.
+
+Corretto sostituendo le tre emoji-azione con `<i class="fas fa-*">`
+(`fa-whatsapp`, `fa-pen`, `fa-trash` — il glifo `fa-pen` non era ancora
+incorporato, aggiunto rilanciando `scripts/vendor-fonts.mjs`) e i colori
+letterali con i token di stato già esistenti (`--color-success-text`,
+`--color-warning-text`, `--color-danger-text`, `--color-danger-surface`,
+`--color-danger-border`). Il verde di WhatsApp non è uno stato
+dell'applicazione — è l'identità di un servizio terzo — quindi non poteva
+diventare `--color-success`: gli è stato dato il suo primitivo dedicato,
+`--brand-whatsapp`, con la stessa regola degli altri colori letterali
+(vive solo in `primitive.css`, il resto lo referenzia).
+
+Non toccate le icone tecnologia di `quote-templates.js`
+(`⚡ 🧊 🖨️ 👕 🌈 🪧 🎁 📋`): quella stessa stringa `icona` finisce anche
+dentro un `<option>` di un `<select>` nativo (`quoter/index.js`), che non
+può renderizzare un tag `<i>` — comparirebbe come testo letterale. Qui
+l'emoji non è un difetto della chrome, è un vincolo tecnico del controllo
+che la ospita, e coincide comunque con la regola 5: sono icone di
+categoria (contenuto), non di un'azione dell'interfaccia.
+
 ---
 
 ## 9. Regole
