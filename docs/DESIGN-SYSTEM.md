@@ -352,6 +352,48 @@ l'emoji non è un difetto della chrome, è un vincolo tecnico del controllo
 che la ospita, e coincide comunque con la regola 5: sono icone di
 categoria (contenuto), non di un'azione dell'interfaccia.
 
+### Due barre in alto, la decisione presa (2.15.0)
+
+Il rilascio 2.7.0 aveva chiuso la duplicazione funzionale fra topbar
+principale e barra enterprise (`#saas-session-bar`), lasciando aperta una
+domanda di layout: se diventare una barra sola o restare due, «un pattern
+comune nei prodotti SaaS multi-tenant».
+
+**Decisione**: restano due. La barra enterprise non è una topbar
+duplicata — è una striscia d'identità (laboratorio, piano, scadenza,
+White Label, uscita) sopra la topbar operativa (ricerca, comandi rapidi,
+notifiche, tema). Fonderle in una sola avrebbe richiesto una riscrittura
+di layout con un raggio d'azione molto più ampio del difetto reale
+verificato qui, contro il mandato di non riscrivere.
+
+**Trovato invece con uno screenshot vero**: la barra enterprise usa
+`--eh-brand` come **sfondo intero**, e `src/product/tema.js` lo impostava
+identico all'accento (`'--eh-brand': a`) — lo stesso valore di
+`--color-primary`. Il risultato, su qualunque installazione anche senza
+White Label configurato: un pannello ciano a piena saturazione largo
+tutto lo schermo, esattamente ciò che la regola d'identità di questo
+documento vieta («il ciano è un accento… non è un colore di riempimento»,
+§3). Non era una scelta — era la stessa variabile riusata per due scopi
+diversi (colorare un bottone, riempire un pannello) che a piena
+saturazione si comportano in modo opposto.
+
+Corretto in `tema.js`: `--eh-brand` deriva ancora dall'accento (cambia
+quando l'utente lo cambia, e un White Label brand color vero lo
+raggiunge) ma stemperato nell'antracite del marchio (`mescola('#1f2328',
+accento, 0.22)`) invece di sostituirlo — la barra resta riconoscibile
+come identità del laboratorio senza diventare un pannello acceso. Stesso
+giro, tokenizzati anche gli stati della barra che erano ancora colori
+letterali: pallino di stato (successo/attenzione/errore), badge
+notifiche, pulsante uscita, avviso di scadenza, pulsante «Ripristina» del
+modulo White Label — tutti sui token `--color-success/-warning/-danger`
+già in uso nel resto del prodotto, non più `#10b981`/`#f59e0b`/`#ef4444`
+scritti a mano.
+
+**Debito misurato, non chiuso qui**: la barra resta un `<style>` iniettato
+a runtime con diversi `!important` e altri colori letterali (il badge di
+piano per livello, l'avatar, il modale White Label) — si migra insieme al
+resto del debito dichiarato al §8 sopra, non tutto in un colpo solo.
+
 ---
 
 ## 9. Regole

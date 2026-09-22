@@ -2966,7 +2966,7 @@ body.saas-active main {
 ._eh-icon-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
 ._eh-icon-btn .badge {
   position: absolute; top: -3px; right: -3px;
-  width: 14px; height: 14px; border-radius: 50%; background: #ef4444;
+  width: 14px; height: 14px; border-radius: 50%; background: var(--color-danger);
   font-size: 8px; font-weight: 800; color: #fff;
   display: flex; align-items: center; justify-content: center;
   border: 1.5px solid var(--eh-brand, #18181f);
@@ -2991,15 +2991,15 @@ body.saas-active main {
                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 ._eh-logout {
   margin-left: 4px; padding: 3px 8px; border-radius: 5px;
-  background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.25);
-  color: #fca5a5; font-size: 10px; font-weight: 700; cursor: pointer;
+  background: var(--color-danger-surface); border: 1px solid var(--color-danger-border);
+  color: var(--color-danger-text); font-size: 10px; font-weight: 700; cursor: pointer;
   transition: background .15s; font-family: inherit;
 }
-._eh-logout:hover { background: rgba(239,68,68,.25); color: #fff; }
+._eh-logout:hover { background: var(--color-danger-border); color: #fff; }
 
 /* Expiry warning */
 ._eh-expiry {
-  font-size: 10px; color: #fde68a; display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--color-warning-text); display: flex; align-items: center; gap: 4px;
 }
 
 /* Divider */
@@ -3009,11 +3009,11 @@ body.saas-active main {
 
 /* License status dot */
 ._eh-status-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: #10b981;
-  box-shadow: 0 0 6px #10b981; flex-shrink: 0;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--color-success);
+  box-shadow: 0 0 6px var(--color-success); flex-shrink: 0;
 }
-._eh-status-dot.warn  { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
-._eh-status-dot.error { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+._eh-status-dot.warn  { background: var(--color-warning); box-shadow: 0 0 6px var(--color-warning); }
+._eh-status-dot.error { background: var(--color-danger); box-shadow: 0 0 6px var(--color-danger); }
 
 /* Hide old bottom bar (redundant) */
 #_ingly_bar { display: none !important; }
@@ -3042,7 +3042,7 @@ body.saas-active main {
             font-size: 12px; font-weight: 700; font-family: inherit; }
 ._wl-btn.save   { background: #6366f1; color: #fff; }
 ._wl-btn.cancel { background: #1a1a24; color: #888; border: 1px solid #2a2a35; }
-._wl-btn.reset  { background: rgba(239,68,68,.15); color: #fca5a5; border: 1px solid rgba(239,68,68,.2); }
+._wl-btn.reset  { background: var(--color-danger-surface); color: var(--color-danger-text); border: 1px solid var(--color-danger-border); }
     `;
     document.head.appendChild(css);
   }
@@ -3063,7 +3063,7 @@ body.saas-active main {
     var days = ab ? ab.giorni : null;
     var expiryHtml = '';
     if (ab && !ab.accesso) {
-      expiryHtml = '<span class="_eh-expiry" style="color:#fca5a5">' + planLabel + ' non attivo</span>';
+      expiryHtml = '<span class="_eh-expiry" style="color:var(--color-danger-text)">' + planLabel + ' non attivo</span>';
     } else if (ab && ab.inScadenza && days != null) {
       expiryHtml = '<span class="_eh-expiry">&#9201; ' + days + 'gg</span>';
     }

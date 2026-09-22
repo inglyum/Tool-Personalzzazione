@@ -78,7 +78,14 @@ test('da un colore solo discendono tutti i token, storici compresi', () => {
   const t = T.token({ accento: '#22d3ee' });
   assert.equal(t['--color-primary'], '#22d3ee');
   assert.equal(t['--primary'], '#22d3ee', 'senza il nome storico metà app resterebbe del colore vecchio');
-  assert.equal(t['--eh-brand'], '#22d3ee');
+  /* `--eh-brand` è lo sfondo INTERO della barra d'identità, non un bottone:
+     l'accento a piena saturazione lì è esattamente il pannello di ciano che
+     il design system vieta. Deve derivare dall'accento (cambia insieme a
+     lui) ma non esserne la copia esatta — deve restare stemperato
+     nell'antracite del marchio. */
+  assert.notEqual(t['--eh-brand'], '#22d3ee', 'la barra non deve diventare un pannello a piena saturazione');
+  assert.match(t['--eh-brand'], /^#[0-9a-f]{6}$/i);
+  assert.ok(T.luminanza(t['--eh-brand']) < T.luminanza('#22d3ee'), 'stemperato: più scuro del ciano puro');
   assert.ok(t['--color-primary-surface'].startsWith('rgba('));
   assert.ok(t['--color-primary-hover'] !== t['--color-primary']);
 });

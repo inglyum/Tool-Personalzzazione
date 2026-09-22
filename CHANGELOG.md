@@ -3,6 +3,51 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.15.0 — Design System 2.0, secondo milestone: la barra d'identità non è un pannello
+
+Fase 2 del mandato «NEXT-GENERATION ERP UI/UX & VISUAL TRANSFORMATION»
+(navigazione/shell/topbar). `docs/DESIGN-SYSTEM.md` §8 lasciava aperta,
+dal 2.7.0, una domanda di layout: se la topbar principale e la «barra
+enterprise» (`#saas-session-bar`, identità laboratorio/piano/White
+Label/uscita) dovessero diventare una barra sola o restare due.
+
+**Decisione**: restano due — è una striscia d'identità sopra la topbar
+operativa, non una topbar duplicata (la duplicazione funzionale era già
+stata chiusa nel 2.7.0/2.9.0). Fonderle avrebbe richiesto una riscrittura
+di layout ben oltre il difetto reale trovato, contro il mandato di non
+riscrivere.
+
+**Trovato con uno screenshot vero**, non solo leggendo il codice: la
+barra enterprise usa `--eh-brand` come sfondo INTERO, e
+`src/product/tema.js` lo impostava identico all'accento
+(`'--eh-brand': a`). Risultato: ogni installazione, anche senza White
+Label configurato, apriva con un pannello ciano a piena saturazione
+largo tutto lo schermo — esattamente ciò che questo stesso documento
+vieta al §3 («il ciano è un accento… non è un colore di riempimento»).
+Non era una scelta di design: era la stessa variabile d'accento riusata
+per colorare un bottone E per riempire un pannello, due usi che a piena
+saturazione si comportano in modo opposto.
+
+Corretto: `--eh-brand` deriva ancora dall'accento (segue un White Label
+brand color vero) ma stemperato nell'antracite del marchio invece di
+sostituirlo (nuovo helper `mescola()` in `tema.js`). Nello stesso giro,
+tokenizzati anche gli stati della barra rimasti colori letterali —
+pallino di stato, badge notifiche, pulsante uscita, avviso di scadenza,
+pulsante «Ripristina» del modulo White Label — sui token
+`--color-success/-warning/-danger` già in uso nel resto del prodotto.
+
+Debito non chiuso qui, dichiarato: la barra resta un `<style>` iniettato
+a runtime con diversi `!important` e altri letterali (badge di piano per
+livello, avatar, modale White Label) — si migra con il resto del debito
+già in tracciamento al §8. Dettaglio completo in
+`docs/DESIGN-SYSTEM.md`.
+
+npm test: 2210/2210 (un'asserzione in `tests/tema.test.mjs` e un
+controllo in `tests/qa/aspetto.mjs` aggiornati per riflettere il nuovo
+comportamento corretto, non il vecchio) · npm run verify: 267 file ·
+npm run qa: tutte le suite verdi, incluso un run pulito di
+`quoter3d-calcoli.mjs` senza il flake della release precedente.
+
 ## 2.14.0 — Design System 2.0, primo milestone: le icone sono icone
 
 Primo passo del mandato «INGLY OS — NEXT-GENERATION ERP UI/UX & VISUAL

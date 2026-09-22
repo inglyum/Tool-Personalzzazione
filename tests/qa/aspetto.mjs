@@ -54,7 +54,14 @@ const esito = await page.evaluate(async () => {
   const p2 = letto('--primary');
   const p3 = letto('--eh-brand');
   dico(`il colore raggiunge il design system (${p1})`, /ff6b35/i.test(p1));
-  dico('e anche i nomi storici che il codice legacy legge', /ff6b35/i.test(p2) && /ff6b35/i.test(p3));
+  dico('e anche il nome storico che il codice legacy legge', /ff6b35/i.test(p2));
+  /* `--eh-brand` non è più una copia dell'accento: è la barra d'identità
+     intera, e l'accento a piena saturazione lì è il pannello di ciano che
+     il design system vieta (docs/DESIGN-SYSTEM.md §3). Deve seguire
+     l'accento (non restare fermo su quello predefinito) ma stemperato,
+     mai identico. */
+  dico('e la barra d\'identità segue l\'accento, stemperato — non è un pannello a piena saturazione',
+    p3 && !/ff6b35/i.test(p3) && /^#[0-9a-f]{6}$/i.test(p3));
   dico('e i derivati non sono uguali all\'originale',
     letto('--color-primary-hover').toLowerCase() !== p1.toLowerCase());
 

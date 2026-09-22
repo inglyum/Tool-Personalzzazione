@@ -135,6 +135,18 @@
     var c = rgb(hex); if (!c) return hex;
     return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
   }
+  /** Stempera `hex` dentro `base` per la frazione `q` (0 = solo base, 1 = solo
+      hex). Serve alla barra d'identità: l'accento la deve tingere, non
+      riempirla — vedi la nota su `--eh-brand` più sotto. */
+  function mescola(base, hex, q) {
+    var b = rgb(base), c = rgb(hex);
+    if (!b || !c) return base;
+    return esa({
+      r: b.r + (c.r - b.r) * q,
+      g: b.g + (c.g - b.g) * q,
+      b: b.b + (c.b - b.b) * q,
+    });
+  }
 
   /* ── La verifica ──────────────────────────────────────────────────────────
      Un accento si sceglie guardando un quadratino di colore, e un quadratino
@@ -189,7 +201,16 @@
       '--primary-dim': alfa(a, 0.14),
       '--primary-border': alfa(a, 0.3),
       '--accent': a,
-      '--eh-brand': a,
+      /* La barra d'identità (#saas-session-bar) usa questo colore come SFONDO
+         intero, non come un bottone o un'etichetta: l'accento a piena
+         saturazione lì diventa esattamente il pannello di ciano che il
+         design system vieta ("un accento, non un colore di riempimento" —
+         docs/DESIGN-SYSTEM.md §3). Ogni installazione, anche senza White
+         Label configurato, partiva quindi con una barra ciano piena in
+         cima a ogni pagina. Qui l'accento si stempera nell'antracite del
+         marchio invece di sostituirlo: resta riconoscibile come identità
+         del laboratorio, non diventa un pannello acceso. */
+      '--eh-brand': mescola('#1f2328', a, 0.22),
       '--font-sans': car.stack,
       '--font-body': car.stack,
       '--ds-font-scale': String(sc.fattore),
