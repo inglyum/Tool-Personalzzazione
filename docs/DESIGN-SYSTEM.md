@@ -390,9 +390,32 @@ già in uso nel resto del prodotto, non più `#10b981`/`#f59e0b`/`#ef4444`
 scritti a mano.
 
 **Debito misurato, non chiuso qui**: la barra resta un `<style>` iniettato
-a runtime con diversi `!important` e altri colori letterali (il badge di
-piano per livello, l'avatar, il modale White Label) — si migra insieme al
-resto del debito dichiarato al §8 sopra, non tutto in un colpo solo.
+a runtime con diversi `!important` e con il badge di piano per livello
+ancora su colori letterali (indigo/viola/ambra/ciano/verde per
+starter/pro/business/enterprise/lifetime) — è una scala categoriale per
+livello di piano, non uno stato semantico, e non ha ancora un proprio
+set di token: si aggiunge insieme alla mappa dei cinque cataloghi piano
+già documentata in `docs/RELEASE-SAAS-BILLING-ACCESS-CONTROL.md` §3,
+non qui. L'avatar e l'intero modale White Label, dichiarati debito nel
+2.15.0, sono stati tokenizzati nel 2.16.0 — vedi sotto.
+
+### Avatar e modulo White Label: lo stesso indigo dimenticato in due posti (2.16.0)
+
+Chiusura diretta del debito dichiarato sopra. Due colori letterali,
+entrambi lo stesso vecchio indigo `#6366f1` che l'accento predefinito
+aveva già smesso di essere: il gradiente dell'avatar utente
+(`#6366f1 → #a855f7`, indipendente da qualunque accento il laboratorio
+avesse scelto — con «Rosso» attivo l'avatar restava comunque indigo) e
+il pulsante «Applica» del modulo White Label. Lo stesso modulo aveva
+anche sfondo, bordo, titolo, etichette e campi su una dozzina di altri
+letterali, indipendenti dal resto del prodotto.
+
+Tokenizzati: l'avatar su `--color-primary`/`--color-primary-active` (ora
+segue davvero l'accento), il modale sui component token già usati da
+ogni altro modale del prodotto (`--modal-bg`, `--modal-border`,
+`--modal-backdrop`) e sui token semantici di superficie/testo; «Applica»
+su `--color-primary`/`--color-text-on-primary`, la stessa coppia di ogni
+bottone primario dell'app. Verificato con screenshot reali.
 
 ---
 

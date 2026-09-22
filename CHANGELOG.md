@@ -3,6 +3,38 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.16.0 — Design System 2.0, terzo milestone: chiuso il debito dichiarato nella barra d'identità
+
+Continuazione diretta del 2.15.0, che aveva dichiarato esplicitamente
+cosa restava fuori dalla tokenizzazione della barra enterprise
+(`#saas-session-bar`, `src/legacy/patches/117-...js`): l'avatar, il
+pulsante «Applica» del modulo White Label e l'intero modulo White Label
+stesso. Chiuso qui, stesso file, stesso giro:
+
+**Avatar dell'utente**: gradiente `#6366f1 → #a855f7` (indigo/viola)
+scritto a mano, indipendente da qualunque accento il laboratorio avesse
+scelto — con l'accento «Rosso» (2.11.0) attivo, l'avatar restava comunque
+indigo. Ora deriva da `var(--color-primary)`/`var(--color-primary-active)`:
+segue davvero il colore scelto.
+
+**Modulo White Label**: l'intero modale (sfondo, bordo, titolo, etichette,
+campi, pulsanti) usava una dozzina di colori letterali indipendenti dal
+resto del prodotto — compreso il pulsante «Applica», ancora `#6366f1`,
+lo stesso indigo sbagliato dell'avatar. Tokenizzato sui component token
+già usati da ogni altro modale del prodotto (`--modal-bg`, `--modal-
+border`, `--modal-backdrop`) e sui token semantici di superficie/testo
+(`--color-surface`, `--color-text`, `--color-text-muted`,
+`--color-border`); «Applica» ora usa `var(--color-primary)` con
+`--color-text-on-primary`, la stessa coppia di token di ogni bottone
+primario dell'app.
+
+Verificato con screenshot reali, non solo letti nel codice: il modale
+apre con lo sfondo e i bordi coerenti col resto del prodotto, «Applica»
+è ciano (o l'accento scelto) invece di un indigo residuo.
+
+npm test: 2210/2210 · npm run verify: 267 file · npm run qa: tutte le
+suite verdi.
+
 ## 2.15.0 — Design System 2.0, secondo milestone: la barra d'identità non è un pannello
 
 Fase 2 del mandato «NEXT-GENERATION ERP UI/UX & VISUAL TRANSFORMATION»
