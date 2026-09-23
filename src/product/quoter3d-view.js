@@ -100,6 +100,22 @@
     };
     var iva = num(r.iva);
     var lordo = num(r.prezzoLordo) || (num(r.prezzo) + iva);
+    /* Il canale si vede solo quando costa qualcosa: chi vende diretto non
+       deve leggere una riga di commissioni a zero per capire che non paga
+       commissioni. Compare la stessa domanda che «Costo di stampa» risolve
+       sopra — un numero in più solo quando risponde a qualcosa. */
+    var haCanale = num(r.commissioni) > 0 || num(r.margineSpedizione) !== 0;
+    var canale = haCanale
+      ? gruppo('Canale · ' + (r.marketplaceLabel || 'Vendita diretta'), 'var(--text-dim)',
+          (num(r.commissioni) > 0 ? cella('Commissioni', '−' + eu(r.commissioni), 'var(--text)', 'canale + incasso, sul lordo') : '')
+          + (num(r.margineSpedizione) !== 0
+              ? cella('Spedizione', (r.margineSpedizione >= 0 ? '+' : '−') + eu(Math.abs(r.margineSpedizione)),
+                  r.margineSpedizione >= 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)',
+                  r.margineSpedizione >= 0 ? 'addebitata copre il costo' : 'costa più di quanto addebitato')
+              : '')
+          + cella('Profitto netto', eu(r.profittoOperativo), r.profittoOperativo > 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)',
+              'dopo canale e spedizione · ' + pc(r.margineOperativoPct)))
+      : '';
     return '<div style="display:flex;gap:16px;flex-wrap:wrap">'
       + gruppo('Costi', 'var(--text-muted)',
           cella('Costo di stampa', eu(r.costoStampa), 'var(--text-muted)', 'materiale ed energia')
@@ -108,7 +124,8 @@
           cella('Prezzo netto', eu(r.prezzo), 'var(--primary)', 'margine ' + pc(r.marginePct))
           + (iva > 0 ? cella('IVA', eu(iva), 'var(--text-muted)', 'sul netto') : '')
           + (iva > 0 ? cella('Prezzo lordo', eu(lordo), 'var(--text)', 'quello che paga il cliente') : '')
-          + cella('Profitto', eu(r.profitto), r.profitto > 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)', 'per pezzo'))
+          + cella('Profitto', eu(r.profitto), r.profitto > 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)', 'per pezzo, prima del canale'))
+      + canale
       + '</div>';
   }
 
@@ -248,12 +265,45 @@
        due chiamate, nessun conto rifatto a mano. */
     var stampa = E.calcola(Object.assign({}, ingresso, { livelloCosto: 'stampa' }));
 
+    /* Il canale di vendita: il motore sa già separare la commissione del
+       marketplace da quella di chi incassa la carta, ma finché niente
+       glielo passava restavano sempre a zero — stesso prezzo per chi vende
+       su Etsy e per chi vende dal proprio sito. `InglyMarketplaces` tiene le
+       aliquote dichiarate dai canali più comuni; `o.commissioneMarketplacePct`
+       ecc. restano un override manuale che vince sempre sul profilo, per chi
+       ha negoziato un'aliquota diversa.
+
+       Nessun canale scelto (`o.marketplace` assente) deve restare a zero
+       commissioni, non ripiegare in silenzio su «vendita diretta»: un
+       preventivo che nessuno ha ancora configurato non deve guadagnare da
+       solo una spesa che ieri non c'era. Il profilo «diretto» esiste per chi
+       lo sceglie davvero dal menu, non come default implicito. */
+    var MP = global.InglyMarketplaces;
+    var commissioni = (MP && o.marketplace) ? MP.opzioniPrezzo(o.marketplace, {
+      commissioneMarketplacePct: o.commissioneMarketplacePct,
+      commissionePagamentoPct: o.commissionePagamentoPct,
+      commissionePagamentoFissa: o.commissionePagamentoFissa,
+    }) : {
+      commissioneMarketplacePct: num(o.commissioneMarketplacePct, 0),
+      commissionePagamentoPct: num(o.commissionePagamentoPct, 0),
+      commissionePagamentoFissa: num(o.commissionePagamentoFissa, 0),
+    };
+
     var opzPrezzo = {
       strategia: 'margine',
       marginePct: num(o.marginePct, 40),
       ivaPct: num(o.ivaPct, 0),
       marginePavimentoPct: o.marginePavimentoPct,
       scontoPct: num(o.scontoPct, 0),
+      commissioneMarketplacePct: commissioni.commissioneMarketplacePct,
+      commissionePagamentoPct: commissioni.commissionePagamentoPct,
+      commissionePagamentoFissa: commissioni.commissionePagamentoFissa,
+      /* Spedizione: costo reale e quanto viene addebitato, mai lo stesso
+         numero travestito da due. `spedizioneAddebitata: true` (booleano) è
+         la scorciatoia storica «il cliente paga esattamente il costo»; qui
+         si passano sempre i due importi separati quando la vista li ha. */
+      spedizioneCosto: o.spedizioneCosto,
+      spedizioneAddebitata: o.spedizioneAddebitata,
     };
     var p = E.prezzo(c.costoPezzo, opzPrezzo);
 
@@ -312,6 +362,18 @@
       profitto: p.profittoLordo, profittoOperativo: p.profittoOperativo,
       marginePct: p.marginePct, ricaricoPct: p.ricaricoPct,
       pavimentoScattato: p.pavimentoScattato,
+      /* Le commissioni del canale, e cosa resta dopo: due numeri che il
+         motore calcolava già e che nessuna vista mostrava. Sono zero — e
+         spariscono dalla card — quando non si è scelto un canale a
+         pagamento, così il preventivatore resta identico a prima per chi
+         vende senza intermediari. */
+      marketplace: o.marketplace || null,
+      marketplaceLabel: (MP && o.marketplace) ? MP.profilo(o.marketplace).label : null,
+      commissioni: p.commissioni,
+      commissioniDettaglio: p.commissioniDettaglio,
+      spedizioneCosto: p.spedizioneCosto, spedizioneAddebitata: p.spedizioneAddebitata,
+      margineSpedizione: p.margineSpedizione,
+      margineOperativoPct: p.margineOperativoPct,
       strategie: strategieCalcolate,
       scaglioni: validi, miglioriScaglioni: miglioriScaglioni,
       avvisi: E.avvisi(c.costoPezzo, p, ingresso),

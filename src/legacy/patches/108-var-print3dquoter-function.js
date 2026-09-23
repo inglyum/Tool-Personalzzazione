@@ -111,6 +111,12 @@ var MARGINE_MINIMO_3D=25;
 var STRATEGIA='standard';
 var MARG=40;
 var MODO='completo';
+/* Il canale di vendita: `null` finché nessuno lo sceglie, non «diretto» per
+   default — un preventivo che nessuno ha ancora configurato non deve
+   guadagnarsi da solo una commissione che ieri non c'era. La spedizione è
+   sempre due numeri, mai uno: quanto costa davvero e quanto si addebita. */
+var CANALE=null;
+var SPED_COSTO=0, SPED_ADDEB=0;
 var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
 var _registroLetto=false;
 /* I materiali che il magazzino conosce. Tenuti separati da MATS — la lista
@@ -682,6 +688,23 @@ function render(){
           +'<button class="p3-disc-btn'+(DISC===20?' active':'')+'" onclick="Print3DQuoter.setDisc(20)">20%</button>'
           +'<input class="p3-fc" id="p3d-disc-custom" type="number" step="1" min="0" max="100" value="'+DISC+'" placeholder="%" style="width:60px;padding:5px 8px;font-size:12px" oninput="Print3DQuoter.setDisc(parseFloat(this.value)||0)">'
         +'</div>'
+      +'</div>'
+    +'</div>'
+    // Canale & Spedizione — il motore separa già queste voci, questa card gliele passa
+    +'<div class="p3-card">'
+      +'<div class="p3-ct">🚚 CANALE &amp; SPEDIZIONE</div>'
+      +'<div class="p3-fg"><label class="p3-fl">DOVE VENDI</label>'
+        +'<select id="p3d-canale" class="p3-fc" style="width:100%;padding:7px 8px;font-size:12px" onchange="Print3DQuoter.setCanale(this.value)">'
+          +'<option value=""'+(!CANALE?' selected':'')+'>— nessuno (nessuna commissione) —</option>'
+          +canaleOpzioniHtml()
+        +'</select>'
+      +'</div>'
+      +canaleNotaHtml()
+      +'<div class="p3-fg"><label class="p3-fl">SPEDIZIONE — COSTO REALE (€)</label>'
+        +'<input class="p3-fc" id="p3d-sped-costo" type="number" step="0.01" min="0" value="'+SPED_COSTO+'" oninput="Print3DQuoter.setSpedCosto(this.value)" style="width:100%;padding:7px 8px;font-size:12px">'
+      +'</div>'
+      +'<div class="p3-fg"><label class="p3-fl">SPEDIZIONE — ADDEBITATA AL CLIENTE (€)</label>'
+        +'<input class="p3-fc" id="p3d-sped-addeb" type="number" step="0.01" min="0" value="'+SPED_ADDEB+'" oninput="Print3DQuoter.setSpedAddeb(this.value)" style="width:100%;padding:7px 8px;font-size:12px">'
       +'</div>'
     +'</div>'
     // Azioni
@@ -1834,6 +1857,18 @@ function setDisc(v){
   var ci=el('p3d-disc-custom');if(ci)ci.value=v;
   render();
 }
+function setCanale(v){
+  CANALE=v||null;
+  render();
+}
+function setSpedCosto(v){
+  SPED_COSTO=Math.max(0,parseFloat(v)||0);
+  calc();
+}
+function setSpedAddeb(v){
+  SPED_ADDEB=Math.max(0,parseFloat(v)||0);
+  calc();
+}
 
 function pickMach(id){
   var m=null;
@@ -2254,6 +2289,29 @@ function fonti(){
   };
 }
 
+/* Le opzioni del <select> canale vengono da `InglyMarketplaces`, non da una
+   lista scritta qui: aggiungere un marketplace nel registro basta a farlo
+   comparire, senza toccare questo file. Se il registro non è caricato (mai
+   nel bundle reale, ma i test isolano i moduli) il select resta con la sola
+   opzione «nessuno». */
+function canaleOpzioniHtml(){
+  var MP=(typeof window!=='undefined') && window.InglyMarketplaces;
+  if(!MP) return '';
+  return MP.elenco().map(function(p){
+    return '<option value="'+p.id+'"'+(CANALE===p.id?' selected':'')+'>'+p.icona+' '+p.label+'</option>';
+  }).join('');
+}
+/* La nota del profilo scelto, sotto il select: ogni aliquota qui dentro è
+   «dichiarata», non verificata — chi preventiva deve vedere da dove viene
+   prima di fidarsene, non scoprirlo leggendo il codice sorgente. */
+function canaleNotaHtml(){
+  var MP=(typeof window!=='undefined') && window.InglyMarketplaces;
+  if(!MP || !CANALE) return '';
+  var p=MP.profilo(CANALE);
+  if(!p || !p.nota) return '';
+  return '<div style="font-size:11px;line-height:1.5;color:var(--text-muted);background:var(--bg-card2);border-radius:6px;padding:8px 10px;margin-top:-2px">ℹ️ '+p.nota+'</div>';
+}
+
 function setModo(m){ MODO=m; render(); }
 
 /* Cursore e casella scrivono la stessa variabile e si risincronizzano a
@@ -2318,6 +2376,9 @@ function calc(){
        100 e 500. */
     quantita: SCAGLIONI,
     fonti: fonti(),
+    marketplace: CANALE,
+    spedizioneCosto: SPED_COSTO,
+    spedizioneAddebitata: SPED_ADDEB,
   }) : { indisponibile:true, motivo:'Vista preventivatore non disponibile' };
 
   var ok = R && !R.indisponibile;
@@ -2703,6 +2764,7 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   addMat:addMat,editMat:editMat,delMat:delMat,
   setModo:setModo,setMargine:setMargine,setCalib:setCalib,setPrezzoMat:setPrezzoMat,
   setStrategia:setStrategia,
+  setCanale:setCanale, setSpedCosto:setSpedCosto, setSpedAddeb:setSpedAddeb,
   setFase:setFase, addHw:addHw, upHw:upHw, rmHw:rmHw,
   setPrezzoManuale:setPrezzoManuale, setMargineMinimo:setMargineMinimo,
   setTempo:setTempo, tempoDaDecimale:tempoDaDecimale,

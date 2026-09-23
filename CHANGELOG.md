@@ -3,6 +3,45 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.22.0 — Canale di vendita e spedizione nello Smart Quoter 3D
+
+Punto 16 del mandato Smart Quoter 3D: `InglyCostEngine.prezzo()` separava
+già da tempo tre voci — commissione di marketplace, commissione di
+pagamento, spedizione reale vs addebitata — ma nessuna vista gliele
+passava mai. Chi vendeva su Etsy vedeva lo stesso profitto di chi vende
+dal proprio sito: il motore era pronto, mancava solo il collegamento.
+
+**`InglyMarketplaces`** (`src/product/marketplace-profiles.js`, nuovo) —
+un registro di sei profili canale (Vendita diretta, Etsy, Amazon, Shopify,
+Sito proprio, eBay, TikTok Shop) con le aliquote che ciascuna piattaforma
+dichiara pubblicamente. Ogni profilo porta la propria `nota` con la fonte
+e la data implicita di verifica, e nessuno è marcato "verificato": lo
+stato onesto è `dichiarata` finché chi preventiva non la conferma sul
+sito del canale — la regola "NON inventare numeri" applicata ai dati di
+mercato, non solo ai costi di laboratorio. Un override manuale, per chi
+ha negoziato un'aliquota diversa, vince sempre sul profilo.
+
+**Smart Quoter 3D** — nuova card "🚚 CANALE & SPEDIZIONE" nella schermata
+reale (non solo nel modulo): un menu con i profili di `InglyMarketplaces`
+(di default nessuno scelto, per non far guadagnare una commissione a un
+preventivo che nessuno ha ancora configurato), la nota del profilo scelto
+in chiaro, e due campi separati per la spedizione — costo reale e importo
+addebitato al cliente, mai un solo numero. Il conto a schermo aggiunge un
+riquadro "Canale" (visibile solo se applicabile) con commissioni, margine
+di spedizione e "Profitto netto" distinto dal profitto lordo pre-canale.
+
+Coperto da 10 test unitari (`tests/marketplace-profiles.test.mjs`) e da
+un collaudo browser dedicato (`tests/qa/quoter3d-canale-spedizione.mjs`,
+12 verifiche) che apre la pagina vera, sceglie Etsy dal menu che vede
+l'utente e controlla che il profitto in pagina scenda — non solo che il
+motore sappia farlo. Un bug è stato trovato e corretto durante lo
+sviluppo, prima che raggiungesse un test: la prima versione applicava le
+commissioni del profilo "diretto" (gateway di pagamento, ~2,9% + 0,30€) a
+ogni preventivo esistente non appena il registro era caricato, anche
+senza che l'utente avesse mai toccato il nuovo menu — corretto rendendo
+`marketplace: null` (nessun canale) l'unico stato che produce commissioni
+a zero.
+
 ## 2.21.0 — Duplicate Feature Audit: cinque pannelli fantasma, due con dati inventati
 
 Punto 2 del mandato di cleanup architetturale. Un audit mirato (non

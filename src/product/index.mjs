@@ -50,6 +50,10 @@ export const PRODUCT_FILES = [
      passo successivo, non ancora costruito. */
   'machine-maintenance.js',
   'cost-engine.js',
+  /* Legge solo le tre chiavi di commissione che il motore già accetta: non
+     tocca `cost-engine.js`, gli passa dati. Nessun ordine di caricamento da
+     rispettare verso di lui — lo interroga solo `quoter3d-view.js`, dopo. */
+  'marketplace-profiles.js',
   'print3d-cost.js',
   /* L'adapter del preventivo: dopo il motore, prima di chi lo usa. */
   'quote-adapter.js',
