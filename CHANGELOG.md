@@ -3,6 +3,65 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.21.0 — Duplicate Feature Audit: cinque pannelli fantasma, due con dati inventati
+
+Punto 2 del mandato di cleanup architetturale. Un audit mirato (non
+un'esplorazione generica: Orders/Popeline, Backup/Restore, CRM, Catalogo,
+Quoter, Produzione, Inventario, Vendite, Dashboard, Settings, Admin, AI)
+ha trovato cinque pannelli reali, tutti iniettati da patch legacy sopra
+viste già canoniche — non nascosti, visibili aprendo la sezione giusta.
+Rimossi tutti e cinque, verificati uno per uno con Playwright dopo la
+rimozione (nessun elemento duplicato più presente nel DOM).
+
+**Ordini** — `patches/101` iniettava un secondo Kanban (`#prox-kanban`)
+con il proprio modale "+ Nuovo Ordine" sopra la vista nativa di
+`GestioneOrdini`, che ha già Kanban/Lista/Produzione/Calendario propri.
+Non era solo doppione: il modale creava i nuovi ordini in
+`localStorage('ingly_orders')`, mentre l'unico store reale è
+`IDB('orders')` — un ordine creato da lì sarebbe stato invisibile
+ovunque nel resto dell'app, con un "✅ Ordine creato" a confermare il
+contrario.
+
+**Backup** — lo stesso file iniettava un secondo pannello "Backup &
+Ripristino" sopra la vista Backup reale. Le sue voci di export/import
+erano già state corrette in una release precedente per delegare al
+modulo `Backup` canonico, ma restava un proprio meccanismo di
+scatti/ripristino ogni 30 minuti su 10 chiavi di `localStorage` — nessuna
+delle quali è uno store IndexedDB reale — con un pulsante "↩ Ripristina"
+che sovrascriveva `localStorage` senza toccare un solo dato vero,
+annunciando comunque il successo.
+
+**Macchine** — `patches/105` iniettava un pannello "AI Machine
+Intelligence" sopra la vista Macchine reale (`equipment`, IDB
+canonico). Seminava quattro macchine finte in
+`localStorage('ev3_machines')` se lo store era vuoto, mostrate con un
+"health score" calcolato come se fossero il parco macchine reale del
+laboratorio — dati inventati spacciati per verità operativa, la cosa
+esatta che le regole del progetto vietano.
+
+**Fornitori e Impostazioni** — `patches/102` iniettava due pannelli
+distinti: un "Supplier Intelligence" sopra la vista Fornitori reale,
+interamente su un array statico di dieci fornitori con nomi, rating e
+URL inventati (mai collegato allo store reale — non poteva
+disallinearsi dai dati veri perché non li leggeva mai), e un secondo
+elenco macchine dentro *Impostazioni* (non Macchine), con lo stesso
+schema di dati finti già trovato in 105.
+
+Rimosso anche, per pulizia, l'unico avanzo di CSS reso orfano da questi
+tagli: le regole `.att-card*`/`.oc__attention` in
+`operating-center.css`, già morte dalla propria redesign della Dashboard
+in 2.19.0 (il markup che le usava era `.att-card`, sostituito allora da
+`.oc__alert-group`, ma le vecchie regole non erano state tolte).
+
+**Controllato e lasciato intatto**: la scheda "💾" del pannello ⚡ Cost
+Engine flottante (`src/legacy/app/src/modules/settings/index.js`) legge
+`IDB.getAll('backups')` — lo store reale — e i suoi pulsanti chiamano
+`Backup.createNow()`/`Backup.download()`, il modulo canonico. Non è un
+doppione: è un accesso rapido corretto allo stesso sistema.
+
+npm test: 2210/2210 (tre nuove voci in `baseline/deliberate-changes.json`,
+una aggiornata) · npm run qa: tutte le suite verdi.
+
 ## 2.20.0 — Gantt: rimosso per intero, non nascosto
 
 Prima release del mandato "CLEANUP ARCHITECTURE + REAL VISUAL REDESIGN +

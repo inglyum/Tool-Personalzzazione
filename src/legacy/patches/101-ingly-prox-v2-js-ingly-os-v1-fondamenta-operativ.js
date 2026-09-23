@@ -127,69 +127,9 @@
 .v2-search-wrap { position:relative; }
 .v2-search-wrap::before { content:'🔍'; position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:13px; pointer-events:none; }
 
-/* ════════════════════════════════════
-   KANBAN ORDERS
-════════════════════════════════════ */
-#prox-kanban {
-  display:grid;
-  grid-template-columns:repeat(5,minmax(180px,1fr));
-  gap:10px; padding-bottom:8px;
-  overflow-x:auto; align-items:start;
-}
-@media(max-width:900px){#prox-kanban{grid-template-columns:repeat(3,minmax(160px,1fr));}}
-@media(max-width:600px){#prox-kanban{grid-template-columns:repeat(2,minmax(150px,1fr));}}
-
-.kb-col {
-  border-radius:12px; overflow:hidden;
-  background:rgba(255,255,255,.025);
-  border:1px solid rgba(255,255,255,.07);
-  min-height:120px;
-}
-.kb-col-hdr {
-  padding:10px 12px; font-size:10px; font-weight:700;
-  text-transform:uppercase; letter-spacing:.4px;
-  display:flex; align-items:center; justify-content:space-between;
-  position:sticky; top:0; z-index:2;
-}
-.kb-col-body { padding:8px; min-height:80px; }
-.kb-col.drag-over .kb-col-body { background:rgba(251,191,36,.06); border-radius:8px; }
-
-.kb-card {
-  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07);
-  border-radius:9px; padding:10px 11px; margin-bottom:6px;
-  cursor:grab; user-select:none; transition:border-color .12s, box-shadow .12s;
-  position:relative;
-}
-.kb-card:active { cursor:grabbing; }
-.kb-card:hover { border-color:rgba(251,191,36,.3); box-shadow:0 4px 16px rgba(0,0,0,.4); }
-.kb-card.dragging { opacity:.4; }
-.kb-card-client { font-size:12px; font-weight:700; color:#e5e5e5; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kb-card-id { font-size:9px; color:#52525b; font-family:monospace; margin-bottom:4px; }
-.kb-card-amount { font-size:13px; font-weight:800; color:#fbbf24; }
-.kb-card-date { font-size:9px; color:#52525b; }
-.kb-card-actions { position:absolute; top:6px; right:6px; display:flex; gap:4px; opacity:0; transition:.12s; }
-.kb-card:hover .kb-card-actions { opacity:1; }
-.kb-card-btn { background:rgba(255,255,255,.08); border:none; border-radius:4px; cursor:pointer; color:#a1a1aa; font-size:10px; padding:2px 5px; }
-.kb-card-btn:hover { background:rgba(251,191,36,.15); color:#fbbf24; }
-.kb-col-empty { font-size:10px; color:#3f3f46; text-align:center; padding:16px 8px; }
-.kb-add-card {
-  width:100%; padding:7px; background:transparent;
-  border:1px dashed rgba(255,255,255,.1); border-radius:8px;
-  color:#52525b; font-size:11px; cursor:pointer; margin-top:4px; transition:.12s;
-}
-.kb-add-card:hover { border-color:rgba(251,191,36,.3); color:#fbbf24; }
-
-/* New order quick modal */
-#prox-order-modal-overlay {
-  position:fixed; inset:0; z-index:18000; background:rgba(0,0,0,.8);
-  backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center;
-}
-#prox-order-modal-overlay.open { display:flex; }
-#prox-order-modal {
-  background:#0f0f11; border:1px solid rgba(255,255,255,.12); border-radius:16px;
-  padding:24px; width:100%; max-width:480px; box-shadow:0 24px 60px rgba(0,0,0,.9);
-}
-#prox-order-modal h3 { margin:0 0 16px; font-size:16px; color:#e5e5e5; }
+/* CSS del secondo Kanban Ordini e del suo modale "+ Nuovo Ordine" —
+   rimossi insieme al JS, vedi il commento più sotto dove vivevano
+   buildKanban()/_doKanban()/buildNewOrderModal(). */
 
 /* ════════════════════════════════════
    CRM ENHANCEMENT
@@ -235,20 +175,9 @@
 .cdp-header { padding:20px; border-bottom:1px solid rgba(255,255,255,.06); }
 .cdp-header h3 { margin:0 0 4px; font-size:18px; color:#e5e5e5; }
 
-/* ════════════════════════════════════
-   BACKUP MANAGER
-════════════════════════════════════ */
-#prox-backup-bar { margin-bottom:14px; }
-.bk-slot {
-  display:flex; align-items:center; gap:10px; padding:10px 12px;
-  background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.06);
-  border-radius:9px; margin-bottom:4px;
-}
-.bk-slot-ts { font-size:11px; color:#a1a1aa; flex:1; }
-.bk-slot-size { font-size:10px; color:#52525b; }
-.bk-slot-badge { font-size:9px; padding:2px 8px; border-radius:10px; font-weight:700; }
-.bk-auto { background:rgba(34,197,94,.15); color:#22c55e; }
-.bk-manual { background:rgba(96,165,250,.15); color:#60a5fa; }
+/* CSS del pannello Backup Manager iniettato in cima alla vista Backup
+   reale — rimosso insieme al JS, vedi il commento più sotto dove
+   vivevano performBackup()/buildBackupEnhancement()/_doBackup(). */
 
 /* ════════════════════════════════════
    FINANCE SUITE (P&L)
@@ -311,362 +240,14 @@
     document.head.appendChild(s);
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     V1 — KANBAN ORDINI (drag & drop)
-  ═══════════════════════════════════════════════════════════════════ */
-  var KANBAN_COLS = [
-    { id:'attesa',     label:'📥 Da Gestire',   color:'#64748b', bg:'rgba(100,116,139,.12)' },
-    { id:'produzione', label:'⚙️ In Produzione', color:'#f59e0b', bg:'rgba(245,158,11,.12)'  },
-    { id:'consegnato', label:'🚚 Consegnato',    color:'#60a5fa', bg:'rgba(96,165,250,.12)'  },
-    { id:'pagato',     label:'✅ Pagato',        color:'#22c55e', bg:'rgba(34,197,94,.12)'   },
-    { id:'annullato',  label:'❌ Annullato',     color:'#ef4444', bg:'rgba(239,68,68,.12)'   },
-  ];
-
-  function buildKanban() {
-    var section = document.getElementById('view-gestione_ordini');
-    if (!section || section._kanbanBuilt) return;
-
-    function _try(n) {
-      n = n || 0; if (n > 40) return;
-      if (!section.children.length) { setTimeout(function(){ _try(n+1); }, 400); return; }
-      if (section._kanbanBuilt) return;
-      section._kanbanBuilt = true;
-      _doKanban(section);
-    }
-    _try();
-  }
-
-  function _doKanban(section) {
-    /* Remove the old prox-ordini-bar from v15 if present (we supersede it) */
-    var old = document.getElementById('prox-ordini-bar');
-    if (old) old.remove();
-
-    /* ── Wrapper ── */
-    var wrap = document.createElement('div');
-    wrap.id = 'prox-kanban-wrap';
-
-    /* Top bar */
-    var topBar = document.createElement('div');
-    topBar.className = 'v2-card';
-    topBar.style.cssText = 'margin-bottom:10px;';
-    topBar.innerHTML =
-      '<div class="v2-title"><span>📋 Ordini & Workflow</span>' +
-      '<button class="v2-btn v2-btn-primary v2-btn-sm" id="kb-new-btn">＋ Nuovo Ordine</button>' +
-      '<button class="v2-btn v2-btn-secondary v2-btn-sm" id="kb-refresh-btn" style="margin-left:6px">↺ Aggiorna</button>' +
-      '</div>' +
-      '<div class="v2-kpis" id="kb-kpis"></div>' +
-      '<div class="v2-search-wrap" style="max-width:360px">' +
-      '<input class="v2-search" id="kb-search" placeholder="Cerca cliente, ordine, importo...">' +
-      '</div>';
-    wrap.appendChild(topBar);
-
-    /* Kanban grid */
-    var grid = document.createElement('div');
-    grid.id = 'prox-kanban';
-    wrap.appendChild(grid);
-
-    section.insertBefore(wrap, section.firstChild);
-
-    /* ── State ── */
-    var dragState = { card: null, fromCol: null };
-    var searchQ = '';
-
-    /* ── Helpers ── */
-    function saveOrder(o) {
-      var key = o._src || 'ingly_orders';
-      var arr = STORE.arr(key);
-      var idx = arr.findIndex(function(x){ return x.id === o.id; });
-      var clean = Object.assign({}, o); delete clean._src;
-      if (idx >= 0) arr[idx] = clean; else arr.push(clean);
-      STORE.set(key, arr);
-    }
-
-    function getOrders() {
-      return readOrders();
-    }
-
-    /* ── KPIs ── */
-    function renderKPIs() {
-      var orders = getOrders();
-      var pagati  = orders.filter(function(o){ return orderStatus(o)==='pagato'; });
-      var inProd  = orders.filter(function(o){ return orderStatus(o)==='produzione'; });
-      var total   = orders.reduce(function(s,o){ return s+orderAmt(o); }, 0);
-      var incass  = pagati.reduce(function(s,o){ return s+orderAmt(o); }, 0);
-      var el = document.getElementById('kb-kpis');
-      if (!el) return;
-      el.innerHTML = [
-        { val: orders.length,        lbl: 'Ordini totali',  color: '#e5e5e5' },
-        { val: inProd.length,        lbl: 'In lavorazione', color: '#f59e0b' },
-        { val: pagati.length,        lbl: 'Pagati',         color: '#22c55e' },
-        { val: fmt(total, 0),        lbl: 'Valore totale',  color: '#fbbf24' },
-        { val: fmt(incass, 0),       lbl: 'Incassato',      color: '#22c55e' },
-        { val: readClients().length, lbl: 'Clienti CRM',    color: '#60a5fa' },
-      ].map(function(k){
-        return '<div class="v2-kpi"><div class="v2-kpi-val" style="color:'+k.color+'">'+k.val+'</div><div class="v2-kpi-lbl">'+k.lbl+'</div></div>';
-      }).join('');
-    }
-
-    /* ── Kanban render ── */
-    function renderKanban() {
-      var orders = getOrders();
-      var q = searchQ.toLowerCase().trim();
-      if (q) orders = orders.filter(function(o){
-        return (orderClient(o)||'').toLowerCase().includes(q) ||
-               (o.id||'').toString().toLowerCase().includes(q) ||
-               orderAmt(o).toString().includes(q);
-      });
-
-      /* Group by status */
-      var groups = {};
-      KANBAN_COLS.forEach(function(c){ groups[c.id]=[]; });
-      orders.forEach(function(o){ var st=orderStatus(o); if(groups[st]) groups[st].push(o); else groups['attesa'].push(o); });
-
-      grid.innerHTML = '';
-      KANBAN_COLS.forEach(function(col){
-        var cards = groups[col.id];
-        var colEl = document.createElement('div');
-        colEl.className = 'kb-col';
-        colEl.dataset.col = col.id;
-
-        colEl.innerHTML =
-          '<div class="kb-col-hdr" style="background:'+col.bg+';color:'+col.color+'">'+
-          '<span>'+col.label+'</span>'+
-          '<span style="background:rgba(0,0,0,.3);border-radius:20px;padding:1px 8px;font-size:11px">'+cards.length+'</span>'+
-          '</div>'+
-          '<div class="kb-col-body" id="kb-body-'+col.id+'"></div>';
-
-        grid.appendChild(colEl);
-
-        var body = colEl.querySelector('.kb-col-body');
-
-        if (!cards.length) {
-          body.innerHTML = '<div class="kb-col-empty">Nessun ordine</div>';
-        } else {
-          cards.forEach(function(o){
-            var card = document.createElement('div');
-            card.className = 'kb-card';
-            card.draggable = true;
-            card.dataset.id = o.id || '';
-            card.dataset.src = o._src || 'ingly_orders';
-            var amt = orderAmt(o);
-            var dt  = dateIT(orderDate(o));
-            var nm  = orderClient(o) || 'Cliente';
-            card.innerHTML =
-              '<div class="kb-card-id">#'+(o.id||'—').toString().slice(-8)+'</div>'+
-              '<div class="kb-card-client">'+esc(nm)+'</div>'+
-              (amt ? '<div class="kb-card-amount">'+fmt(amt,0)+'</div>' : '')+
-              '<div class="kb-card-date">'+dt+'</div>'+
-              '<div class="kb-card-actions">'+
-              KANBAN_COLS.filter(function(c){return c.id!==col.id;}).slice(0,3).map(function(c){
-                return '<button class="kb-card-btn" data-move="'+c.id+'" title="Sposta in '+c.label+'">→'+c.label.split(' ')[1]+'</button>';
-              }).join('')+
-              '</div>';
-
-            /* Drag events */
-            card.addEventListener('dragstart', function(e){
-              dragState.card = o;
-              dragState.fromCol = col.id;
-              card.classList.add('dragging');
-              e.dataTransfer.effectAllowed = 'move';
-            });
-            card.addEventListener('dragend', function(){
-              card.classList.remove('dragging');
-            });
-
-            /* Quick move buttons */
-            card.addEventListener('click', function(e){
-              var btn = e.target.closest('[data-move]');
-              if (!btn) return;
-              e.stopPropagation();
-              o.status = btn.dataset.move;
-              o.stage  = btn.dataset.move;
-              saveOrder(o);
-              renderKanban();
-              renderKPIs();
-              toastr('Ordine spostato in '+(btn.dataset.move), 'success', 1500);
-            });
-
-            body.appendChild(card);
-          });
-        }
-
-        /* Add card button */
-        var addBtn = document.createElement('button');
-        addBtn.className = 'kb-add-card';
-        addBtn.textContent = '＋ Aggiungi ordine';
-        addBtn.addEventListener('click', function(){ openNewOrderModal(col.id); });
-        body.appendChild(addBtn);
-
-        /* Drop zone */
-        colEl.addEventListener('dragover', function(e){
-          e.preventDefault();
-          colEl.classList.add('drag-over');
-        });
-        colEl.addEventListener('dragleave', function(){
-          colEl.classList.remove('drag-over');
-        });
-        colEl.addEventListener('drop', function(e){
-          e.preventDefault();
-          colEl.classList.remove('drag-over');
-          if (!dragState.card || dragState.fromCol === col.id) return;
-          dragState.card.status = col.id;
-          dragState.card.stage  = col.id;
-          saveOrder(dragState.card);
-          toastr('Spostato in '+col.label.split(' ').slice(1).join(' '), 'success', 1500);
-          dragState.card = null; dragState.fromCol = null;
-          renderKanban();
-          renderKPIs();
-        });
-      });
-    }
-
-    renderKPIs();
-    renderKanban();
-
-    /* Search */
-    document.getElementById('kb-search').addEventListener('input', function(){
-      searchQ = this.value;
-      renderKanban();
-    });
-    document.getElementById('kb-refresh-btn').addEventListener('click', function(){
-      renderKPIs(); renderKanban();
-    });
-
-    /* New order btn */
-    document.getElementById('kb-new-btn').addEventListener('click', function(){ openNewOrderModal('attesa'); });
-
-    /* Storage sync */
-    window.addEventListener('storage', function(e){
-      if (['ingly_orders','ingly_quotes','lb2b_quotes_v1','ingly_clients','ingly_crm_v1'].includes(e.key)){
-        renderKPIs(); renderKanban();
-      }
-    });
-
-    /* ── New Order Modal ── */
-    buildNewOrderModal();
-    function openNewOrderModal(defaultStatus) {
-      var ov = document.getElementById('prox-order-modal-overlay');
-      if (!ov) return;
-      document.getElementById('nom-status').value = defaultStatus || 'attesa';
-      renderClientAC_nom('');
-      ov.classList.add('open');
-    }
-  }
-
-  function buildNewOrderModal() {
-    if (document.getElementById('prox-order-modal-overlay')) return;
-    var overlay = document.createElement('div');
-    overlay.id = 'prox-order-modal-overlay';
-
-    var modal = document.createElement('div');
-    modal.id = 'prox-order-modal';
-
-    modal.innerHTML =
-      '<h3>➕ Nuovo Ordine</h3>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-      '<div style="grid-column:1/-1">'+
-      '<label style="font-size:10px;color:#71717a;display:block;margin-bottom:4px">Cliente</label>'+
-      '<div class="v2-search-wrap" style="position:relative">'+
-      '<input class="v2-search" id="nom-client" placeholder="Cerca cliente CRM..." autocomplete="off">'+
-      '<div id="nom-client-ac" style="position:absolute;top:100%;left:0;right:0;background:#161618;border:1px solid rgba(255,255,255,.12);border-radius:8px;z-index:100;max-height:140px;overflow-y:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.7)"></div>'+
-      '</div></div>'+
-      '<div><label style="font-size:10px;color:#71717a;display:block;margin-bottom:4px">Descrizione ordine</label>'+
-      '<input class="v2-search" id="nom-desc" placeholder="es. 50 targhette MDF" style="padding-left:12px"></div>'+
-      '<div><label style="font-size:10px;color:#71717a;display:block;margin-bottom:4px">Importo (€)</label>'+
-      '<input type="number" class="v2-search" id="nom-amount" placeholder="0.00" min="0" step="0.01" style="padding-left:12px"></div>'+
-      '<div><label style="font-size:10px;color:#71717a;display:block;margin-bottom:4px">Stato</label>'+
-      '<select class="v2-search" id="nom-status" style="padding-left:12px">'+
-      KANBAN_COLS.map(function(c){ return '<option value="'+c.id+'">'+c.label+'</option>'; }).join('')+
-      '</select></div>'+
-      '<div><label style="font-size:10px;color:#71717a;display:block;margin-bottom:4px">Data consegna</label>'+
-      '<input type="date" class="v2-search" id="nom-deadline" style="padding-left:12px"></div>'+
-      '<div><label style="font-size:10px;color:#71717a;display:block;margin-bottom:4px">Tecnica</label>'+
-      '<select class="v2-search" id="nom-technique" style="padding-left:12px">'+
-      '<option value="">— Seleziona —</option>'+
-      '<option value="laser">⚡ Laser</option><option value="dtf">🖨️ DTF</option>'+
-      '<option value="sublimazione">🎨 Sublimazione</option><option value="uv">🌈 UV</option>'+
-      '<option value="misto">🔀 Misto</option>'+
-      '</select></div>'+
-      '</div>'+
-      '<div style="display:flex;gap:8px;margin-top:16px">'+
-      '<button class="v2-btn v2-btn-primary" id="nom-save-btn">💾 Crea Ordine</button>'+
-      '<button class="v2-btn v2-btn-secondary" id="nom-cancel-btn">Annulla</button>'+
-      '</div>';
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    function renderClientAC_nom(q) {
-      var ac = document.getElementById('nom-client-ac');
-      if (!ac) return;
-      q = q.toLowerCase().trim();
-      var clients = readClients().filter(function(c){
-        return !q || clientName(c).toLowerCase().includes(q);
-      }).slice(0,8);
-      if (!clients.length) { ac.style.display='none'; return; }
-      ac.innerHTML = clients.map(function(c){
-        var nm = clientName(c);
-        return '<div style="padding:8px 12px;cursor:pointer;font-size:12px;color:#e5e5e5;border-bottom:1px solid rgba(255,255,255,.04)" data-name="'+esc(nm)+'" class="nom-ac-item">'+esc(nm)+'</div>';
-      }).join('');
-      ac.style.display = 'block';
-      ac.querySelectorAll('.nom-ac-item').forEach(function(item){
-        item.addEventListener('mousedown', function(e){
-          e.preventDefault();
-          document.getElementById('nom-client').value = item.dataset.name;
-          ac.style.display = 'none';
-        });
-      });
-    }
-    window.renderClientAC_nom = renderClientAC_nom;
-
-    document.getElementById('nom-client').addEventListener('input', function(){
-      renderClientAC_nom(this.value);
-    });
-    document.getElementById('nom-client').addEventListener('blur', function(){
-      setTimeout(function(){ var ac=document.getElementById('nom-client-ac'); if(ac) ac.style.display='none'; }, 200);
-    });
-
-    document.getElementById('nom-cancel-btn').addEventListener('click', function(){
-      overlay.classList.remove('open');
-    });
-    overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.classList.remove('open'); });
-
-    document.getElementById('nom-save-btn').addEventListener('click', function(){
-      var client  = document.getElementById('nom-client').value.trim();
-      var desc    = document.getElementById('nom-desc').value.trim();
-      var amount  = parseFloat(document.getElementById('nom-amount').value) || 0;
-      var status  = document.getElementById('nom-status').value;
-      var dl      = document.getElementById('nom-deadline').value;
-      var tech    = document.getElementById('nom-technique').value;
-      if (!client) { document.getElementById('nom-client').focus(); return; }
-      var order = {
-        id:         'O' + Date.now(),
-        clientName: client, client: client,
-        description: desc,
-        total:      amount, totalPrice: amount,
-        status:     status, stage: status, stato: status,
-        technique:  tech,
-        deadline:   dl,
-        date:       new Date().toISOString(),
-        createdAt:  new Date().toISOString(),
-      };
-      var orders = STORE.arr('ingly_orders');
-      orders.push(order);
-      STORE.set('ingly_orders', orders);
-      overlay.classList.remove('open');
-      /* Reset */
-      ['nom-client','nom-desc','nom-amount','nom-deadline'].forEach(function(id){
-        var el=document.getElementById(id); if(el) el.value='';
-      });
-      toastr('✅ Ordine creato per '+client, 'success', 2500);
-      /* Re-render kanban */
-      var kb = document.getElementById('prox-kanban');
-      if (kb) {
-        var sec = document.getElementById('view-gestione_ordini');
-        if (sec) { sec._kanbanBuilt=false; buildKanban(); }
-      }
-    });
-  }
+  /* Qui vivevano buildKanban()/_doKanban() e buildNewOrderModal(): un
+     secondo Kanban Ordini (#prox-kanban) e il suo modale "+ Nuovo
+     Ordine", iniettati sopra la vista nativa di GestioneOrdini — che ha
+     già Kanban/Lista/Produzione/Calendario propri. Rimossi perché
+     duplicati E rotti: il modale scriveva i nuovi ordini in
+     STORE('ingly_orders', localStorage), mentre l'unico store reale è
+     IDB('orders') — un ordine creato da lì sarebbe stato invisibile
+     ovunque nell'app vera. Vedi CHANGELOG per il dettaglio. */
 
   /* ═══════════════════════════════════════════════════════════════════
      V1 + V2 — CRM SEGMENTAZIONE
@@ -907,167 +488,19 @@
     });
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     V1 — BACKUP AUTOMATICO
-  ═══════════════════════════════════════════════════════════════════ */
-  var BACKUP_KEY = 'prox_backups_v1';
-  var AUTO_BACKUP_INTERVAL = 30 * 60 * 1000; // 30 min
-
-  function performBackup(type) {
-    var data = {};
-    var keys = ['ingly_clients','ingly_crm_v1','ingly_orders','ingly_quotes',
-                'lb2b_quotes_v1','ingly_products','ingly_projects','ingly_fixed_costs',
-                'prox_catalog','ingly_listino'];
-    keys.forEach(function(k){
-      var v = localStorage.getItem(k);
-      if (v) data[k] = v;
-    });
-    var entry = {
-      id: uid(), ts: new Date().toISOString(), type: type || 'auto',
-      size: JSON.stringify(data).length, data: data
-    };
-    var bks = STORE.get(BACKUP_KEY) || [];
-    bks.unshift(entry);
-    if (bks.length > 20) bks = bks.slice(0, 20); // keep last 20
-    STORE.set(BACKUP_KEY, bks);
-    return entry;
-  }
-
-  function startAutoBackup() {
-    /* Initial backup on load */
-    setTimeout(function(){ performBackup('auto'); }, 5000);
-    /* Periodic backup */
-    setInterval(function(){ performBackup('auto'); }, AUTO_BACKUP_INTERVAL);
-  }
-
-  function buildBackupEnhancement() {
-    var section = document.getElementById('view-backup');
-    if (!section || section._backupEnhanced) return;
-
-    function _try(n) {
-      n=n||0; if(n>30) return;
-      if(!section.children.length){ setTimeout(function(){ _try(n+1); }, 400); return; }
-      if(section._backupEnhanced) return;
-      section._backupEnhanced = true;
-      _doBackup(section);
-    }
-    _try();
-  }
-
-  function _doBackup(section) {
-    if (document.getElementById('prox-backup-bar')) return;
-
-    var bar = document.createElement('div');
-    bar.id = 'prox-backup-bar';
-    bar.className = 'v2-card';
-    bar.innerHTML =
-      '<div class="v2-title"><span>☁️ Backup & Ripristino Dati</span></div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
-      '<button class="v2-btn v2-btn-primary" id="bk-now-btn">💾 Backup Manuale Ora</button>'+
-      '<button class="v2-btn v2-btn-secondary" id="bk-export-btn">📥 Esporta JSON</button>'+
-      '<button class="v2-btn v2-btn-secondary" id="bk-import-btn">📤 Importa JSON</button>'+
-      '<input type="file" id="bk-import-file" accept=".json" style="display:none">'+
-      '</div>'+
-      '<div style="font-size:10px;color:#52525b;margin-bottom:12px">Scatti automatici delle <b>preferenze</b> ogni 30 minuti · ultimi 20 conservati.<br>I dati del laboratorio stanno in IndexedDB: per quelli usa «Esporta JSON» qui sopra o la scheda Backup completo.</div>'+
-      '<div id="bk-slots"></div>';
-
-    section.insertBefore(bar, section.firstChild);
-
-    function renderBackups() {
-      var bks = STORE.get(BACKUP_KEY) || [];
-      var el = document.getElementById('bk-slots');
-      if (!el) return;
-      if (!bks.length) { el.innerHTML='<div style="color:#3f3f46;font-size:11px;padding:8px 0">Nessun backup ancora</div>'; return; }
-      el.innerHTML = bks.slice(0,10).map(function(bk){
-        var kb = (bk.size/1024).toFixed(1);
-        var dt = new Date(bk.ts);
-        var dtStr = dt.toLocaleDateString('it-IT')+ ' '+dt.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-        var keyCount = Object.keys(bk.data||{}).length;
-        return '<div class="bk-slot">'+
-          '<span class="bk-slot-badge '+(bk.type==='manual'?'bk-manual':'bk-auto')+'">'+
-          (bk.type==='manual'?'Manuale':'Auto')+'</span>'+
-          '<span class="bk-slot-ts">'+dtStr+' &nbsp;·&nbsp; '+keyCount+' sezioni</span>'+
-          '<span class="bk-slot-size">'+kb+' KB</span>'+
-          '<button class="v2-btn v2-btn-secondary v2-btn-sm" data-restore="'+bk.id+'">↩ Ripristina</button>'+
-          '<button class="v2-btn v2-btn-secondary v2-btn-sm" data-dl="'+bk.id+'" style="margin-left:4px">⬇</button>'+
-          '</div>';
-      }).join('');
-    }
-    renderBackups();
-
-    document.getElementById('bk-now-btn').addEventListener('click', function(){
-      var entry = performBackup('manual');
-      renderBackups();
-      toastr('💾 Backup salvato — '+Object.keys(entry.data).length+' sezioni', 'success', 2500);
-    });
-
-    /* ── Un solo backup, non due ────────────────────────────────────────
-       Questo pannello esportava le sole chiavi di localStorage: preferenze e
-       poco altro. I dati del laboratorio — clienti, ordini, catalogo,
-       magazzino — stanno in IndexedDB, e non finivano nel file. Un backup che
-       si scarica, pesa poco e non contiene i dati è peggio di nessun backup,
-       perché sembra fatto. Adesso questo pulsante chiama lo stesso motore
-       della scheda «Backup completo». */
-    document.getElementById('bk-export-btn').addEventListener('click', function(){
-      var B = (typeof Backup !== 'undefined') ? Backup : (window.Backup || null);
-      if (B && typeof B.downloadWithImages === 'function') { B.downloadWithImages(); return; }
-      if (B && typeof B.download === 'function') { B.download(); return; }
-      toastr('❌ Modulo backup non disponibile', 'error', 4000);
-    });
-
-    document.getElementById('bk-import-btn').addEventListener('click', function(){
-      document.getElementById('bk-import-file').click();
-    });
-
-    /* ── Il difetto misurato ────────────────────────────────────────────
-       Questo gestore faceva `localStorage.setItem(k, data[k])` su ogni chiave
-       di primo livello del file. Su un backup nel formato INGLY_FULL le
-       chiavi di primo livello sono `_ts`, `_v`, `data` e `images`: scriveva
-       quattro voci di cui due valevano la stringa «[object Object]», non
-       importava un solo record, e annunciava «✅ Dati ripristinati con
-       successo». Misurato con un backup vero da 2,6 MB: 82 clienti, 364
-       prodotti, 699 articoli e 50 ordini, e dopo l'importazione zero di
-       ognuno.
-
-       Il ripristino vero è uno solo e sta in `Backup.onImport`: riconosce i
-       formati, pulisce, importa a blocchi e rimette le immagini. Questo
-       pulsante gli passa il file e basta. */
-    document.getElementById('bk-import-file').addEventListener('change', function(e){
-      var input = this;
-      if (!input.files || !input.files[0]) return;
-      var B = (typeof Backup !== 'undefined') ? Backup : (window.Backup || null);
-      if (B && typeof B.onImport === 'function') { B.onImport(input); return; }
-      toastr('❌ Modulo di ripristino non disponibile', 'error', 4000);
-      input.value = '';
-    });
-
-    document.getElementById('bk-slots').addEventListener('click', function(e){
-      var restoreBtn = e.target.closest('[data-restore]');
-      var dlBtn = e.target.closest('[data-dl]');
-      var bks = STORE.get(BACKUP_KEY) || [];
-
-      if (restoreBtn) {
-        var bk = bks.find(function(b){ return b.id===restoreBtn.dataset.restore; });
-        if (!bk) return;
-        var dt = new Date(bk.ts).toLocaleString('it-IT');
-        if (!confirm('Ripristinare backup del '+dt+'?\nI dati attuali saranno sovrascritti.')) return;
-        Object.keys(bk.data).forEach(function(k){ localStorage.setItem(k, bk.data[k]); });
-        toastr('✅ Backup ripristinato', 'success', 3000);
-        setTimeout(function(){ location.reload(); }, 1500);
-      }
-
-      if (dlBtn) {
-        var bk2 = bks.find(function(b){ return b.id===dlBtn.dataset.dl; });
-        if (!bk2) return;
-        var json = JSON.stringify(bk2.data, null, 2);
-        var blob = new Blob([json],{type:'application/json'});
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'ingly-backup-'+bk2.ts.slice(0,16).replace('T','-')+'.json';
-        a.click();
-      }
-    });
-  }
+  /* Qui vivevano performBackup()/startAutoBackup()/buildBackupEnhancement()
+     /_doBackup(): un secondo pannello di backup, iniettato sopra la vista
+     Backup reale (che già ha il proprio export/import/restore su tutta
+     IndexedDB, in src/legacy/app/src/modules/settings/index.js). I suoi
+     pulsanti di export/import erano già stati corretti per delegare al
+     modulo Backup canonico (vedi CHANGELOG per i due bug misurati allora),
+     ma restava un secondo, autonomo meccanismo di snapshot/ripristino:
+     ogni 30 minuti salvava 10 chiavi di localStorage — nessuna delle quali
+     è uno store IndexedDB reale (ordini, clienti, magazzino ci vivono) —
+     e il suo pulsante «↩ Ripristina» faceva
+     `localStorage.setItem(k, bk.data[k])` su quello snapshot, annunciando
+     "✅ Backup ripristinato" senza aver toccato un solo dato vero. Rimosso
+     per intero: non restava nulla da salvare. */
 
   /* ═══════════════════════════════════════════════════════════════════
      V2 — AI BUSINESS ADVISOR (Dashboard widget)
@@ -1382,13 +815,10 @@
     }
 
     injectV2CSS();
-    startAutoBackup();
 
-    buildKanban();
     buildCRMEnhancement();
     buildAdvisorWidget();
     buildFinanceSuite();
-    buildBackupEnhancement();
 
     /* Nav hooks */
     if (!window._proxV2NavHooked && App.navigate) {
@@ -1396,11 +826,9 @@
       App.navigate = function (section) {
         var r = _origNav.apply(this, arguments);
         setTimeout(function () {
-          if (section === 'gestione_ordini') buildKanban();
           if (section === 'clients')         buildCRMEnhancement();
           if (section === 'dashboard')       buildAdvisorWidget();
           if (section === 'fiscal')          buildFinanceSuite();
-          if (section === 'backup')          buildBackupEnhancement();
         }, 300);
         return r;
       };

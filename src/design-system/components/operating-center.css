@@ -576,85 +576,6 @@
   align-self: flex-start;
 }
 
-/* ── Richiede attenzione ──────────────────────────────────────────────────  */
-.oc__attention {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--space-4);
-}
-
-.att-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--card-padding-compact);
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-top: 2px solid var(--color-text-subtle);
-  border-radius: var(--card-radius);
-}
-
-.att-card--danger { border-top-color: var(--color-danger); }
-.att-card--warning { border-top-color: var(--color-warning); }
-.att-card--info { border-top-color: var(--color-info); }
-
-.att-card__head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.att-card__count {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-.att-card__label {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-}
-
-.att-card__value {
-  margin-left: auto;
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text);
-}
-
-.att-card__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.att-card__list li {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: var(--text-xs);
-}
-
-.att-card__item-title {
-  color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.att-card__item-meta {
-  color: var(--color-text-subtle);
-  flex-shrink: 0;
-}
-
-.att-card .btn {
-  align-self: flex-start;
-}
-
 /* ── Magazzino ────────────────────────────────────────────────────────────  */
 .inv-block + .inv-block {
   margin-top: var(--space-4);
@@ -879,7 +800,6 @@
 
   .oc__kpis,
   .wc-grid,
-  .oc__attention,
   .prof-grid,
   .oc__two {
     grid-template-columns: 1fr;

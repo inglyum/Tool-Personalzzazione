@@ -153,45 +153,7 @@
 '.sched-deadline.soon{color:#f59e0b;font-weight:600;}'+
 '.sched-amount{font-size:.78rem;font-weight:700;color:#fbbf24;}'+
 '.machine-load-bar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;margin-top:5px;}'+
-'.machine-load-fill{height:100%;border-radius:3px;transition:.4s;}'+
-/* ═══ ATTREZZATURE ═══ */
-'.att-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;}'+
-'.att-card{padding:16px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:12px;transition:.12s;}'+
-'.att-card:hover{border-color:rgba(255,255,255,.15);}'+
-'.att-card-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;}'+
-'.att-icon{font-size:1.6rem;}'+
-'.att-name{font-size:.9rem;font-weight:700;color:#e5e5e5;}'+
-'.att-sub{font-size:.72rem;color:#52525b;margin-top:2px;}'+
-'.att-status-badge{padding:3px 10px;border-radius:20px;font-size:.68rem;font-weight:700;margin-left:auto;}'+
-'.att-ok{background:rgba(34,197,94,.15);color:#22c55e;}'+
-'.att-maint{background:rgba(245,158,11,.15);color:#f59e0b;}'+
-'.att-broken{background:rgba(239,68,68,.15);color:#ef4444;}'+
-'.att-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;}'+
-'.att-stat{text-align:center;background:rgba(255,255,255,.03);border-radius:7px;padding:8px;}'+
-'.att-stat-val{font-size:.88rem;font-weight:700;color:#fbbf24;}'+
-'.att-stat-lbl{font-size:.62rem;color:#52525b;text-transform:uppercase;}'+
-'.att-prog-wrap{margin-bottom:8px;}'+
-'.att-prog-label{display:flex;justify-content:space-between;font-size:.7rem;color:#71717a;margin-bottom:3px;}'+
-'.att-prog-bar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;}'+
-'.att-prog-fill{height:100%;border-radius:3px;transition:.4s;}'+
-'.att-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}'+
-/* ═══ SUPPLIER INTEL ═══ */
-'.sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}'+
-'.sup-card{padding:14px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:11px;transition:.12s;}'+
-'.sup-card:hover{border-color:rgba(251,191,36,.25);}'+
-'.sup-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}'+
-'.sup-logo{width:36px;height:36px;border-radius:8px;background:rgba(251,191,36,.1);color:#fbbf24;display:flex;align-items:center;justify-content:center;font-size:.95rem;font-weight:800;flex-shrink:0;}'+
-'.sup-name{font-size:.83rem;font-weight:700;color:#e5e5e5;}'+
-'.sup-cat{font-size:.68rem;color:#52525b;}'+
-'.sup-stars{color:#fbbf24;font-size:.78rem;letter-spacing:1px;}'+
-'.sup-rank-badge{padding:2px 8px;border-radius:10px;font-size:.62rem;font-weight:800;margin-left:auto;}'+
-'.sup-rank-1{background:rgba(34,197,94,.15);color:#22c55e;}'+
-'.sup-rank-2{background:rgba(251,191,36,.15);color:#fbbf24;}'+
-'.sup-rank-3{background:rgba(100,116,139,.12);color:#94a3b8;}'+
-'.sup-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;}'+
-'.sup-stat{background:rgba(255,255,255,.03);border-radius:6px;padding:6px 8px;}'+
-'.sup-stat-val{font-size:.8rem;font-weight:700;color:#e5e5e5;}'+
-'.sup-stat-lbl{font-size:.62rem;color:#52525b;text-transform:uppercase;letter-spacing:.03em;}';
+'.machine-load-fill{height:100%;border-radius:3px;transition:.4s;}';
     document.head.appendChild(s);
   }
 
@@ -828,211 +790,17 @@
     window.addEventListener('storage',function(e){if(['ingly_orders','ingly_quotes'].includes(e.key))render();});
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     V3 — ATTREZZATURE & MANUTENZIONE
-  ═══════════════════════════════════════════════════════════════════ */
-  var ATT_KEY='prox_attrezzature_v1';
-  var DEFAULT_ATT=[
-    {id:'a1',name:'Laser CO2 80W P3',icon:'⚡',status:'ok',hoursTotal:0,hoursService:500,lastService:'2024-01-15',notes:'Lente pulita, specchi allineati',cat:'Laser'},
-    {id:'a2',name:'Stampante DTF A3',icon:'🖨️',status:'ok',hoursTotal:0,hoursService:200,lastService:'2024-02-01',notes:'Testina pulita',cat:'DTF'},
-    {id:'a3',name:'Pressa Sub 38×38',icon:'🎨',status:'ok',hoursTotal:0,hoursService:100,lastService:'2024-03-01',notes:'Calibrazione temperatura OK',cat:'Sub'},
-  ];
-  function getAtt(){ var v=_get(ATT_KEY); return Array.isArray(v)&&v.length?v:DEFAULT_ATT.slice(); }
-  function saveAtt(a){ _set(ATT_KEY,a); }
-
-  function buildAttrezzature(){
-    var section=document.getElementById('view-settings')||document.getElementById('view-backup');
-    if(!section||section._attBuilt)return;
-    function _try(n){ n=n||0; if(n>20)return; if(!section.children.length){setTimeout(function(){_try(n+1);},400);return;} if(section._attBuilt)return; section._attBuilt=true; _doAtt(section); }
-    _try();
-  }
-
-  function _doAtt(section){
-    if(document.getElementById('prox-attrezzature'))return;
-    var card=document.createElement('div'); card.id='prox-attrezzature'; card.className='v3-card';
-    section.insertBefore(card,section.firstChild);
-
-    function closeAttModal(){ var ov=document.getElementById('att-overlay-root'); if(ov)ov.remove(); }
-
-    function openHrsModal(machineId){
-      var machines=getAtt(); var m=machines.find(function(x){return x.id===machineId;}); if(!m)return;
-      var ov=document.createElement('div'); ov.className='mag-overlay'; ov.id='att-overlay-root';
-      ov.innerHTML=
-        '<div class="mag-modal" style="max-width:420px">'+
-        '<div class="mag-modal-header"><div class="mag-modal-title">⏱️ Registra Ore — '+esc(m.name)+'</div><button class="mag-modal-close" id="ah-close">✕</button></div>'+
-        '<div class="mag-modal-body">'+
-        '<label class="v3-label">Ore da aggiungere</label><input type="number" class="v3-input" id="ah-hrs" value="1" min="0.5" step="0.5" style="font-size:1.2rem;font-weight:700;margin-bottom:12px">'+
-        '<label class="v3-label">Note (opzionale)</label><input class="v3-input" id="ah-note" placeholder="es. Lavoro produzione tazze...">'+
-        '</div>'+
-        '<div class="mag-modal-footer"><button class="v3-btn v3-btn-ghost" id="ah-cancel">Annulla</button><button class="v3-btn v3-btn-primary" id="ah-save">💾 Registra</button></div>'+
-        '</div>';
-      document.body.appendChild(ov);
-      document.getElementById('ah-hrs').focus(); document.getElementById('ah-hrs').select();
-      document.getElementById('ah-close').onclick=document.getElementById('ah-cancel').onclick=closeAttModal;
-      ov.addEventListener('click',function(e){if(e.target===ov)closeAttModal();});
-      document.getElementById('ah-save').onclick=function(){
-        var h=parseFloat(document.getElementById('ah-hrs').value)||0; if(!h)return;
-        var machines2=getAtt(); var idx=machines2.findIndex(function(x){return x.id===machineId;});
-        if(idx>=0){machines2[idx].hoursTotal=+(machines2[idx].hoursTotal+h).toFixed(1);saveAtt(machines2);}
-        closeAttModal(); render();
-      };
-    }
-
-    function render(){
-      var machines=getAtt();
-      card.innerHTML=
-        '<div class="v3-section-header">'+
-        '<div class="v3-section-title">🔧 Attrezzature & Manutenzione Predittiva</div>'+
-        '<button class="v3-btn v3-btn-primary v3-btn-sm" id="att-add-btn">＋ Aggiungi Macchina</button>'+
-        '</div>'+
-        '<div class="att-grid">'+
-        machines.map(function(m){
-          var hoursInCycle=m.hoursTotal%m.hoursService||0;
-          var hoursLeft=m.hoursService-hoursInCycle;
-          var pct=Math.min(100,Math.round(hoursInCycle/m.hoursService*100));
-          var needsMaint=hoursLeft<50;
-          var sc={ok:'att-ok',maint:'att-maint',broken:'att-broken'}[m.status]||'att-ok';
-          var sl={ok:'Operativa',maint:'In manutenzione',broken:'Fuori servizio'}[m.status]||'OK';
-          var barColor=pct>80?'#ef4444':pct>60?'#f59e0b':'#22c55e';
-          return '<div class="att-card">'+
-            '<div class="att-card-header">'+
-            '<div class="att-icon">'+m.icon+'</div>'+
-            '<div><div class="att-name">'+esc(m.name)+'</div><div class="att-sub">'+m.cat+'</div></div>'+
-            '<span class="att-status-badge '+sc+'">'+sl+'</span>'+
-            '</div>'+
-            (needsMaint?'<div class="v3-alert v3-alert-warn" style="font-size:.75rem;margin-bottom:8px">⚠️ Service tra '+hoursLeft+'h — pianifica manutenzione</div>':'')+
-            '<div class="att-stats">'+
-            '<div class="att-stat"><div class="att-stat-val">'+m.hoursTotal+'h</div><div class="att-stat-lbl">Ore totali</div></div>'+
-            '<div class="att-stat"><div class="att-stat-val" style="color:'+(hoursLeft<50?'#ef4444':hoursLeft<100?'#f59e0b':'#22c55e')+'">'+hoursLeft+'h</div><div class="att-stat-lbl">Al service</div></div>'+
-            '<div class="att-stat"><div class="att-stat-val">'+(m.lastService?dateIT(m.lastService):'—')+'</div><div class="att-stat-lbl">Ultimo service</div></div>'+
-            '</div>'+
-            '<div class="att-prog-wrap">'+
-            '<div class="att-prog-label"><span>Ciclo manutenzione (ogni '+m.hoursService+'h)</span><span>'+pct+'%</span></div>'+
-            '<div class="att-prog-bar"><div class="att-prog-fill" style="width:'+pct+'%;background:'+barColor+'"></div></div>'+
-            '</div>'+
-            (m.notes?'<div style="font-size:.72rem;color:#52525b;margin-top:6px">📝 '+esc(m.notes)+'</div>':'')+
-            '<div class="att-actions">'+
-            '<button class="v3-btn v3-btn-ghost v3-btn-sm" data-att-hrs="'+m.id+'">⏱️ +Ore</button>'+
-            '<button class="v3-btn v3-btn-green v3-btn-sm" data-att-svc="'+m.id+'">✅ Registra Service</button>'+
-            '<button class="v3-btn v3-btn-ghost v3-btn-sm" data-att-toggle="'+m.id+'">'+(m.status==='ok'?'⏸ Pausa':'▶ Attiva')+'</button>'+
-            '</div>'+
-            '</div>';
-        }).join('')+
-        '</div>';
-
-      document.getElementById('att-add-btn') && document.getElementById('att-add-btn').addEventListener('click',function(){
-        var name=window.prompt?window.prompt('Nome macchina:','Nuova Macchina'):'';
-        if(!name)return;
-        var machines2=getAtt();
-        machines2.push({id:uid(),name:name,icon:'🔩',status:'ok',hoursTotal:0,hoursService:200,lastService:new Date().toISOString().slice(0,10),notes:'',cat:'Altro'});
-        saveAtt(machines2); render();
-      });
-
-      card.querySelectorAll('[data-att-hrs]').forEach(function(btn){
-        btn.addEventListener('click',function(){ openHrsModal(btn.dataset.attHrs); });
-      });
-      card.querySelectorAll('[data-att-svc]').forEach(function(btn){
-        btn.addEventListener('click',function(){
-          var machines2=getAtt(); var idx=machines2.findIndex(function(x){return x.id===btn.dataset.attSvc;});
-          if(idx>=0){machines2[idx].lastService=new Date().toISOString().slice(0,10);machines2[idx].hoursTotal=Math.round(machines2[idx].hoursTotal/machines2[idx].hoursService)*machines2[idx].hoursService;saveAtt(machines2);render();}
-        });
-      });
-      card.querySelectorAll('[data-att-toggle]').forEach(function(btn){
-        btn.addEventListener('click',function(){
-          var machines2=getAtt(); var idx=machines2.findIndex(function(x){return x.id===btn.dataset.attToggle;});
-          if(idx>=0){machines2[idx].status=machines2[idx].status==='ok'?'maint':'ok';saveAtt(machines2);render();}
-        });
-      });
-    }
-    render();
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     V3 — SUPPLIER INTELLIGENCE
-  ═══════════════════════════════════════════════════════════════════ */
-  var SUPPLIERS_DB=[
-    {id:'s1', name:'Modulor',       logo:'M',cat:'Legno/Acrilico', country:'🇩🇪',rank:1,rating:4.8,moq:50,  moqUnit:'€',deliveryDays:5, margin:42,url:'modulor.de',     notes:'MDF e acrilico alta qualità, spedizione veloce EU'},
-    {id:'s2', name:'DTFprint IT',   logo:'D',cat:'Transfer DTF',  country:'🇮🇹',rank:1,rating:4.9,moq:30,  moqUnit:'€',deliveryDays:2, margin:55,url:'dtfprint.it',   notes:'Fornitore italiano, consegna 24-48h, qualità top'},
-    {id:'s3', name:'SubliMat',      logo:'S',cat:'Sublimazione',  country:'🇮🇹',rank:2,rating:4.3,moq:20,  moqUnit:'€',deliveryDays:3, margin:60,url:'sublimat.it',   notes:'Carta sub e consumabili, prezzi competitivi'},
-    {id:'s4', name:'GadgetPro IT',  logo:'G',cat:'Gadget/Blank',  country:'🇮🇹',rank:1,rating:4.7,moq:24,  moqUnit:'pz',deliveryDays:3,margin:45,url:'gadgetpro.it',  notes:'Tazze, cuscini, materiali promozionali'},
-    {id:'s5', name:'TextilIT',      logo:'T',cat:'Abbigliamento', country:'🇮🇹',rank:2,rating:4.4,moq:12,  moqUnit:'pz',deliveryDays:4,margin:50,url:'textil-it.com', notes:'T-shirt, felpe, stock sempre disponibile'},
-    {id:'s6', name:'Plastica2',     logo:'P',cat:'Acrilico',      country:'🇮🇹',rank:2,rating:4.2,moq:100, moqUnit:'€',deliveryDays:5, margin:40,url:'plastica2.it',   notes:'Acrilico taglio laser, vari spessori'},
-    {id:'s7', name:'LaserParts EU', logo:'⚙',cat:'Ricambi Laser', country:'🇩🇪',rank:1,rating:4.6,moq:50,  moqUnit:'€',deliveryDays:10,margin:30,url:'laserparts.eu',  notes:'Lenti, specchi, guide, alta qualità'},
-    {id:'s8', name:'CuoioIT',       logo:'C',cat:'Pelle/Cuoio',   country:'🇮🇹',rank:3,rating:4.0,moq:150, moqUnit:'€',deliveryDays:7, margin:48,url:'cuoio-it.com',   notes:'Pelle conciata al vegetale, made in Italy'},
-    {id:'s9', name:'PlotterMat',    logo:'V',cat:'Vinile/Plotter',country:'🇮🇹',rank:2,rating:4.3,moq:40,  moqUnit:'€',deliveryDays:4, margin:52,url:'plottermat.it',  notes:'Vinile adesivo, HTV, materiali plotter'},
-    {id:'s10',name:'PackIT',        logo:'📦',cat:'Imballo',       country:'🇮🇹',rank:3,rating:3.9,moq:50,  moqUnit:'€',deliveryDays:5, margin:35,url:'pack-it.com',    notes:'Imballi e materiali da spedizione'},
-  ];
-
-  function buildSupplierIntel(){
-    var section=document.getElementById('view-suppliers');
-    if(!section||section._supplierBuilt)return;
-    function _try(n){ n=n||0; if(n>30)return; if(!section.children.length){setTimeout(function(){_try(n+1);},400);return;} if(section._supplierBuilt)return; section._supplierBuilt=true; _doSupplier(section); }
-    _try();
-  }
-
-  function _doSupplier(section){
-    if(document.getElementById('prox-supplier-intel'))return;
-    var card=document.createElement('div'); card.id='prox-supplier-intel'; card.className='v3-card';
-    section.insertBefore(card,section.firstChild);
-    var state={rank:'*',search:''};
-
-    function render(){
-      var q=state.search.toLowerCase();
-      var filtered=SUPPLIERS_DB.filter(function(s){
-        if(state.rank!=='*'&&s.rank!==+state.rank)return false;
-        if(q&&!(s.name||'').toLowerCase().includes(q)&&!(s.cat||'').toLowerCase().includes(q))return false;
-        return true;
-      });
-      card.innerHTML=
-        '<div class="v3-section-header">'+
-        '<div class="v3-section-title">🏭 Supplier Intelligence</div>'+
-        '<span style="font-size:.72rem;color:#52525b">'+SUPPLIERS_DB.length+' fornitori nel database</span>'+
-        '</div>'+
-        '<div class="v3-kpis">'+
-        [
-          {v:SUPPLIERS_DB.length,l:'Fornitori totali',c:'#e5e5e5'},
-          {v:SUPPLIERS_DB.filter(function(s){return s.rank===1;}).length,l:'Tier 1 (top)',c:'#22c55e'},
-          {v:Math.round(SUPPLIERS_DB.reduce(function(s,x){return s+x.deliveryDays;},0)/SUPPLIERS_DB.length)+'gg',l:'Consegna media',c:'#60a5fa'},
-          {v:Math.round(SUPPLIERS_DB.reduce(function(s,x){return s+x.margin;},0)/SUPPLIERS_DB.length)+'%',l:'Margine medio',c:'#fbbf24'},
-        ].map(function(k){return '<div class="v3-kpi"><div class="v3-kpi-val" style="color:'+k.c+'">'+k.v+'</div><div class="v3-kpi-lbl">'+k.l+'</div></div>';}).join('')+
-        '</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'+
-        '<div style="flex:1;min-width:200px;position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.8rem;pointer-events:none">🔍</span>'+
-        '<input style="padding:8px 10px 8px 32px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e5e5e5;font-size:.82rem;outline:none;width:100%;box-sizing:border-box;" id="sup-search" placeholder="Cerca fornitore o categoria..." value="'+esc(state.search)+'"></div>'+
-        ['*','1','2','3'].map(function(r){var labels={'*':'Tutti','1':'⭐ Tier 1','2':'Tier 2','3':'Tier 3'};return '<button class="mag-tab'+(state.rank===r?' active':'')+'" data-rank="'+r+'">'+labels[r]+'</button>';}).join('')+
-        '</div>'+
-        '<div class="sup-grid">'+
-        filtered.map(function(s){
-          var rc={1:'sup-rank-1',2:'sup-rank-2',3:'sup-rank-3'}[s.rank]||'sup-rank-3';
-          var rl={1:'TIER 1',2:'TIER 2',3:'TIER 3'}[s.rank]||'';
-          var stars='★'.repeat(Math.round(s.rating))+'☆'.repeat(5-Math.round(s.rating));
-          return '<div class="sup-card">'+
-            '<div class="sup-card-header">'+
-            '<div class="sup-logo">'+s.logo+'</div>'+
-            '<div><div class="sup-name">'+esc(s.name)+' '+s.country+'</div><div class="sup-cat">'+s.cat+'</div></div>'+
-            '<span class="sup-rank-badge '+rc+'">'+rl+'</span>'+
-            '</div>'+
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
-            '<div class="sup-stars">'+stars+'</div>'+
-            '<div style="font-size:.72rem;color:#71717a">'+s.rating+'/5</div>'+
-            '</div>'+
-            '<div class="sup-stats">'+
-            '<div class="sup-stat"><div class="sup-stat-val">'+s.deliveryDays+'gg</div><div class="sup-stat-lbl">Consegna</div></div>'+
-            '<div class="sup-stat"><div class="sup-stat-val" style="color:#22c55e">'+s.margin+'%</div><div class="sup-stat-lbl">Margine</div></div>'+
-            '<div class="sup-stat"><div class="sup-stat-val">'+s.moq+' '+s.moqUnit+'</div><div class="sup-stat-lbl">MOQ</div></div>'+
-            '<div class="sup-stat"><div class="sup-stat-val">'+s.rating+'★</div><div class="sup-stat-lbl">Rating</div></div>'+
-            '</div>'+
-            '<div style="font-size:.72rem;color:#52525b;margin-bottom:8px">'+esc(s.notes)+'</div>'+
-            '<a href="https://'+s.url+'" target="_blank" style="font-size:.75rem;color:#60a5fa;text-decoration:none">🔗 '+s.url+'</a>'+
-            '</div>';
-        }).join('')+
-        '</div>';
-
-      var si=document.getElementById('sup-search'); if(si) si.addEventListener('input',function(){state.search=this.value;render();});
-      card.querySelectorAll('[data-rank]').forEach(function(btn){ btn.addEventListener('click',function(){state.rank=btn.dataset.rank;render();}); });
-    }
-    render();
-  }
+  /* Qui vivevano due pannelli, entrambi rimossi:
+     - buildAttrezzature()/_doAtt(): un secondo elenco macchine, iniettato
+       in cima a Impostazioni (non a Macchine), con DEFAULT_ATT che
+       seminava tre macchine finte in localStorage('prox_attrezzature_v1')
+       se lo store era vuoto — stesso schema del "Machine Intelligence" già
+       rimosso da 105, dati inventati spacciati per parco macchine reale.
+     - buildSupplierIntel(): un "Supplier Intelligence" iniettato sopra la
+       vista Fornitori reale, interamente su SUPPLIERS_DB — dieci fornitori
+       con nomi, rating e URL inventati, mai collegati allo store reale dei
+       fornitori. Non poteva disallinearsi dai dati veri perché non li
+       leggeva mai: sembrava intelligence, era un elenco statico. */
 
   /* ═══════════════════════════════════════════════════════════════════
      BOOT
@@ -1045,8 +813,6 @@
     injectV3CSS();
     buildProductionScheduler();
     buildMagazzino();
-    buildSupplierIntel();
-    buildAttrezzature();
 
     if(!window._proxV3NavHooked&&App.navigate){
       var _orig=App.navigate;
@@ -1055,8 +821,6 @@
         setTimeout(function(){
           if(id==='workflow_dashboard') buildProductionScheduler();
           if(id==='inventory')          buildMagazzino();
-          if(id==='suppliers')          buildSupplierIntel();
-          if(id==='settings'||id==='attrezzature') buildAttrezzature();
         },300);
         return r;
       };

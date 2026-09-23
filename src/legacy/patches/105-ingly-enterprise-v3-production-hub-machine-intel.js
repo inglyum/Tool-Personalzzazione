@@ -647,54 +647,14 @@
     );
   };
 
-  /* ═══════════════════════════════════════════════════
-     3. MACHINE INTELLIGENCE — inject into view-equipment
-  ═══════════════════════════════════════════════════ */
-  function buildMachineIntel() {
-    var section = $id('view-equipment');
-    if (!section || section._ev3MachineIntelBuilt) return;
-    section._ev3MachineIntelBuilt = true;
-
-    ensureMachines();
-    var machines = getMachines();
-    var logs     = getMaintLogs();
-
-    /* Health score per machine */
-    var healthItems = machines.map(function (m) {
-      var maintDays  = m.nextMaint ? daysUntil(m.nextMaint) : null;
-      var health     = m.status === 'offline' ? 0 : m.status === 'maintenance' ? 40 : maintDays !== null && maintDays < 0 ? 50 : maintDays !== null && maintDays < 7 ? 75 : 95;
-      var healthColor = health >= 80 ? '#22c55e' : health >= 50 ? '#fbbf24' : '#ef4444';
-      var lastLog    = logs.filter(function (l) { return l.machineId === m.id; }).slice(-1)[0];
-      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<div style="width:8px;height:8px;border-radius:50%;background:' + (m.status === 'online' ? '#22c55e' : m.status === 'maintenance' ? '#fbbf24' : '#71717a') + ';flex-shrink:0"></div>' +
-        '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:#e5e5e5">' + esc(m.name) + '</div><div style="font-size:10px;color:#52525b">' + (lastLog ? 'Ultima manutenzione: ' + dtIT(lastLog.date) : 'Nessuna manutenzione registrata') + '</div></div>' +
-        '<div style="text-align:right">' +
-          '<div style="font-size:14px;font-weight:800;color:' + healthColor + '">' + health + '%</div>' +
-          '<div style="font-size:10px;color:#71717a">health score</div>' +
-        '</div>' +
-        '<div style="width:60px"><div style="background:rgba(255,255,255,.06);border-radius:99px;height:6px;overflow:hidden"><div style="height:100%;border-radius:99px;background:' + healthColor + ';width:' + health + '%"></div></div></div>' +
-      '</div>';
-    }).join('');
-
-    var totalMaintCost = logs.reduce(function(s,l){return s+(+l.cost||0);},0);
-    var panel = document.createElement('div');
-    panel.id = 'ev3-machine-intel-panel';
-    panel.innerHTML =
-      '<div style="background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.15);border-radius:14px;padding:18px;margin-bottom:20px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
-          '<div style="font-size:14px;font-weight:700;color:#fbbf24;display:flex;align-items:center;gap:8px">🤖 AI Machine Intelligence</div>' +
-          '<button onclick="App.navigate(\'workflow_dashboard\')" style="padding:5px 14px;border-radius:8px;border:1px solid rgba(251,191,36,.3);background:rgba(251,191,36,.08);color:#fbbf24;cursor:pointer;font-size:11px;font-weight:700">🏭 Production Hub →</button>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">' +
-          '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center"><div style="font-size:20px;font-weight:800;color:#22c55e">' + machines.filter(function(m){return m.status==='online';}).length + '</div><div style="font-size:11px;color:#71717a">Online</div></div>' +
-          '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center"><div style="font-size:20px;font-weight:800;color:#fbbf24">' + machines.filter(function(m){return m.status==='maintenance';}).length + '</div><div style="font-size:11px;color:#71717a">Manutenzione</div></div>' +
-          '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center"><div style="font-size:20px;font-weight:800;color:#fbbf24">' + fmt(totalMaintCost) + '</div><div style="font-size:11px;color:#71717a">Costi Manutenzione</div></div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,.03);border-radius:10px;overflow:hidden">' + (healthItems || '<div style="padding:16px;text-align:center;color:#52525b">Nessuna macchina</div>') + '</div>' +
-      '</div>';
-
-    section.insertBefore(panel, section.firstChild);
-  }
+  /* Qui viveva buildMachineIntel(), iniettata sopra la vista Macchine
+     reale (view-equipment, lo store IDB canonico 'equipment'). Non era
+     solo un duplicato: ensureMachines() seminava quattro macchine finte
+     ("Laser CO2 80W", "Stampante DTF A3", ecc., linea 51) in
+     localStorage('ev3_machines') se lo store era vuoto, e le mostrava
+     con un "health score" calcolato — dati inventati spacciati per
+     macchine reali, esattamente quello che le regole del progetto
+     vietano. Rimossa: la vista Macchine reale, sotto, resta l'unica. */
 
   /* ═══════════════════════════════════════════════════
      NAV HOOK + BOOT
@@ -702,7 +662,6 @@
   function dispatch(id) {
     if (id === 'workflow_dashboard') buildProductionHub();
     if (id === 'projects')          buildProjects();
-    if (id === 'equipment')         buildMachineIntel();
   }
 
   function hookNav() {
@@ -726,7 +685,6 @@
       setTimeout(function () {
         buildProductionHub();
         buildProjects();
-        buildMachineIntel();
       }, 900);
       var active = document.querySelector('.section-view.active');
       if (active) { var id = active.id.replace('view-', ''); setTimeout(function () { dispatch(id); }, 250); }
