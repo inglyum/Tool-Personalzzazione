@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // INGLY OS v37b — Task Force FINAL · Remaining 24 Items
 // Part 1: LaserB2B Storico · Template Lavori · Confronto Macchine
-//         Preventivo→Ordine · Checklist Produzione · Gantt
+//         Preventivo→Ordine · Checklist Produzione
 // ═══════════════════════════════════════════════════════════════════
 
 // ─── LASER B2B: STORICO CALCOLI ──────────────────────────────────

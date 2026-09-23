@@ -3,6 +3,55 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.20.0 — Gantt: rimosso per intero, non nascosto
+
+Prima release del mandato "CLEANUP ARCHITECTURE + REAL VISUAL REDESIGN +
+SMART QUOTER 3D REVOLUTION", punto 1 dell'ordine di priorità dichiarato
+(§38: Gantt removal prima di tutto il resto).
+
+Cercato "gantt" case-insensitive su tutto `src/`, `tests/`, `docs/`: quattro
+punti reali, tutti nel layer legacy.
+
+- **`patches/097`** — il vero Gantt Ordini: `window.GanttOrdini`, una rotta
+  iniettata sopra `App.renderSection` per `s==='gantt'`, e un pulsante
+  aggiunto a `#core-nav` (il pannello "Rapido" della sidebar). Era
+  raggiungibile e cliccabile — verificato con Playwright prima e dopo.
+  Leggeva da `ingly_orders_pro_v1`, un `localStorage` isolato che l'app
+  reale non scrive più da tempo: anche lasciandolo, sarebbe sempre stato
+  vuoto o disallineato dagli ordini veri. Rimosso l'oggetto, la rotta, il
+  pulsante e la sua voce nelle scorciatoie della dashboard — non solo
+  scollegato, il codice non esiste più.
+- **`patches/099`** — un mini-Gantt decorativo ("Gantt Settimana
+  Corrente") dentro il Production Scheduler legacy: cinque colonne vuote,
+  nessun dato reale dentro. Rimosso, lasciando intatta la vera tabella
+  "Coda Ordini" sopra di lui.
+- **`patches/100`** — una voce "Gantt" nella griglia di accesso rapido
+  (`DOCK_SECTIONS`) che puntava a `workflow_dashboard`, che `nav-map.js`
+  già alias a `gestione_ordini` (Ordini) — quindi era già, di fatto, un
+  secondo modo mal etichettato per aprire una sezione che ha già la sua
+  voce "Ordini" due righe sopra. Rimossa, zero funzionalità persa.
+- **`patches/094`** — solo un commento d'intestazione che nominava
+  "Gantt" fra le funzionalità del file; il file non ne implementava
+  nessuna. Corretto il commento.
+
+Verificato con un browser reale, non leggendo il codice: nessun elemento
+con testo "Gantt" cliccabile, `window.GanttOrdini` indefinito,
+`App.navigate('gantt')` non produce più alcuna vista (né lancia errori).
+
+**Baseline aggiornata** (`npm run baseline`, commit dedicato come richiede
+`tests/baseline.test.mjs`): tolti `GanttOrdini` e `STATUS_COLORS` (una
+`var` interna alla sua sola funzione di render) dall'inventario di INGLY
+OS. La rigenerazione ha anche risincronizzato `baseline/ingly-cloud-
+admin.json`, rimasto indietro rispetto al codice admin reale da prima di
+questa release (due globali, `AZIONE_BADGE`/`AZIONE_LABEL`, già presenti
+nel codice ma non ancora nella baseline) — un disallineamento preesistente
+e indipendente dal Gantt, chiuso nella stessa passata perché lo stesso
+comando lo tocca.
+
+npm test: 2210/2210 (nuova voce in `baseline/deliberate-changes.json` per
+`patches/097`, gli altri tre file toccati erano già dichiarati da lavoro
+precedente) · npm run qa: tutte le suite verdi.
+
 ## 2.19.0 — Dashboard: non più una griglia di card, un centro operativo
 
 Le cinque release precedenti (2.14.0–2.18.0) erano manutenzione del design

@@ -286,7 +286,6 @@ main { padding-bottom: 70px !important; }
     { icon: '🏭', label: 'Fornitori',    nav: 'suppliers' },
     { icon: '💰', label: 'Fatture',      nav: 'fiscal' },
     { icon: '📊', label: 'Statistiche',  nav: 'analytics' },
-    { icon: '📅', label: 'Gantt',        nav: 'workflow_dashboard' },
     { icon: '☁️', label: 'Cloud',        nav: 'backup' },
     { icon: '🎨', label: 'Brand',        nav: 'brand_identity' },
     { icon: '⚙️', label: 'Impostazioni', nav: 'settings' },

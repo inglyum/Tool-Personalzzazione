@@ -479,15 +479,6 @@ textarea.px-input{resize:vertical;min-height:90px}
         '</tr>';
     }).join('') || '<tr><td colspan="6" class="px-empty">Nessun ordine attivo</td></tr>';
 
-    // Gantt simple (this week)
-    var today = new Date();
-    var weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay() + 1);
-    var days = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven'];
-    var ganttCols = days.map(function (d) {
-      return '<div style="flex:1;min-width:0"><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;text-align:center;margin-bottom:6px">' + d + '</div>' +
-        '<div style="background:var(--bg-card2);border-radius:6px;min-height:60px;padding:4px"></div></div>';
-    }).join('');
-
     return '<div class="prox-section">' +
       '<div class="prox-ph"><div><div class="prox-title">🏭 Production Scheduler</div><div class="prox-subtitle">Coda produzione · Batch · Ottimizzazione AI</div></div>' +
       '<button class="px-btn px-btn-primary" id="prox-prod-ai-btn">🤖 Ottimizza con AI</button></div>' +
@@ -499,10 +490,7 @@ textarea.px-input{resize:vertical;min-height:90px}
       '<div class="px-card"><div class="px-card-title">📋 Coda Ordini (' + orders.length + ' attivi)</div>' +
       '<div class="px-table-wrap"><table class="px-table"><thead><tr>' +
       '<th>#</th><th>Ordine</th><th>Tecnica</th><th>Scadenza</th><th>Stato</th><th>Stima ore</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table></div></div>' +
-
-      '<div class="px-card"><div class="px-card-title">📅 Gantt Settimana Corrente</div>' +
-      '<div style="display:flex;gap:8px">' + ganttCols + '</div></div></div>';
+      '</tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
   }
 
   /* ── STOCK AI ── */
