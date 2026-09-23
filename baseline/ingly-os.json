@@ -488,7 +488,6 @@
     "SLICER",
     "STATI_COLORI",
     "STATI_LABEL",
-    "STATUS_COLORS",
     "STATUS_LABELS",
     "STATUS_ORDER",
     "STORE",
@@ -665,7 +664,6 @@
     "FiscalAssist",
     "FiscalRadar",
     "Gadgets",
-    "GanttOrdini",
     "GestioneOrdini",
     "GlobalSearch",
     "GoalTracker",
@@ -1004,15 +1002,15 @@
   ],
   "counts": {
     "files": 190,
-    "bytes": 9814466,
-    "inlineStyleAttrs": 16812,
+    "bytes": 9805877,
+    "inlineStyleAttrs": 16797,
     "inlineOnclick": 2587,
-    "hardcodedHex": 8249,
-    "important": 181,
-    "emoji": 9235,
+    "hardcodedHex": 8207,
+    "important": 168,
+    "emoji": 9227,
     "alertCalls": 55,
     "confirmCalls": 127,
     "promptCalls": 69,
-    "ariaAttrs": 32
+    "ariaAttrs": 33
   }
 }
