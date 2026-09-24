@@ -80,13 +80,33 @@
           +F('Potenza (W)','powerW','number')+F('Area di lavoro','workArea')+F('Velocità','speed')
           +F('Materiali compatibili','materials','textarea')+'</div>';
       } else if(this._tab==='cost'){
-        var dep=(parseFloat(m.costBuy)||0)/(parseFloat(m.lifeYears)||6)/1650;
+        /* La tariffa la calcola InglyMachineRate — lo stesso motore che i
+           quoter interrogano per l'ammortamento di questa macchina — non una
+           seconda formula qui dentro. `costBuy/lifeYears/1650` stimava un
+           numero plausibile prima che il motore esistesse; ora che esiste,
+           mostrare un numero diverso sarebbe la stessa incoerenza che questo
+           modulo dichiara di evitare. Il valore residuo che manca qui sotto è
+           l'unico dei quattro numeri che lo Smart Quoter 3D non leggeva
+           ancora: senza di lui una macchina si ammortizzava come se a fine
+           vita non valesse più niente. */
+        var previewHtml='';
+        try{
+          var MR=(typeof InglyMachineRate!=='undefined')?InglyMachineRate:null;
+          if(MR){
+            var t=MR.tariffa(this._machineForEngine(m));
+            previewHtml='<div style="margin-top:12px;padding:12px;background:var(--bg-card2);border-radius:10px;font-size:13px">'
+              +'💡 Tariffa macchina (ammortamento + manutenzione): <strong style="color:var(--primary)">'+eur(t.euroOra)+'/h</strong>'
+              +'<div style="margin-top:4px;color:var(--text-muted);font-size:11px">Lo Smart Quoter 3D usa il valore residuo per l\'ammortamento; la manutenzione resta un campo suo, separato, in ogni preventivo.</div>'
+              +(t.avvisi&&t.avvisi.length?'<div style="margin-top:6px;color:var(--orange)">⚠️ '+esc(t.avvisi[0])+'</div>':'')
+              +'</div>';
+          }
+        }catch(e){}
         el.innerHTML='<div class="mc-grid">'
           +F('Costo acquisto (€)','costBuy','number')+F('Anni di vita','lifeYears','number')
+          +F('Valore residuo a fine vita (€)','residualValue','number')
           +F('Costo manutenzione/anno (€)','costMaint','number')+F('Costo consumabili/h (€)','costConsum','number')
-          +'</div><div style="margin-top:12px;padding:12px;background:var(--bg-card2);border-radius:10px;font-size:13px">'
-          +'💡 Costo macchina stimato: <strong style="color:var(--primary)">'+eur(dep)+'/h</strong> di deprezzamento '
-          +'<span style="color:var(--text-muted)">(usato automaticamente nei quoter via SSOT)</span></div>';
+          +'</div>'
+          +previewHtml;
       } else if(this._tab==='use'){
         el.innerHTML='<div class="mc-grid">'
           +F('Stato','status','select',STATI)+F('Operatore assegnato','operator')
@@ -135,7 +155,7 @@
     },
     _set(key,val){
       if(!this._m) return;
-      if(['powerW','costBuy','lifeYears','costMaint','costConsum','hoursLife','hoursWorked','maintenanceIntervalHours'].indexOf(key)>=0) val=(val===''?'':parseFloat(val));
+      if(['powerW','costBuy','lifeYears','residualValue','costMaint','costConsum','hoursLife','hoursWorked','maintenanceIntervalHours'].indexOf(key)>=0) val=(val===''?'':parseFloat(val));
       this._m[key]=val;
       this._save();
     },
@@ -166,7 +186,8 @@
        motore non deve conoscere lo schema di ogni schermata che lo chiama. */
     _machineForEngine(m){
       return {
-        id: m.id, purchasePrice: m.costBuy, expectedLifeHours: m.hoursLife,
+        id: m.id, purchasePrice: m.costBuy, residualValue: m.residualValue,
+        expectedLifeHours: m.hoursLife,
         annualMaintenance: m.costMaint, expectedAnnualHours: m.expectedAnnualHours,
         maintenanceIntervalHours: m.maintenanceIntervalHours,
         hoursWorked: m.hoursWorked, categoria: m.tech,

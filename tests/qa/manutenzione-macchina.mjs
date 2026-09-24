@@ -109,6 +109,32 @@ const elenco = await page.evaluate(async () => {
 });
 dico('l\'elenco macchine mostra l\'allerta di manutenzione scaduta senza aprire il dettaglio', /manutenzione scaduta/.test(elenco));
 
+/* ── il valore residuo abbassa la tariffa mostrata, con lo stesso motore ──── */
+const residuo = await page.evaluate(async (id) => {
+  await MachineCard.open(id);
+  MachineCard._go('cost');
+  await new Promise((s) => setTimeout(s, 100));
+  const senza = document.getElementById('mc-tabbody').innerHTML;
+  const input = [...document.querySelectorAll('#mc-tabbody input')]
+    .find((i) => i.previousElementSibling && /Valore residuo/.test(i.previousElementSibling.textContent || ''));
+  const campoPresente = !!input;
+  if (input) {
+    input.value = '1000';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  await new Promise((s) => setTimeout(s, 300));
+  MachineCard._go('cost');
+  await new Promise((s) => setTimeout(s, 100));
+  const con = document.getElementById('mc-tabbody').innerHTML;
+  return { campoPresente, senza, con };
+}, ID);
+dico('la tab Costi ha il campo «Valore residuo a fine vita»', residuo.campoPresente);
+dico('la tariffa mostrata usa InglyMachineRate, non più costBuy/lifeYears/1650', /Tariffa macchina/.test(residuo.senza));
+const euroSenza = (residuo.senza.match(/Tariffa macchina[^€]*€\s*([\d.,]+)/) || [])[1];
+const euroCon = (residuo.con.match(/Tariffa macchina[^€]*€\s*([\d.,]+)/) || [])[1];
+dico('dichiarare un valore residuo abbassa la tariffa mostrata in scheda (' + euroSenza + ' → ' + euroCon + ')',
+  !!euroSenza && !!euroCon && parseFloat(euroCon.replace(',', '.')) < parseFloat(euroSenza.replace(',', '.')));
+
 /* ── persistenza: l'intervento sopravvive a un ricaricamento vero ─────────── */
 await page.reload({ waitUntil: 'load' });
 await page.waitForTimeout(15000);

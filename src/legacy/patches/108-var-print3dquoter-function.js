@@ -117,6 +117,18 @@ var MODO='completo';
    sempre due numeri, mai uno: quanto costa davvero e quanto si addebita. */
 var CANALE=null;
 var SPED_COSTO=0, SPED_ADDEB=0;
+/* Il valore residuo che la Scheda Macchina sa e la tariffa flatta di prima
+   ignorava: resta a zero finché non si sceglie una macchina del parco che
+   lo dichiara, così una macchina senza questo dato ammortizza esattamente
+   come faceva ieri, non finge un residuo che nessuno ha scritto.
+
+   La manutenzione annua/ore-anno della scheda NON viaggia fin qui apposta:
+   il motore le somma dentro l'ammortamento in modalità ibrida, ma questo
+   preventivatore ha già una riga «Manutenzione e consumabili» separata che
+   legge il campo manuale — sommare anche le prime le conterebbe due volte.
+   Restano salvabili sulla macchina per la sua scheda e per
+   InglyMachineMaintenance, che non condividono quella riga. */
+var MACH_RESIDUO=0;
 var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
 var _registroLetto=false;
 /* I materiali che il magazzino conosce. Tenuti separati da MATS — la lista
@@ -1872,12 +1884,19 @@ function setSpedAddeb(v){
 
 function pickMach(id){
   var m=null;
+  /* Ogni scelta riparte da zero: una macchina del catalogo o digitata a mano
+     non eredita il residuo di quella scelta prima, altrimenti cambiare
+     macchina lascerebbe un dato della vecchia dentro il conto della nuova. */
+  MACH_RESIDUO=0;
   if(String(id).indexOf('parco:')===0){
     var rec=PARCO.filter(function(x){ return 'parco:'+x.id===id; })[0];
     m=macchinaDalParco(rec);
     /* La manutenzione di **questa** macchina batte il valore iniziale del
        modulo, che è un ripiego per chi non ha ancora registrato niente. */
     if(m && m.manutenzione != null) sv('p3d-mnt', m.manutenzione);
+    if(m){
+      MACH_RESIDUO=m.residualValue||0;
+    }
   }
   if(!m) m=(MACH[T]||[]).find(function(x){return x.id===id;});
   if(!m)return;
@@ -1897,7 +1916,10 @@ function pickMach(id){
     var MK=(typeof window!=='undefined') && window.InglyMachineCost;
     if(MK){
       var c=MK.daCatalogo({ id:m.id, name:m.n, price:m.c, life_h:m.l, w:m.w,
-                            dutyCycle:gv('p3d-duty',1), maint:gv('p3d-mnt',0) },
+                            dutyCycle:gv('p3d-duty',1), maint:gv('p3d-mnt',0),
+                            /* Lo stesso residuo che finisce nel conto vero: un'anteprima che lo
+                               ignorasse mostrerebbe un numero diverso da quello del preventivo. */
+                            residualValue:MACH_RESIDUO||0 },
                           { kwhPrice:prezzoEnergia() });
       h.innerHTML=m.n+' — <b style="color:#22d3ee">'+eur(c.machineCostPerHour)+'/h</b>'
         +' <span style="opacity:.7">(corrente '+eur(c.energyCostPerHour)
@@ -1988,6 +2010,11 @@ function macchinaDalParco(rec){
     n: [rec.brand, rec.model].filter(Boolean).join(' ') || rec.name || ('Macchina ' + rec.id),
     w: watt, c: prezzo, l: ore,
     manutenzione: manut,
+    /* Il valore residuo che la Scheda Macchina sa e la tariffa flatta di
+       prima ignorava: InglyMachineRate lo sottrae dall'ammortamento invece
+       di assumere che la macchina non valga più niente a fine vita. Se
+       manca resta zero e il motore ammortizza come ha sempre fatto. */
+    residualValue: n(rec.residualValue) || 0,
     /* Quel che manca si dice, invece di essere completato con un valore di
        listino che non è di questa macchina. */
     incompleta: !(prezzo > 0) || !(ore > 0),
@@ -2149,6 +2176,10 @@ function ingresso(){
     kwhPrice:prezzoEnergia(), dutyCycle:gv('p3d-duty',1),
     machinePrice:gv('p3d-mc',420), machineLifeHours:gv('p3d-lh',3000),
     maintenancePerHour:gv('p3d-mnt',0),
+    /* Solo quando la macchina scelta li dichiara: a zero/null il motore
+       calcola esattamente come se questi campi non esistessero — stesso
+       ammortamento pieno, stessa manutenzione appiattita di sempre. */
+    residualValue: MACH_RESIDUO||undefined,
     /* Il lavaggio è la fase «post» della card lavoro, non un campo a parte:
        finché ne esistevano due, chi compilava entrambi pagava il
        post-processo due volte. */
@@ -2676,6 +2707,7 @@ var SALTA_RIPRISTINO=false;
 function reset(){
   if(!confirm('Resettare tutto il preventivo 3D?'))return;
   LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=40;STRATEGIA='standard';
+  MACH_RESIDUO=0;
   SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
   PROGETTO={ nome:'', descrizione:'', foto:null };
   IMBALLO=[]; HARDWARE=[]; MULTIMAT=[];

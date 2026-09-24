@@ -3,6 +3,47 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.23.0 — Valore residuo della macchina: l'ammortamento non assume più che valga zero
+
+Punto 6 del mandato Smart Quoter 3D: il profilo macchina deve essere
+"salvabile e riutilizzabile", con — fra gli altri — un valore residuo a
+fine vita. `InglyMachineRate.tariffa()` lo sapeva già gestire
+(`(prezzo − residuo) / vita`), ed è il motore che sia la Scheda Macchina
+sia lo Smart Quoter 3D interrogano per l'ammortamento. Ma nessuna delle
+due schermate lo chiedeva mai: ogni macchina si ammortizzava come se, a
+fine vita utile, non valesse più niente — un errore sistematico verso
+l'alto su ogni preventivo che usa una macchina registrata.
+
+**Scheda Macchina** (tab Costi) — nuovo campo "Valore residuo a fine vita
+(€)", salvato sul record `equipment` come tutti gli altri. La vecchia
+anteprima "costo macchina stimato" (`costBuy/lifeYears/1650`, una
+seconda formula scritta prima che `InglyMachineRate` esistesse) è stata
+sostituita da una chiamata diretta al motore: la scheda ora mostra lo
+stesso numero che il preventivatore userà, non una stima diversa accanto
+a quella vera.
+
+**Smart Quoter 3D** — scegliere una macchina del parco porta con sé anche
+il suo valore residuo, che riduce l'ammortamento esattamente come fa il
+motore ovunque altro. Deliberatamente **non** portato con sé: manutenzione
+annua/ore-anno/modalità-tariffa della scheda, perché lo Smart Quoter ha
+già una riga "Manutenzione e consumabili" separata che legge un campo
+manuale — sommare anche quella della scheda l'avrebbe contata due volte.
+Restano salvabili sulla macchina (servono già a `InglyMachineMaintenance`
+e alla scheda stessa) ma non ancora cablate nel preventivo: chiuderle
+richiede prima decidere quale delle due righe di manutenzione vince, non
+è una svista di questa release.
+
+Una macchina senza valore residuo dichiarato calcola esattamente come
+faceva ieri — il campo è additivo, non ha spostato un euro sui preventivi
+esistenti.
+
+Coperto da un collaudo browser esteso (`tests/qa/quoter3d-parco.mjs`):
+due macchine identiche nel parco tranne per il valore residuo producono
+un ammortamento diverso nel *preventivo vero* (€2,00 contro €2,50 su un
+caso di controllo), non solo nel motore interrogato a parte — e da tre
+nuove verifiche in `tests/qa/manutenzione-macchina.mjs` sulla tab Costi
+della scheda.
+
 ## 2.22.0 — Canale di vendita e spedizione nello Smart Quoter 3D
 
 Punto 16 del mandato Smart Quoter 3D: `InglyCostEngine.prezzo()` separava

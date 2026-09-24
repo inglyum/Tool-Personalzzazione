@@ -114,6 +114,75 @@ dico('il costo orario della macchina registrata è diverso da quello del preset 
   + conto.mia + ' vs ' + conto.preset + ')', conto.mia !== conto.preset);
 dico('e la sua manutenzione è la sua (' + conto.manutMia + ')', conto.manutMia === 0.33);
 
+/* Il valore residuo: due macchine identiche tranne per questo devono
+   ammortizzare in modo diverso nel preventivo VERO, non solo nel motore
+   interrogato a parte. Senza manutenzione dichiarata (né costMaint né
+   maintenancePerHour), la riga di manutenzione resta quella scritta a mano
+   nel campo — qui azzerata, per isolare solo l'ammortamento.
+
+   Il parco si legge una volta sola per apertura di sezione (`_registroLetto`):
+   aggiungerle a IDB adesso e richiamare `App.navigate` non basta, la vista è
+   già aperta da prima in questo stesso file. Un ricaricamento è l'unico modo
+   onesto di farle comparire, lo stesso che il collaudo fa già più sotto. */
+await page.evaluate(async () => {
+  await IDB.put('equipment', {
+    id: 3303, name: 'Con residuo', brand: 'OFFICINA', model: 'R1', tech: 'print3d',
+    purchasePrice: 1000, usefulLifeHours: 4000, residualValue: 200, averagePowerW: 100,
+  });
+  await IDB.put('equipment', {
+    id: 3304, name: 'Senza residuo', brand: 'OFFICINA', model: 'R0', tech: 'print3d',
+    purchasePrice: 1000, usefulLifeHours: 4000, averagePowerW: 100,
+  });
+});
+await page.reload({ waitUntil: 'load', timeout: 120000 });
+await page.waitForTimeout(15000);
+const residuo = await page.evaluate(async () => {
+  App.navigate('print3d');
+  await new Promise((s) => setTimeout(s, 2500));
+
+  /* Ore e grammi fissati esplicitamente: un valore diverso da riga a riga
+     renderebbe il confronto sporco. */
+  const sv = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); } };
+  sv('p3d-h', 10); sv('p3d-g', 100);
+  const zeroManut = () => {
+    const e = document.getElementById('p3d-mnt');
+    if (e) { e.value = '0'; e.dispatchEvent(new Event('input', { bubbles: true })); }
+  };
+  const leggiAmmortamento = () => {
+    const testo = (document.getElementById('p3d-bk') || {}).textContent || '';
+    const m = testo.match(/Ammortamento macchina[\s\S]*?€\s*([\d.,]+)/);
+    return m ? parseFloat(m[1].replace(',', '.')) : null;
+  };
+
+  Print3DQuoter.pickMach('parco:3303');
+  await new Promise((s) => setTimeout(s, 600));
+  zeroManut();
+  Print3DQuoter.calc();
+  await new Promise((s) => setTimeout(s, 500));
+  const conResiduo = leggiAmmortamento();
+
+  Print3DQuoter.pickMach('parco:3304');
+  await new Promise((s) => setTimeout(s, 600));
+  zeroManut();
+  Print3DQuoter.calc();
+  await new Promise((s) => setTimeout(s, 500));
+  const senzaResiduo = leggiAmmortamento();
+
+  /* Non lasciare le due macchine di questo blocco nel parco: il collaudo
+     dopo il ricaricamento conta quante macchine registrate ci sono, e deve
+     contare solo quelle sue. */
+  await IDB.del('equipment', 3303).catch(() => {});
+  await IDB.del('equipment', 3304).catch(() => {});
+
+  return { conResiduo, senzaResiduo };
+});
+dico('l\'ammortamento si legge nel dettaglio costi per entrambe le macchine ('
+  + residuo.conResiduo + ' · ' + residuo.senzaResiduo + ')',
+  residuo.conResiduo != null && residuo.senzaResiduo != null);
+dico('il valore residuo abbassa l\'ammortamento del preventivo vero, non solo del motore interrogato a parte ('
+  + residuo.conResiduo + ' < ' + residuo.senzaResiduo + ')',
+  residuo.conResiduo != null && residuo.senzaResiduo != null && residuo.conResiduo < residuo.senzaResiduo);
+
 /* Dopo il ricaricamento la macchina è ancora nel parco. */
 await page.reload({ waitUntil: 'load', timeout: 120000 });
 await page.waitForTimeout(15000);
