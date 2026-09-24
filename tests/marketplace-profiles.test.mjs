@@ -123,3 +123,41 @@ test('la vista: un override manuale passato dalla UI vince sul profilo Etsy', ()
   });
   assert.equal(r.commissioniDettaglio.marketplace, r.prezzoLordo * 0.01);
 });
+
+/* ── Batch × marketplace × IVA: la stessa opzione, non tre percorsi ────── */
+
+test('gli scaglioni di quantità restano gli stessi con o senza canale: la commissione è un costo del venditore, non un ricarico al cliente', () => {
+  const senzaCanale = V.calcola(INGRESSO, { modalita: 'completo', marginePct: 40, quantita: [1, 10, 50] });
+  const conCanale = V.calcola(INGRESSO, { modalita: 'completo', marginePct: 40, marketplace: 'etsy', quantita: [1, 10, 50] });
+  assert.equal(senzaCanale.scaglioni.length, 3);
+  assert.equal(conCanale.scaglioni.length, 3);
+  for (let i = 0; i < 3; i += 1) {
+    const a = senzaCanale.scaglioni[i];
+    const b = conCanale.scaglioni[i];
+    assert.equal(a.qty, b.qty);
+    /* Etsy si prende una fetta di quel che il cliente paga, non aggiunge
+       un sovrapprezzo: chi vende su Etsy o dal proprio sito mostra lo
+       stesso prezzo, ne trattiene una parte diversa. */
+    assert.ok(vicino(a.prezzoPezzo, b.prezzoPezzo), 'il prezzo per pezzo non cambia col canale a qty ' + a.qty);
+    assert.ok(vicino(a.totaleLordo, b.totaleLordo), 'il lordo totale non cambia col canale a qty ' + a.qty);
+  }
+});
+
+test('IVA, sconto e canale insieme non rompono gli scaglioni: nessun NaN, prezzo che scende con la quantità', () => {
+  const r = V.calcola(INGRESSO, {
+    modalita: 'completo', marginePct: 40, marketplace: 'etsy', ivaPct: 22, scontoPct: 10,
+    quantita: [1, 25, 100],
+  });
+  assert.equal(r.indisponibile, false);
+  assert.equal(r.scaglioni.length, 3);
+  r.scaglioni.forEach((s) => {
+    assert.ok(isFinite(s.prezzoPezzo) && s.prezzoPezzo > 0, 'prezzo per pezzo finito e positivo a qty ' + s.qty);
+    assert.ok(isFinite(s.totaleLordo) && s.totaleLordo > s.totaleNetto, 'il lordo resta sopra il netto a qty ' + s.qty);
+  });
+  /* L'avviamento si spalma: il prezzo per pezzo scende all'aumentare della
+     quantità, canale attivo o no — è il punto di questa suite di test, già
+     provato altrove per il motore puro; qui si conferma che il canale non
+     lo rompe. */
+  assert.ok(r.scaglioni[0].prezzoPezzo >= r.scaglioni[1].prezzoPezzo, 'qty 25 non costa più di qty 1');
+  assert.ok(r.scaglioni[1].prezzoPezzo >= r.scaglioni[2].prezzoPezzo, 'qty 100 non costa più di qty 25');
+});
