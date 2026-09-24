@@ -589,7 +589,11 @@ function render(){
       +linesHtml
     +'</div>'
     // ── B · la risposta, prima di tutto il resto ─────────────────────
-    +'<div class="p3-card cyan">'
+    /* `p3-hero-sticky` è una classe sua, non `cyan`: `cyan` la condividono
+       altre otto card di questo file, e renderle tutte sticky le
+       impilerebbe una sopra l'altra mentre si scorre. Solo il conto —
+       §33 del mandato, «riepilogo sempre visibile» — deve restare fermo. */
+    +'<div class="p3-card cyan p3-hero-sticky">'
       +'<div class="p3-ct c" style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
         +'<span id="p3d-hero-t">📊 IL CONTO</span>'
         +'<button onclick="Print3DQuoter.togglePerche()" style="padding:4px 10px;border-radius:7px;cursor:pointer;font-size:10px;font-weight:700;text-transform:none;letter-spacing:0;'

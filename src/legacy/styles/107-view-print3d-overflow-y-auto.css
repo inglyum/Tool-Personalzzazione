@@ -1,11 +1,13 @@
 
-#view-print3d{overflow-y:auto}
+#view-print3d{overflow-y:auto;height:100%}
 #view-print3d .p3-wrap{padding:0 0 40px}
 #view-print3d .p3-ph{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 16px;flex-wrap:wrap;gap:8px}
 #view-print3d .p3-grid{display:grid;grid-template-columns:330px 1fr 295px;gap:14px;padding:0 20px 40px;align-items:start}
 #view-print3d .p3-col{display:flex;flex-direction:column;gap:12px}
 #view-print3d .p3-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
 #view-print3d .p3-card.cyan{border-color:#22d3ee35;background:linear-gradient(135deg,#0a1a1f,#071520)}
+#view-print3d .p3-hero-sticky{position:sticky;top:12px;z-index:5;box-shadow:0 8px 24px -8px rgba(0,0,0,.5)}
+@media (max-width:768px){#view-print3d .p3-hero-sticky{position:static}}
 #view-print3d .p3-ct{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:12px}
 #view-print3d .p3-ct.c{color:#22d3ee}
 #view-print3d .p3-fg{margin-bottom:10px}

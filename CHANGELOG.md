@@ -3,6 +3,39 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.24.0 — Il conto resta in vista mentre si scorre lo Smart Quoter 3D
+
+Punto 33 del mandato: "riepilogo sempre visibile — COSTO/PREZZO/PROFITTO/
+MARGINE". La card "IL CONTO" esisteva già, con tutti e quattro i numeri,
+ma era una card come le altre: scorrendo la colonna centrale per leggere
+il dettaglio costi o gli scaglioni di quantità, spariva insieme al resto.
+Chi confrontava un numero in fondo alla pagina doveva risalire per
+ricontrollare prezzo e margine.
+
+Aggiunta una classe dedicata (`p3-hero-sticky`) solo su quella card —
+non su `.cyan`, che altre otto card di questo file condividono e che
+sarebbe diventata tutta sticky insieme, impilandosi mentre si scorre.
+Per farla funzionare davvero è stato necessario correggere anche il
+contenitore che la ospita: `#view-print3d` aveva `overflow-y:auto` ma
+altezza automatica, quindi non scorreva mai da solo — era il contenitore
+esterno (`#content-inner`) a scorrerlo per intero, e la posizione sticky
+non ha effetto sul contenitore sbagliato. Ora `#view-print3d` ha
+un'altezza propria e scorre se stesso, rendendo lo sticky reale.
+
+Su schermo piccolo (≤768px, lo stesso breakpoint mobile già in uso nel
+resto dell'app) resta statica: bloccare mezzo schermo con una card fissa
+su un telefono avrebbe tolto più di quanto aggiunge — verificato che
+nessun modulo sbordi in orizzontale a 390/430/768px.
+
+Verificato con Playwright (screenshot prima/dopo lo scroll, non solo il
+CSS letto): la card resta visibile mentre "VOCI IN PREVENTIVO" scorre
+fuori vista. `npm test`: 2222/2222. `npm run qa`: 89/89 script puliti
+(due dei quattro run completi di verifica hanno mostrato un fallimento
+isolato ciascuno, sempre in `page.reload()` sotto la contesa di CPU dei
+~90 lanci Chromium in sequenza, mai nei moduli toccati da questa
+modifica — stesso pattern già osservato e documentato nella release
+2.23.0; entrambi confermati puliti in isolamento).
+
 ## 2.23.0 — Valore residuo della macchina: l'ammortamento non assume più che valga zero
 
 Punto 6 del mandato Smart Quoter 3D: il profilo macchina deve essere
