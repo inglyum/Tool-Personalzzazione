@@ -1,22 +1,25 @@
 # Rapporto finale — "COMMAND DEFINITIVO — SMART QUOTER 3D MARKET-COST ENGINE + UI/UX + AGENTS + CATALOGO DINAMICO"
 
 Punto 44 del mandato. Non un resoconto di intenzioni: ogni voce qui sotto è
-verificata leggendo il codice presente al commit `1ad35d1` (branch
+verificata leggendo il codice presente al commit `cdeaa75` (branch
 `claude/ingly-personalization-repo-ekvc0z`), eseguendo `npm test` e
 `npm run qa`, o aprendo la schermata vera con Playwright. Dove non ho potuto
 verificare, lo dico — non lo do per fatto.
+
+Aggiornato dopo la release 2.24.0 (riepilogo sticky, §33) — la prima
+versione di questo rapporto copriva fino alla 2.23.0.
 
 ## REPOSITORY
 
 Audit §0 eseguito prima di ogni modifica, non dopo. Repo: `Tool-Personalzzazione`
 (non `Pusatingly`, che è un progetto statico separato con cui questa sessione
 condivide solo l'ambiente di esecuzione). Branch di lavoro:
-`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.23.0**.
+`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.24.0**.
 Build: `dist/INGLY-OS.html` (11,23 MB) e `dist/INGLY-CLOUD-ADMIN.html`
 (994 KB), generati da `npm run build` da `src/legacy/patches/*.js` +
 `src/product/*.js` via `scripts/compose.mjs`. Ogni release di questa sessione
 è registrata in `dist/releases/<versione>/manifest.json` e in `RELEASES.json`
-(23 release tracciate).
+(24 release tracciate).
 
 ## GANTT
 
@@ -27,6 +30,7 @@ localStorage/IDB/manifest/docs) è release **2.20.0** (`4faf0a4`), di una
 sessione precedente a questa. Il nome del file della vecchia patch resta
 nello storico git, come previsto dal mandato stesso — non è raggiungibile da
 nessun punto dell'app.
+
 
 ## DUPLICATES
 
@@ -179,52 +183,78 @@ modulo stesso documenta di aver sostituito. Copertura test:
 
 ## UI
 
-Nessun redesign visivo generale in questa sessione (Dashboard, Sidebar,
-Topbar, Smart Quoter, Ordini, Produzione, CRM, Magazzino, Catalogo,
-Finance, Macchine, Admin — §41). La Dashboard era già stata rifatta in
-release 2.19.0, di una sessione precedente. Le due feature di questa
-sessione (card "Canale & Spedizione" nello Smart Quoter 3D; campo "Valore
-residuo" nella Scheda Macchina) sono reali componenti funzionali sul
-design system esistente, non skin — ma non costituiscono il redesign
-generale che il mandato chiede al punto §41, che resta P2/P3 e non è stato
-affrontato.
+Nessun redesign visivo **generale** in questa sessione (Dashboard, Sidebar,
+Topbar, Ordini, Produzione, CRM, Magazzino, Catalogo, Finance, Macchine,
+Admin — §41). La Dashboard era già stata rifatta in release 2.19.0, di una
+sessione precedente.
+
+**§33 (riepilogo sticky), fatto — release 2.24.0**: la card "IL CONTO"
+(Costo/Prezzo/IVA/Profitto) resta visibile mentre si scorre la colonna
+centrale dello Smart Quoter 3D, invece di sparire come le altre card.
+Verificato con screenshot prima/dopo lo scroll, non solo leggendo il CSS.
+Ha richiesto correggere anche il contenitore (`#view-print3d` aveva
+`overflow-y:auto` ma altezza automatica: non scorreva mai da solo, quindi
+lo sticky non aveva un ancoraggio reale) — cambiamento dichiarato in
+`baseline/deliberate-changes.json` con la ragione, verificato a 5
+breakpoint (390/430/768/1366/1920px) senza overflow orizzontale.
+
+**§31-32 (flusso a 6 step: Modello→Macchina→Materiale→Produzione→
+Vendita→Risultato), deliberatamente non affrontato.** La UI attuale è una
+vista unica con tutte le sezioni visibili insieme — coerente con
+l'"Operating Center" del resto dell'app, pensata per un uso professionale
+ripetuto (molti preventivi al giorno), non per una stima occasionale.
+Convertirla in un wizard a click avrebbe voluto dire riscrivere `render()`
+(2750 righe) cambiando il modello di interazione, con un rischio di
+regressione alto su un sistema oggi corretto e testato — e una sessione
+precedente (release "Redesign Smart Quoter 3D — versione INGLY del cost
+calculator") aveva già valutato i calcolatori di riferimento del mandato
+e scelto deliberatamente di non copiarne la struttura a step. Non l'ho
+fatto senza deciderlo: l'ho deciso e scritto qui, non saltato per fretta.
+
+Le altre feature di questa sessione (card "Canale & Spedizione"; campo
+"Valore residuo" nella Scheda Macchina) sono componenti funzionali reali
+sul design system esistente, non skin — ma non costituiscono il redesign
+generale del §41, che resta P2/P3 e non è stato affrontato.
 
 ## TEST
 
-`npm test`: **2220/2220**, eseguito quattro volte in questa sessione (una
-per ogni build), sempre pulito. Due nuovi file di test unitari dalla
-sessione precedente non sono stati toccati; questa sessione ha aggiunto
-copertura a `tests/qa/quoter3d-parco.mjs` (confronto ammortamento con/senza
-valore residuo, sul preventivo vero, non sul motore isolato) e
+`npm test`: **2222/2222**, eseguito sei volte in questa sessione (una per
+ogni build), sempre pulito. Questa sessione ha aggiunto copertura a
+`tests/qa/quoter3d-parco.mjs` (confronto ammortamento con/senza valore
+residuo, sul preventivo vero, non sul motore isolato) e
 `tests/qa/manutenzione-macchina.mjs` (tab Costi della Scheda Macchina),
-oltre al nuovo `tests/marketplace-profiles.test.mjs` (10 test) e
-`tests/qa/quoter3d-canale-spedizione.mjs` (12 verifiche browser) per la
-release 2.22.0.
+oltre a `tests/marketplace-profiles.test.mjs` (12 test, inclusi due nuovi
+sulla combinazione scaglioni × canale × IVA) e
+`tests/qa/quoter3d-canale-spedizione.mjs` (12 verifiche browser).
 
 ## REGRESSION
 
-`npm run qa` eseguito **quattro volte** in questa sessione (89 script
-Playwright ciascuna). Due esecuzioni hanno mostrato un fallimento isolato
-ciascuna, in due moduli **non toccati** da questa sessione
-(`quoter3d-calcoli.mjs` FASE 16 — salvataggio preventivo — e
-`apparel-scaglioni-consuntivo.mjs` — consuntivo tessile), entrambi legati
-a `page.reload()` sotto la contesa di CPU dei ~90 lanci Chromium in
-sequenza. Rieseguiti singolarmente, entrambi puliti (52/52 e 33/33). Le
-ultime due esecuzioni complete: pulite, zero PROBLEMI, zero errori
-JavaScript. Nessun fallimento ha mai coinvolto i moduli di questa sessione
-(marketplace, macchina, quoter 3D) nei quattro run.
+`npm run qa` eseguito **otto volte** in questa sessione (89 script
+Playwright ciascuna, in due gruppi di quattro corse — una per ogni
+release). In quattro delle otto corse è comparso un fallimento isolato,
+sempre in `page.reload()` sotto la contesa di CPU dei ~90 lanci Chromium
+in sequenza, sempre in un modulo **non toccato** da questa sessione
+(`quoter3d-calcoli.mjs` FASE 16 — salvataggio preventivo — o
+`apparel-scaglioni-consuntivo.mjs` — consuntivo tessile), mai negli
+stessi due insieme. Rieseguiti singolarmente: sempre puliti (52/52 e
+33/33, verificato più volte). Le corse finali di entrambi i round:
+pulite, zero PROBLEMI, zero errori JavaScript. Nessun fallimento ha mai
+coinvolto i moduli toccati da questa sessione (marketplace, macchina,
+quoter 3D, contenitore sticky) in nessuna delle otto corse.
 
 ## RELEASE
 
-Due release spedite in questa sessione, entrambe con la pipeline completa
+Tre release spedite in questa sessione, tutte con la pipeline completa
 (build → test → qa → commit → release-artifacts → push → verifica sync):
 
 - **2.22.0** — Canale di vendita e spedizione nello Smart Quoter 3D
 - **2.23.0** — Valore residuo della macchina nell'ammortamento reale
+- **2.24.0** — Riepilogo sticky Costo/Prezzo/Profitto/Margine (§33)
 
-Entrambe verificate su `dist/INGLY-OS.html` vero con Playwright, non solo
-a livello di modulo. Branch remoto `claude/ingly-personalization-repo-ekvc0z`
-sincronizzato (`git fetch` + `git status` puliti dopo ogni push).
+Tutte e tre verificate su `dist/INGLY-OS.html` vero con Playwright, non
+solo a livello di modulo. Branch remoto
+`claude/ingly-personalization-repo-ekvc0z` sincronizzato (`git fetch` +
+`git status` puliti dopo ogni push).
 
 ## KNOWN ISSUES
 
@@ -235,11 +265,21 @@ sincronizzato (`git fetch` + `git status` puliti dopo ogni push).
    macchina nello stesso schermo (suggerimento vs preventivo reale) —
    possono divergere leggermente, mai quella fatturata.
 3. **Nessun registro "MARKET COST SOURCES" strutturato** per i costi di
-   mercato diversi dalle commissioni marketplace (§23).
-4. **Agents e Trend Watcher non costruiti come autonomi** — bloccante
+   mercato diversi dalle commissioni marketplace (§23) — valutato in
+   questa sessione e scartato deliberatamente: senza accesso a dati di
+   mercato verificabili in tempo reale, la maggior parte delle voci
+   sarebbe finita "valore da configurare" — poco più di quanto le badge
+   di fonte/confidenza già esistenti (predefinito/stima) comunicano oggi.
+4. **§31-32 (flusso a 6 step) non costruito** — deliberato, vedi UI sopra:
+   rischio di regressione alto su un cambio di modello d'interazione, non
+   solo visivo, senza una direzione chiara su quale dei due modelli
+   (vista unica per uso professionale vs wizard per stima occasionale)
+   il laboratorio vuole davvero.
+5. **Agents e Trend Watcher non costruiti come autonomi** — bloccante
    architetturale verificato (nessuno scheduler, nessun backend), non una
    scelta di comodo. Le alternative umano-in-comando esistenti (Product
    Builder, AI Vision, Trend & Product Hunter) sono reali e raggiungibili.
-5. **Redesign UI/UX generale (§31-34, §41) non affrontato** — P2/P3
-   nell'ordine del mandato stesso, non saltato per fretta ma per priorità
-   dichiarata.
+6. **Redesign UI/UX generale (§41) non affrontato** — P2/P3 nell'ordine
+   del mandato stesso, non saltato per fretta ma per priorità dichiarata.
+   Il flusso a 6 step dello Smart Quoter (§31-32) resta nella stessa
+   categoria, vedi punto 4 sopra.
