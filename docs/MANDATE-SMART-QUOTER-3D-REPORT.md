@@ -1,25 +1,26 @@
 # Rapporto finale — "COMMAND DEFINITIVO — SMART QUOTER 3D MARKET-COST ENGINE + UI/UX + AGENTS + CATALOGO DINAMICO"
 
 Punto 44 del mandato. Non un resoconto di intenzioni: ogni voce qui sotto è
-verificata leggendo il codice presente al commit `cdeaa75` (branch
+verificata leggendo il codice presente al commit `3bb4d01` (branch
 `claude/ingly-personalization-repo-ekvc0z`), eseguendo `npm test` e
 `npm run qa`, o aprendo la schermata vera con Playwright. Dove non ho potuto
 verificare, lo dico — non lo do per fatto.
 
-Aggiornato dopo la release 2.24.0 (riepilogo sticky, §33) — la prima
-versione di questo rapporto copriva fino alla 2.23.0.
+Aggiornato dopo la release 2.25.0 (grafico di composizione del costo,
+§33 chiuso) — le versioni precedenti di questo rapporto coprivano fino
+alla 2.23.0 e alla 2.24.0.
 
 ## REPOSITORY
 
 Audit §0 eseguito prima di ogni modifica, non dopo. Repo: `Tool-Personalzzazione`
 (non `Pusatingly`, che è un progetto statico separato con cui questa sessione
 condivide solo l'ambiente di esecuzione). Branch di lavoro:
-`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.24.0**.
+`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.25.0**.
 Build: `dist/INGLY-OS.html` (11,23 MB) e `dist/INGLY-CLOUD-ADMIN.html`
 (994 KB), generati da `npm run build` da `src/legacy/patches/*.js` +
 `src/product/*.js` via `scripts/compose.mjs`. Ogni release di questa sessione
 è registrata in `dist/releases/<versione>/manifest.json` e in `RELEASES.json`
-(24 release tracciate).
+(25 release tracciate).
 
 ## GANTT
 
@@ -188,15 +189,20 @@ Topbar, Ordini, Produzione, CRM, Magazzino, Catalogo, Finance, Macchine,
 Admin — §41). La Dashboard era già stata rifatta in release 2.19.0, di una
 sessione precedente.
 
-**§33 (riepilogo sticky), fatto — release 2.24.0**: la card "IL CONTO"
-(Costo/Prezzo/IVA/Profitto) resta visibile mentre si scorre la colonna
-centrale dello Smart Quoter 3D, invece di sparire come le altre card.
-Verificato con screenshot prima/dopo lo scroll, non solo leggendo il CSS.
-Ha richiesto correggere anche il contenitore (`#view-print3d` aveva
-`overflow-y:auto` ma altezza automatica: non scorreva mai da solo, quindi
-lo sticky non aveva un ancoraggio reale) — cambiamento dichiarato in
+**§33 (riepilogo sticky + grafico di composizione), fatto — release 2.24.0
+e 2.25.0.** La card "IL CONTO" (Costo/Prezzo/IVA/Profitto) resta visibile
+mentre si scorre la colonna centrale dello Smart Quoter 3D, invece di
+sparire come le altre card. Verificato con screenshot prima/dopo lo
+scroll, non solo leggendo il CSS. Ha richiesto correggere anche il
+contenitore (`#view-print3d` aveva `overflow-y:auto` ma altezza
+automatica: non scorreva mai da solo, quindi lo sticky non aveva un
+ancoraggio reale) — cambiamento dichiarato in
 `baseline/deliberate-changes.json` con la ragione, verificato a 5
-breakpoint (390/430/768/1366/1920px) senza overflow orizzontale.
+breakpoint (390/430/768/1366/1920px) senza overflow orizzontale. Sotto
+il dettaglio costi, una barra di composizione (materiale/energia/
+ammortamento/manodopera/…, colori dal set semantico esistente) chiude il
+punto: "hero → COGS/Fees/Profit/Margin → detailed breakdown → simple
+cost chart" ha ora tutti e quattro i pezzi.
 
 **§31-32 (flusso a 6 step: Modello→Macchina→Materiale→Produzione→
 Vendita→Risultato), deliberatamente non affrontato.** La UI attuale è una
@@ -218,41 +224,43 @@ generale del §41, che resta P2/P3 e non è stato affrontato.
 
 ## TEST
 
-`npm test`: **2222/2222**, eseguito sei volte in questa sessione (una per
+`npm test`: **2229/2229**, eseguito sette volte in questa sessione (una per
 ogni build), sempre pulito. Questa sessione ha aggiunto copertura a
 `tests/qa/quoter3d-parco.mjs` (confronto ammortamento con/senza valore
-residuo, sul preventivo vero, non sul motore isolato) e
+residuo, sul preventivo vero, non sul motore isolato),
 `tests/qa/manutenzione-macchina.mjs` (tab Costi della Scheda Macchina),
-oltre a `tests/marketplace-profiles.test.mjs` (12 test, inclusi due nuovi
-sulla combinazione scaglioni × canale × IVA) e
-`tests/qa/quoter3d-canale-spedizione.mjs` (12 verifiche browser).
+`tests/marketplace-profiles.test.mjs` (12 test, inclusi due sulla
+combinazione scaglioni × canale × IVA), `tests/qa/quoter3d-canale-
+spedizione.mjs` (12 verifiche browser) e `tests/quoter3d-cost-chart.test.mjs`
+(7 test sul grafico di composizione).
 
 ## REGRESSION
 
-`npm run qa` eseguito **otto volte** in questa sessione (89 script
-Playwright ciascuna, in due gruppi di quattro corse — una per ogni
-release). In quattro delle otto corse è comparso un fallimento isolato,
-sempre in `page.reload()` sotto la contesa di CPU dei ~90 lanci Chromium
-in sequenza, sempre in un modulo **non toccato** da questa sessione
-(`quoter3d-calcoli.mjs` FASE 16 — salvataggio preventivo — o
-`apparel-scaglioni-consuntivo.mjs` — consuntivo tessile), mai negli
-stessi due insieme. Rieseguiti singolarmente: sempre puliti (52/52 e
-33/33, verificato più volte). Le corse finali di entrambi i round:
-pulite, zero PROBLEMI, zero errori JavaScript. Nessun fallimento ha mai
-coinvolto i moduli toccati da questa sessione (marketplace, macchina,
-quoter 3D, contenitore sticky) in nessuna delle otto corse.
+`npm run qa` eseguito **nove volte** in questa sessione (89 script
+Playwright ciascuna, in tre gruppi — uno per release). In quattro delle
+nove corse è comparso un fallimento isolato, sempre in `page.reload()`
+sotto la contesa di CPU dei ~90 lanci Chromium in sequenza, sempre in un
+modulo **non toccato** da questa sessione (`quoter3d-calcoli.mjs` FASE 16
+— salvataggio preventivo — o `apparel-scaglioni-consuntivo.mjs` —
+consuntivo tessile), mai negli stessi due insieme. Rieseguiti
+singolarmente: sempre puliti (52/52 e 33/33, verificato più volte). La
+corsa per la release 2.25.0 (grafico di composizione) è stata pulita alla
+prima. Nessun fallimento ha mai coinvolto i moduli toccati da questa
+sessione (marketplace, macchina, quoter 3D, contenitore sticky, grafico)
+in nessuna delle nove corse.
 
 ## RELEASE
 
-Tre release spedite in questa sessione, tutte con la pipeline completa
+Quattro release spedite in questa sessione, tutte con la pipeline completa
 (build → test → qa → commit → release-artifacts → push → verifica sync):
 
 - **2.22.0** — Canale di vendita e spedizione nello Smart Quoter 3D
 - **2.23.0** — Valore residuo della macchina nell'ammortamento reale
 - **2.24.0** — Riepilogo sticky Costo/Prezzo/Profitto/Margine (§33)
+- **2.25.0** — Grafico semplice della composizione del costo (§33)
 
-Tutte e tre verificate su `dist/INGLY-OS.html` vero con Playwright, non
-solo a livello di modulo. Branch remoto
+Tutte e quattro verificate su `dist/INGLY-OS.html` vero con Playwright,
+non solo a livello di modulo. Branch remoto
 `claude/ingly-personalization-repo-ekvc0z` sincronizzato (`git fetch` +
 `git status` puliti dopo ogni push).
 
