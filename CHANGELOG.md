@@ -3,6 +3,35 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.25.0 — Un grafico semplice della composizione del costo
+
+Chiude l'ultimo pezzo del punto 33: "Recommended Price hero → COGS/Fees/
+Profit/Margin → detailed breakdown → simple cost chart". I primi tre
+esistevano già (l'ultimo, il riepilogo sticky, dalla 2.24.0); mancava
+solo il grafico.
+
+Sotto il dettaglio riga per riga dello Smart Quoter 3D, una barra
+orizzontale impilata mostra la composizione del costo a colpo d'occhio —
+materiale, energia, ammortamento, manodopera e le altre voci, ordinate
+dalla più grande alla più piccola, con una legenda sotto (icona,
+etichetta, percentuale). Non ricalcola niente: legge la stessa lista
+`r.voci` che il dettaglio già mostra in tabella, quindi le due
+rappresentazioni non possono mai raccontare due storie diverse.
+
+I colori vengono dal set semantico già in uso nel resto dell'app
+(`--color-info/warning/premium/success/danger` più l'accento primario) —
+nessuna nuova palette inventata per questo grafico. Assegnati per
+posizione nella classifica, non per categoria fissa: un preventivo con
+quattro voci usa quattro colori, non dodici caselle mezze vuote.
+
+Copertura: `tests/quoter3d-cost-chart.test.mjs` (7 test) verifica che le
+percentuali sommino a 100, che l'ordine sia decrescente, che i colori
+restino dentro il set atteso, e che una voce a zero non produca un
+segmento fantasma.
+
+`npm test`: 2229/2229. `npm run qa`: 89/89 script puliti alla prima
+corsa completa.
+
 ## 2.24.0 — Il conto resta in vista mentre si scorre lo Smart Quoter 3D
 
 Punto 33 del mandato: "riepilogo sempre visibile — COSTO/PREZZO/PROFITTO/

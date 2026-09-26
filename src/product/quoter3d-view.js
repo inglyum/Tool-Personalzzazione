@@ -159,6 +159,55 @@
     return righe + fuori;
   }
 
+  /* ── SEZIONE D-bis · lo stesso conto, in un colpo d'occhio ────────────────
+     §33 del mandato: dopo il dettaglio riga per riga, un grafico semplice
+     della composizione. Le righe sopra dicono «quanto», questo dice «cosa
+     pesa di più» prima ancora di leggere un numero — la domanda che un
+     elenco di sette voci non risponde finché non lo si legge tutto.
+
+     Sei colori, dal set semantico già in uso nel resto dell'app (successo/
+     avviso/pericolo/informazione/premium + l'accento primario) — non un
+     nuovo set inventato per questo grafico. Assegnati per posizione, non
+     per categoria: una stampa con quattro voci usa quattro colori, non
+     dodici mezzi vuoti. */
+  var COLORI_QUOTA = ['var(--color-info,#3b82f6)', 'var(--color-warning,#f59e0b)',
+    'var(--color-premium,#eab308)', 'var(--color-success,#22c55e)',
+    'var(--color-danger,#ef4444)', 'var(--primary,#22d3ee)'];
+
+  function costChart(r) {
+    if (!r || r.indisponibile || !r.voci.length) return '';
+    var totale = r.voci.reduce(function (a, v) { return a + Math.max(0, num(v.value)); }, 0);
+    if (!(totale > 0)) return '';
+    /* Dalla più grande alla più piccola: la barra si legge da sinistra come
+       si legge una classifica, non nell'ordine casuale con cui il motore le
+       ha calcolate. */
+    var ordinate = r.voci.slice().sort(function (a, b) { return num(b.value) - num(a.value); });
+    var segmenti = ordinate.map(function (v, i) {
+      var quota = (Math.max(0, num(v.value)) / totale) * 100;
+      var colore = COLORI_QUOTA[i % COLORI_QUOTA.length];
+      return { v: v, quota: quota, colore: colore };
+    }).filter(function (s) { return s.quota > 0.05; });
+
+    var barra = segmenti.map(function (s) {
+      return '<div title="' + esc(s.v.label) + ' — ' + esc(pc(s.quota)) + '" style="width:' + s.quota.toFixed(2)
+        + '%;background:' + s.colore + ';height:100%"></div>';
+    }).join('');
+
+    var legenda = segmenti.map(function (s) {
+      return '<div style="display:flex;align-items:center;gap:6px;font-size:11px">'
+        + '<span style="width:9px;height:9px;border-radius:3px;background:' + s.colore + ';flex-shrink:0"></span>'
+        + '<span style="color:var(--text-muted)">' + (ICONE[s.v.id] || '•') + ' ' + esc(s.v.label) + '</span>'
+        + '<span style="color:var(--text-dim)">' + esc(pc(s.quota)) + '</span>'
+        + '</div>';
+    }).join('');
+
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
+      + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-bottom:8px">Composizione del costo</div>'
+      + '<div style="display:flex;width:100%;height:14px;border-radius:7px;overflow:hidden;background:var(--bg-card2)">' + barra + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px 14px;margin-top:10px">' + legenda + '</div>'
+      + '</div>';
+  }
+
   /* ── SEZIONE E · le quattro offerte ────────────────────────────────────────
      Ogni politica punta a un **margine**, non a un moltiplicatore. È la
      correzione che rende lo slider vero: chi chiede il 40% ottiene il 40%. */
@@ -388,6 +437,7 @@
     calcola: calcola,
     hero: hero,
     dettaglio: dettaglio,
+    costChart: costChart,
     strategie: strategie,
     quantita: quantita,
     calibrazione: calibrazione,

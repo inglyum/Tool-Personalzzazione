@@ -2482,7 +2482,7 @@ function calc(){
 
   var bk=el('p3d-bk');
   if(bk){
-    bk.innerHTML = (ok && V) ? V.dettaglio(R)
+    bk.innerHTML = (ok && V) ? V.dettaglio(R)+(typeof V.costChart==='function'?V.costChart(R):'')
       : '<div style="color:var(--text-dim);text-align:center;padding:20px;font-size:12px">'+((R&&R.motivo)||'Inserisci grammi e ore per vedere il calcolo')+'</div>';
   }
 
