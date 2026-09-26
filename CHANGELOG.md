@@ -3,6 +3,32 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.26.0 — Il prezzo consigliato si vede prima degli altri numeri
+
+Il gruppo "Prezzo" della card "IL CONTO" aveva quattro celle della stessa
+dimensione — netto, IVA, lordo, profitto — e chi guardava doveva leggerle
+tutte per capire qual era la risposta alla domanda che ha aperto la
+schermata: "quanto chiedo?". IVA, lordo e profitto sono il contesto del
+prezzo consigliato, non la stessa domanda.
+
+§33 del mandato lo chiama "Recommended Price hero": ora "Prezzo netto" è
+l'unica cella con cifra più grande (30px contro 21px), sfondo e bordo
+accesi nel cyan dell'app — non un colore nuovo, lo stesso accento già
+usato per le strategie di prezzo consigliate altrove in questa vista.
+
+Nessun colore inventato per l'occasione, nessuna nuova palette: il
+gradiente e il bordo sono fissi sull'accento primario esistente, non
+derivati dinamicamente dal parametro colore della cella (che per altre
+celle è spesso una variabile CSS, non un esadecimale — concatenarci
+un'opacità avrebbe prodotto un colore non valido).
+
+Copertura: nuovo test in `tests/quoter3d-view.test.mjs` che verifica la
+cifra enfatizzata (30px, un importo in euro) e che le altre celle del
+gruppo restino alla dimensione normale — non tutto il gruppo si
+ingrandisce, solo una cella.
+
+`npm test`: 2230/2230. `npm run qa`: 89/89 script puliti alla prima corsa.
+
 ## 2.25.0 — Un grafico semplice della composizione del costo
 
 Chiude l'ultimo pezzo del punto 33: "Recommended Price hero → COGS/Fees/

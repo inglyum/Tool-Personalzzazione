@@ -81,10 +81,25 @@
       return '<div style="padding:24px;text-align:center;color:var(--text-dim);font-size:12px">'
         + esc((r && r.motivo) || 'Inserisci peso e ore di stampa') + '</div>';
     }
-    var cella = function (etichetta, valore, colore, nota) {
-      return '<div style="flex:1;min-width:130px;padding:12px 14px;background:var(--bg-card2);border-radius:12px;border:1px solid var(--border)">'
+    var cella = function (etichetta, valore, colore, nota, enfasi) {
+      /* Il prezzo consigliato è la risposta alla domanda che si apre questa
+         vista per fare — «quanto chiedo?» — le altre tre celle del gruppo
+         Prezzo sono il suo contesto (IVA, lordo, profitto), non la sua
+         stessa domanda. §33 del mandato lo chiama "Recommended Price hero":
+         qui è la sola cella con bordo acceso e cifra più grande, non
+         un'altra fra pari come le altre sette.
+
+         Il colore di sfondo/bordo enfatizzati sono fissi, non derivati da
+         `colore`: quest'ultimo arriva spesso come `var(--primary)` — una
+         variabile CSS, non un esadecimale — e concatenarci un suffisso di
+         opacità produrrebbe un colore non valido, silenziosamente ignorato
+         dal browser. La cella enfatizzata userà sempre l'accento cyan
+         dell'app, come le altre evidenziazioni "attiva" di questo file. */
+      return '<div style="flex:1;min-width:130px;padding:' + (enfasi ? '16px 18px' : '12px 14px') + ';background:'
+        + (enfasi ? 'linear-gradient(135deg,var(--bg-card2),#22d3ee14)' : 'var(--bg-card2)')
+        + ';border-radius:12px;border:' + (enfasi ? '1.5px solid #22d3ee55' : '1px solid var(--border)') + '">'
         + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-bottom:4px">' + esc(etichetta) + '</div>'
-        + '<div style="font-size:21px;font-weight:900;color:' + colore + ';line-height:1.1">' + esc(valore) + '</div>'
+        + '<div style="font-size:' + (enfasi ? '30px' : '21px') + ';font-weight:900;color:' + colore + ';line-height:1.1">' + esc(valore) + '</div>'
         + (nota ? '<div style="font-size:10px;color:var(--text-muted);margin-top:3px">' + esc(nota) + '</div>' : '')
         + '</div>';
     };
@@ -121,7 +136,7 @@
           cella('Costo di stampa', eu(r.costoStampa), 'var(--text-muted)', 'materiale ed energia')
           + cella('Costo ' + r.modalitaLabel.toLowerCase(), eu(r.costo), 'var(--text)', r.modalitaSotto))
       + gruppo('Prezzo', 'var(--primary)',
-          cella('Prezzo netto', eu(r.prezzo), 'var(--primary)', 'margine ' + pc(r.marginePct))
+          cella('Prezzo netto', eu(r.prezzo), 'var(--primary)', 'margine ' + pc(r.marginePct), true)
           + (iva > 0 ? cella('IVA', eu(iva), 'var(--text-muted)', 'sul netto') : '')
           + (iva > 0 ? cella('Prezzo lordo', eu(lordo), 'var(--text)', 'quello che paga il cliente') : '')
           + cella('Profitto', eu(r.profitto), r.profitto > 0 ? 'var(--green,#22c55e)' : 'var(--red,#ef4444)', 'per pezzo, prima del canale'))

@@ -277,3 +277,20 @@ test('le sezioni si disegnano', async (t) => {
     assert.ok(!/<img/.test(V.hero(cattivo)), 'HTML non sfuggito nella vista');
   });
 });
+
+/* ── §33 · «Recommended Price hero» ────────────────────────────────────────
+   Quattro celle nel gruppo Prezzo si somigliavano troppo: IVA, lordo e
+   profitto sono il contesto del prezzo consigliato, non la stessa domanda.
+   La cella "Prezzo netto" deve distinguersi visivamente dalle altre tre,
+   non essere una fra pari. */
+test('il prezzo consigliato si distingue visivamente dalle altre celle', () => {
+  const r = V.calcola(CASO, { modalita: 'completo', marginePct: 40 });
+  const html = V.hero(r);
+  const cifraGrande = html.match(/font-size:30px[^>]*>([^<]+)</);
+  assert.ok(cifraGrande, 'esiste una cifra a 30px nella vista');
+  assert.ok(cifraGrande[1].includes('€'), 'la cifra enfatizzata è un importo in euro');
+  /* Le altre celle del gruppo Prezzo restano alla dimensione normale: non
+     tutto il gruppo deve ingrandirsi, solo una cella. */
+  const normali = [...html.matchAll(/font-size:21px/g)];
+  assert.ok(normali.length >= 2, 'restano celle a dimensione normale accanto a quella enfatizzata');
+});
