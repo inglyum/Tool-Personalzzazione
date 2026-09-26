@@ -1,26 +1,26 @@
 # Rapporto finale — "COMMAND DEFINITIVO — SMART QUOTER 3D MARKET-COST ENGINE + UI/UX + AGENTS + CATALOGO DINAMICO"
 
 Punto 44 del mandato. Non un resoconto di intenzioni: ogni voce qui sotto è
-verificata leggendo il codice presente al commit `3bb4d01` (branch
+verificata leggendo il codice presente al commit `aaaac55` (branch
 `claude/ingly-personalization-repo-ekvc0z`), eseguendo `npm test` e
 `npm run qa`, o aprendo la schermata vera con Playwright. Dove non ho potuto
 verificare, lo dico — non lo do per fatto.
 
-Aggiornato dopo la release 2.25.0 (grafico di composizione del costo,
-§33 chiuso) — le versioni precedenti di questo rapporto coprivano fino
-alla 2.23.0 e alla 2.24.0.
+Aggiornato dopo la release 2.26.0 (prezzo consigliato come vero hero
+visivo) — le versioni precedenti di questo rapporto coprivano fino alla
+2.23.0, alla 2.24.0 e alla 2.25.0.
 
 ## REPOSITORY
 
 Audit §0 eseguito prima di ogni modifica, non dopo. Repo: `Tool-Personalzzazione`
 (non `Pusatingly`, che è un progetto statico separato con cui questa sessione
 condivide solo l'ambiente di esecuzione). Branch di lavoro:
-`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.25.0**.
+`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.26.0**.
 Build: `dist/INGLY-OS.html` (11,23 MB) e `dist/INGLY-CLOUD-ADMIN.html`
 (994 KB), generati da `npm run build` da `src/legacy/patches/*.js` +
 `src/product/*.js` via `scripts/compose.mjs`. Ogni release di questa sessione
 è registrata in `dist/releases/<versione>/manifest.json` e in `RELEASES.json`
-(25 release tracciate).
+(26 release tracciate).
 
 ## GANTT
 
@@ -251,15 +251,16 @@ in nessuna delle nove corse.
 
 ## RELEASE
 
-Quattro release spedite in questa sessione, tutte con la pipeline completa
+Cinque release spedite in questa sessione, tutte con la pipeline completa
 (build → test → qa → commit → release-artifacts → push → verifica sync):
 
 - **2.22.0** — Canale di vendita e spedizione nello Smart Quoter 3D
 - **2.23.0** — Valore residuo della macchina nell'ammortamento reale
 - **2.24.0** — Riepilogo sticky Costo/Prezzo/Profitto/Margine (§33)
 - **2.25.0** — Grafico semplice della composizione del costo (§33)
+- **2.26.0** — Il prezzo consigliato come vero hero visivo (§33)
 
-Tutte e quattro verificate su `dist/INGLY-OS.html` vero con Playwright,
+Tutte e cinque verificate su `dist/INGLY-OS.html` vero con Playwright,
 non solo a livello di modulo. Branch remoto
 `claude/ingly-personalization-repo-ekvc0z` sincronizzato (`git fetch` +
 `git status` puliti dopo ogni push).
