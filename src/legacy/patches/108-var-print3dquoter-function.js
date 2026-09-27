@@ -129,6 +129,10 @@ var SPED_COSTO=0, SPED_ADDEB=0;
    Restano salvabili sulla macchina per la sua scheda e per
    InglyMachineMaintenance, che non condividono quella riga. */
 var MACH_RESIDUO=0;
+/* §21 del mandato: la stessa stampa confrontata su una seconda macchina.
+   `null` finché nessuno lo sceglie — un preventivo aperto non deve
+   calcolare un secondo motore ogni volta che si digita un carattere. */
+var CONFRONTO_ID=null;
 var MAT_REG=null;   // il costo del materiale a registro, se il magazzino lo sa
 var _registroLetto=false;
 /* I materiali che il magazzino conosce. Tenuti separati da MATS — la lista
@@ -152,6 +156,7 @@ var PARCO=[];
 var SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
 var ENE='auto';   // auto · misurato · medio · targa
 var R=null;
+var R2=null;   // §21 — lo stesso lavoro sulla macchina di confronto, se scelta
 var CALIB_RIF=0;
 var SK='p3dq_v4';
 
@@ -610,6 +615,14 @@ function render(){
     +'<div id="p3d-costoper"></div>'
     // ── E · le quantità: l'avviamento si divide, il pezzo no ──────────
     +'<div class="p3-card"><div class="p3-ct">📦 QUANTITÀ — quanto conviene stampare</div><div id="p3d-scaglioni"><div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div></div></div>'
+    // ── §21 del mandato · la stessa stampa, su un'altra macchina ──────
+    +'<div class="p3-card">'
+      +'<div class="p3-ct">⚖️ CONFRONTA MACCHINE</div>'
+      +'<div class="p3-fg"><label class="p3-fl">STESSA STAMPA SU</label>'
+        +'<select class="p3-fc" id="p3d-confronto" onchange="Print3DQuoter.setConfronto(this.value)"><option value="">— Nessun confronto —</option>'+machOpts+'</select>'
+        +'<div class="p3-ht">Stessi grammi e ore dichiarati: se la macchina scelta stampa più veloce o più lenta, correggi le ore prima di fidarti del confronto.</div></div>'
+      +'<div id="p3d-confronto-esito"></div>'
+    +'</div>'
     // ── Le posizioni di prezzo, una card per politica ────────────────
     +'<div class="p3-card"><div class="p3-ct">💶 POSIZIONI DI PREZZO</div><div id="p3d-politiche"><div class="p3-ht">Inserisci i dati per vedere le posizioni.</div></div></div>'
     // ── Preventivato contro reale ────────────────────────────────────
@@ -1940,6 +1953,26 @@ function pickMach(id){
   var btns=document.querySelectorAll('#view-print3d .p3-mb');if(btns[idx])btns[idx].classList.add('sel');
   calc();
 }
+/** Una macchina qualunque — del parco o del catalogo — nella stessa forma
+    che `pickMach` già sa leggere. Usata dal confronto §21, che non deve
+    scrivere una seconda volta la stessa risoluzione id→macchina. */
+function risolviMacchina(id){
+  if(!id) return null;
+  if(String(id).indexOf('parco:')===0){
+    var rec=PARCO.filter(function(x){ return 'parco:'+x.id===id; })[0];
+    return macchinaDalParco(rec);
+  }
+  return (MACH[T]||[]).find(function(x){return x.id===id;}) || null;
+}
+function setConfronto(id){
+  CONFRONTO_ID=id||null;
+  /* Come pickMach: se questa funzione viene chiamata da qualcosa che non è
+     il cambio del <select> — un pulsante rapido, un ripristino di stato —
+     il menu deve comunque mostrare la scelta giusta, non restare fermo su
+     «Nessun confronto» mentre il conto sotto dice un'altra cosa. */
+  var s=el('p3d-confronto');if(s)s.value=CONFRONTO_ID||'';
+  calc();
+}
 function pickMat(id){
   var m=materialeDi(id);if(!m)return;
   /* Il prezzo digitato è un punto di partenza, non una verità: se il registro
@@ -2420,6 +2453,33 @@ function calc(){
   COST  = ok ? R.costo  : 0;
   PRICE = ok ? R.prezzo : 0;
 
+  /* §21 del mandato — la stessa stampa su una seconda macchina. Stessi
+     grammi, stesse ore, stessa politica di prezzo e canale: cambia solo
+     la macchina, così il confronto isola davvero quella variabile invece
+     di sommarci sopra anche uno sconto diverso o un margine diverso.
+     Avvolto in try/catch perché è un secondo calcolo facoltativo — un suo
+     errore non deve rompere il preventivo principale, che ha già i suoi
+     numeri sopra. */
+  R2 = null;
+  if(CONFRONTO_ID && V){
+    var m2=risolviMacchina(CONFRONTO_ID);
+    if(m2){
+      var ing2=Object.assign({},ing,{
+        machinePrice: m2.c>0?m2.c:ing.machinePrice,
+        machineLifeHours: m2.l>0?m2.l:ing.machineLifeHours,
+        watt: m2.w>0?m2.w:ing.watt,
+        residualValue: m2.residualValue||0,
+        maintenancePerHour: m2.manutenzione!=null?m2.manutenzione:ing.maintenancePerHour,
+      });
+      try{
+        R2=V.calcola(ing2,{
+          modalita:MODO, marginePct:MARG, ivaPct:IVA_ON?aliquotaIva():0, scontoPct:DISC,
+          marketplace:CANALE, spedizioneCosto:SPED_COSTO, spedizioneAddebitata:SPED_ADDEB,
+        });
+      }catch(e){ R2=null; }
+    }
+  }
+
   /* ── Il peso: chi comanda, e se il campo dice un'altra cosa ─────────────
      Il difetto misurato: la card slicer sovrascriveva il campo in silenzio.
      Il campo mostrava 290, il motore usava 2, e nessuna schermata diceva
@@ -2490,6 +2550,52 @@ function calc(){
   if(sc){
     var tab = (ok && V) ? V.quantita(R) : '';
     sc.innerHTML = tab || '<div style="color:var(--text-dim);text-align:center;padding:16px;font-size:11px">Inserisci i dati per vedere gli scaglioni</div>';
+  }
+
+  /* §21 — il confronto fra due macchine per lo stesso lavoro: costo, prezzo,
+     profitto e margine affiancati. Nessuna terza matematica: sono le stesse
+     due chiamate a InglyCostEngine che hanno appena prodotto R e R2. */
+  var ce=el('p3d-confronto-esito');
+  if(ce){
+    if(!CONFRONTO_ID){
+      ce.innerHTML='';
+    } else if(!ok || !R2 || R2.indisponibile){
+      ce.innerHTML='<div class="p3-ht" style="margin-top:8px">'+((R2&&R2.motivo)||'Impossibile calcolare su questa macchina')+'</div>';
+    } else {
+      var riga=function(etichetta,a,b,formato){
+        var fa=formato(a), fb=formato(b);
+        var delta=b-a;
+        var segno=Math.abs(delta)<0.005?'=' : (delta>0?'+':'−');
+        var favorevole = etichetta==='Profitto'||etichetta==='Margine' ? delta>0 : delta<0;
+        var coloreDelta = Math.abs(delta)<0.005 ? 'var(--text-dim)' : (favorevole?'var(--green,#22c55e)':'var(--red,#ef4444)');
+        return '<tr><td style="padding:5px 8px;font-size:11px;color:var(--text-muted)">'+etichetta+'</td>'
+          +'<td style="padding:5px 8px;text-align:right;font-size:12px;font-weight:700">'+fa+'</td>'
+          +'<td style="padding:5px 8px;text-align:right;font-size:12px;font-weight:700">'+fb+'</td>'
+          +'<td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:'+coloreDelta+'">'+segno+(segno==='='?'':formato(Math.abs(delta)))+'</td>'
+          +'</tr>';
+      };
+      var nomeA = (el('p3d-mach') && el('p3d-mach').selectedOptions[0] && el('p3d-mach').selectedOptions[0].textContent) || 'Macchina attuale';
+      var nomeB = (el('p3d-confronto') && el('p3d-confronto').selectedOptions[0] && el('p3d-confronto').selectedOptions[0].textContent) || 'Macchina B';
+      /* I due nomi vengono da un campo che l'utente ha scritto (marca/modello
+         della macchina registrata): non è un valore del motore, quindi passa
+         da esc() prima di finire in innerHTML — l'unico punto di questa card
+         a farlo, perché è l'unico con del testo libero dentro. */
+      var escOk=(typeof window!=='undefined')&&window.InglyUI&&window.InglyUI.esc;
+      var escNome=function(s){ return escOk ? window.InglyUI.esc(s) : String(s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+      nomeA=escNome(nomeA); nomeB=escNome(nomeB);
+      ce.innerHTML='<table style="width:100%;border-collapse:collapse;margin-top:4px">'
+        +'<thead><tr>'
+          +'<th style="text-align:left;padding:5px 8px;font-size:9px;color:var(--text-dim);text-transform:uppercase">Voce</th>'
+          +'<th style="text-align:right;padding:5px 8px;font-size:9px;color:var(--text-dim);text-transform:uppercase;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+nomeA+'</th>'
+          +'<th style="text-align:right;padding:5px 8px;font-size:9px;color:var(--text-dim);text-transform:uppercase;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+nomeB+'</th>'
+          +'<th style="text-align:right;padding:5px 8px;font-size:9px;color:var(--text-dim);text-transform:uppercase">Diff.</th>'
+        +'</tr></thead><tbody>'
+        +riga('Costo',R.costo,R2.costo,eur)
+        +riga('Prezzo',R.prezzo,R2.prezzo,eur)
+        +riga('Profitto',R.profitto,R2.profitto,eur)
+        +riga('Margine',R.marginePct,R2.marginePct,function(v){return v.toFixed(1)+'%';})
+        +'</tbody></table>';
+    }
   }
 
   var tc=el('p3d-tiers');
@@ -2710,8 +2816,8 @@ var SALTA_RIPRISTINO=false;
 
 function reset(){
   if(!confirm('Resettare tutto il preventivo 3D?'))return;
-  LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=40;STRATEGIA='standard';
-  MACH_RESIDUO=0;
+  LINES=[];EXTRAS=[];COST=0;PRICE=0;R=null;R2=null;CALIB_RIF=0;IVA_ON=true;DISC=0;MODO='completo';MARG=40;STRATEGIA='standard';
+  MACH_RESIDUO=0; CONFRONTO_ID=null;
   SLICER={ pesoTotale:0, pesoModello:0, supporti:0, purge:0, ore:0, kwh:0, costo:0, includeTutto:true };
   PROGETTO={ nome:'', descrizione:'', foto:null };
   IMBALLO=[]; HARDWARE=[]; MULTIMAT=[];
@@ -2794,6 +2900,7 @@ return{render:render,calc:calc,reset:reset,setType:setType,setIva:setIva,setDisc
   tariffaToccata:tariffaToccata,apriProfili:apriProfili,tariffaOraria:tariffaOraria,fonteTariffa:fonteTariffa,
   energiaToccata:energiaToccata,prezzoEnergia:prezzoEnergia,
   pickMach:pickMach,pickMat:pickMat,addExtra:addExtra,rmE:rmE,upE:upE,
+  setConfronto:setConfronto,
   addLine:addLine,rmLine:rmLine,editLine:editLine,clearLines:clearLines,
   doSave:doSave,loadSaved:loadSaved,delSaved:delSaved,clearSaved:clearSaved,
   doPdf:doPdf,doWa:doWa,sendQ:sendQ,openMat:openMat,closeMat:closeMat,

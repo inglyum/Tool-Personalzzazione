@@ -3,6 +3,39 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.27.0 — Confronto macchine: la stessa stampa, su una seconda macchina
+
+Punto 21 del mandato: "Scenario Comparison — Printer A vs B ... output
+cost/time/price/profit/margin". `InglyMachineCost.confronta()` esisteva
+già ma confrontava solo la tariffa oraria di più macchine — non è la
+stessa domanda: il mandato chiede il conto di un lavoro intero su due
+macchine, non solo quanto costano all'ora.
+
+Nuova card "⚖️ CONFRONTA MACCHINE" nello Smart Quoter 3D: si sceglie una
+seconda macchina (dallo stesso parco registrato o dal catalogo, la stessa
+tendina già usata per la macchina principale) e la tabella mostra Costo,
+Prezzo, Profitto e Margine affiancati, con la differenza colorata (verde
+quando il numero è a favore, rosso quando è contro — un costo più basso è
+verde, un profitto più basso è rosso, anche se sono entrambi "meno").
+
+Nessun terzo motore: sono due chiamate a `InglyCostEngine.calcola()` +
+`.prezzo()`, la seconda con gli stessi grammi, ore, margine, IVA, sconto
+e canale della prima — cambia solo la macchina, così il confronto isola
+davvero quella variabile. Il tempo di stampa resta lo stesso dichiarato
+per entrambe: la card lo dice esplicitamente, invece di stimare quanto
+più veloce o lenta stamperebbe la macchina B senza un dato reale per
+farlo (regola del mandato: non inventare un numero che non si conosce).
+
+Coperto da `tests/qa/quoter3d-confronto-macchine.mjs` (9 verifiche): il
+selettore elenca le macchine vere del parco, la tabella compare solo dopo
+aver scelto una macchina B, i nomi sono quelli giusti (non il segnaposto
+"Nessun confronto"), i quattro numeri richiesti dal mandato sono tutti
+presenti, i valori delle due macchine sono realmente diversi (non lo
+stesso calcolo duplicato), e la tabella sparisce tornando a "nessun
+confronto".
+
+`npm test`: 2230/2230. `npm run qa`: 90/90 script puliti alla prima corsa.
+
 ## 2.26.0 — Il prezzo consigliato si vede prima degli altri numeri
 
 Il gruppo "Prezzo" della card "IL CONTO" aveva quattro celle della stessa
