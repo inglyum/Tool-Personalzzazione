@@ -362,5 +362,19 @@
     "browserQA": "PASS",
     "knownBlockers": null,
     "migrationStatus": "additiva — nessun dato esistente rimosso o incompatibile"
+  },
+  {
+    "version": "2.27.0",
+    "commit": "a435f7d88389d262297277c456d5ccd3dd8e868a",
+    "branch": "claude/ingly-personalization-repo-ekvc0z",
+    "buildDate": "2026-09-27T15:59:48.648Z",
+    "product": "dist/releases/2.27.0/INGLY-OS-2.27.0.html",
+    "admin": "dist/releases/2.27.0/INGLY-CLOUD-ADMIN-2.27.0.html",
+    "productBytes": 11785511,
+    "adminBytes": 1017451,
+    "tests": "PASS",
+    "browserQA": "PASS",
+    "knownBlockers": null,
+    "migrationStatus": "additiva — nessun dato esistente rimosso o incompatibile"
   }
 ]
