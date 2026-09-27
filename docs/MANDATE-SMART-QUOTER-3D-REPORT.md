@@ -1,26 +1,26 @@
 # Rapporto finale — "COMMAND DEFINITIVO — SMART QUOTER 3D MARKET-COST ENGINE + UI/UX + AGENTS + CATALOGO DINAMICO"
 
 Punto 44 del mandato. Non un resoconto di intenzioni: ogni voce qui sotto è
-verificata leggendo il codice presente al commit `aaaac55` (branch
+verificata leggendo il codice presente al commit `b50a729` (branch
 `claude/ingly-personalization-repo-ekvc0z`), eseguendo `npm test` e
 `npm run qa`, o aprendo la schermata vera con Playwright. Dove non ho potuto
 verificare, lo dico — non lo do per fatto.
 
-Aggiornato dopo la release 2.26.0 (prezzo consigliato come vero hero
-visivo) — le versioni precedenti di questo rapporto coprivano fino alla
-2.23.0, alla 2.24.0 e alla 2.25.0.
+Aggiornato dopo la release 2.27.0 (confronto macchine per la stessa
+stampa, §21) — le versioni precedenti di questo rapporto coprivano fino
+alla 2.23.0, alla 2.24.0, alla 2.25.0 e alla 2.26.0.
 
 ## REPOSITORY
 
 Audit §0 eseguito prima di ogni modifica, non dopo. Repo: `Tool-Personalzzazione`
 (non `Pusatingly`, che è un progetto statico separato con cui questa sessione
 condivide solo l'ambiente di esecuzione). Branch di lavoro:
-`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.26.0**.
-Build: `dist/INGLY-OS.html` (11,23 MB) e `dist/INGLY-CLOUD-ADMIN.html`
+`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.27.0**.
+Build: `dist/INGLY-OS.html` (11,24 MB) e `dist/INGLY-CLOUD-ADMIN.html`
 (994 KB), generati da `npm run build` da `src/legacy/patches/*.js` +
 `src/product/*.js` via `scripts/compose.mjs`. Ogni release di questa sessione
 è registrata in `dist/releases/<versione>/manifest.json` e in `RELEASES.json`
-(26 release tracciate).
+(27 release tracciate).
 
 ## GANTT
 
@@ -81,6 +81,18 @@ quel motore, non su una copia. Il caso di regressione del mandato — 9h57m,
   sulla macchina, non ancora cablate: chiuderle bene richiede prima
   decidere quale delle due righe di manutenzione vince, non è stato fatto
   a metà per fretta.
+
+- **§21 Confronto macchine sulla stessa stampa** (release 2.27.0, `a435f7d`):
+  esisteva già `InglyMachineCost.confronta()`, ma era codice morto (nessuna
+  vista lo chiamava) e comunque rispondeva alla domanda sbagliata — tariffa
+  oraria, non l'esito di un lavoro intero. Aggiunta la card "CONFRONTA
+  MACCHINE": a parità di grammi/ore/margine/IVA/sconto/canale, si sceglie
+  una seconda macchina (parco o catalogo) e si legge una tabella
+  costo/prezzo/profitto/margine con delta colorato. Nessun secondo motore:
+  due chiamate a `InglyCostEngine.calcola()`+`.prezzo()`, le stesse già
+  usate per il calcolo principale. Deliberatamente non ristimato un tempo
+  di stampa diverso per la macchina B — sarebbe un numero inventato senza
+  un dato di velocità reale; la UI lo dichiara nel testo di aiuto.
 
 **Non ancora fatto, e perché è nella lista sotto invece che qui**: il
 redesign UI/UX a 6 step (§31-34) non è stato affrontato in questa sessione
@@ -224,34 +236,35 @@ generale del §41, che resta P2/P3 e non è stato affrontato.
 
 ## TEST
 
-`npm test`: **2229/2229**, eseguito sette volte in questa sessione (una per
+`npm test`: **2230/2230**, eseguito più volte in questa sessione (una per
 ogni build), sempre pulito. Questa sessione ha aggiunto copertura a
 `tests/qa/quoter3d-parco.mjs` (confronto ammortamento con/senza valore
 residuo, sul preventivo vero, non sul motore isolato),
 `tests/qa/manutenzione-macchina.mjs` (tab Costi della Scheda Macchina),
 `tests/marketplace-profiles.test.mjs` (12 test, inclusi due sulla
 combinazione scaglioni × canale × IVA), `tests/qa/quoter3d-canale-
-spedizione.mjs` (12 verifiche browser) e `tests/quoter3d-cost-chart.test.mjs`
-(7 test sul grafico di composizione).
+spedizione.mjs` (12 verifiche browser), `tests/quoter3d-cost-chart.test.mjs`
+(7 test sul grafico di composizione) e `tests/qa/quoter3d-confronto-
+macchine.mjs` (9 verifiche browser sul confronto macchine, §21).
 
 ## REGRESSION
 
-`npm run qa` eseguito **nove volte** in questa sessione (89 script
-Playwright ciascuna, in tre gruppi — uno per release). In quattro delle
-nove corse è comparso un fallimento isolato, sempre in `page.reload()`
+`npm run qa` eseguito **dieci volte** in questa sessione (90 script
+Playwright ciascuna, in quattro gruppi — uno per release). In quattro delle
+dieci corse è comparso un fallimento isolato, sempre in `page.reload()`
 sotto la contesa di CPU dei ~90 lanci Chromium in sequenza, sempre in un
 modulo **non toccato** da questa sessione (`quoter3d-calcoli.mjs` FASE 16
 — salvataggio preventivo — o `apparel-scaglioni-consuntivo.mjs` —
 consuntivo tessile), mai negli stessi due insieme. Rieseguiti
-singolarmente: sempre puliti (52/52 e 33/33, verificato più volte). La
-corsa per la release 2.25.0 (grafico di composizione) è stata pulita alla
-prima. Nessun fallimento ha mai coinvolto i moduli toccati da questa
-sessione (marketplace, macchina, quoter 3D, contenitore sticky, grafico)
-in nessuna delle nove corse.
+singolarmente: sempre puliti (52/52 e 33/33, verificato più volte). Le
+corse per le release 2.25.0, 2.26.0 e 2.27.0 sono state pulite alla prima.
+Nessun fallimento ha mai coinvolto i moduli toccati da questa sessione
+(marketplace, macchina, quoter 3D, contenitore sticky, grafico, confronto
+macchine) in nessuna delle dieci corse.
 
 ## RELEASE
 
-Cinque release spedite in questa sessione, tutte con la pipeline completa
+Sei release spedite in questa sessione, tutte con la pipeline completa
 (build → test → qa → commit → release-artifacts → push → verifica sync):
 
 - **2.22.0** — Canale di vendita e spedizione nello Smart Quoter 3D
@@ -259,8 +272,9 @@ Cinque release spedite in questa sessione, tutte con la pipeline completa
 - **2.24.0** — Riepilogo sticky Costo/Prezzo/Profitto/Margine (§33)
 - **2.25.0** — Grafico semplice della composizione del costo (§33)
 - **2.26.0** — Il prezzo consigliato come vero hero visivo (§33)
+- **2.27.0** — Confronto macchine per la stessa stampa (§21)
 
-Tutte e cinque verificate su `dist/INGLY-OS.html` vero con Playwright,
+Tutte e sei verificate su `dist/INGLY-OS.html` vero con Playwright,
 non solo a livello di modulo. Branch remoto
 `claude/ingly-personalization-repo-ekvc0z` sincronizzato (`git fetch` +
 `git status` puliti dopo ogni push).
