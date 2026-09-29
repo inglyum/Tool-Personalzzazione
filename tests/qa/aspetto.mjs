@@ -119,6 +119,26 @@ const esito = await page.evaluate(async () => {
   T.applica({ scala: 'normale' });
   await attesa(100);
 
+  /* ── La densità delle tabelle ─────────────────────────────────────────── */
+  const tabella = document.createElement('div');
+  tabella.className = 'table-wrap';
+  tabella.style.cssText = 'position:fixed;left:-999px';
+  tabella.innerHTML = '<table class="ds-table"><tbody><tr><td>prova</td></tr></tbody></table>';
+  document.body.appendChild(tabella);
+  const rigaAltezza = () => tabella.querySelector('td').getBoundingClientRect().height;
+
+  T.applica({ densita: 'comoda' });
+  await attesa(150);
+  const rigaComoda = rigaAltezza();
+  T.applica({ densita: 'compatta' });
+  await attesa(150);
+  const rigaCompatta = rigaAltezza();
+  dico(`la densità cambia davvero l'altezza di una riga vera, di almeno 8px (${rigaCompatta} / ${rigaComoda}px)`,
+    rigaComoda - rigaCompatta >= 8);
+  T.applica({ densita: 'comoda' });
+  await attesa(100);
+  tabella.remove();
+
   /* ── Il pannello ──────────────────────────────────────────────────────── */
   if (V) {
     V.apri();
@@ -127,10 +147,12 @@ const esito = await page.evaluate(async () => {
     dico('il pannello si apre', !!n);
     if (n) {
       const t = n.textContent.replace(/\s+/g, ' ');
-      dico('mostra tema, colore, carattere e dimensione',
-        /Tema/.test(t) && /accento/i.test(t) && /Carattere/.test(t) && /Dimensione/.test(t));
+      dico('mostra tema, colore, carattere, dimensione e densità',
+        /Tema/.test(t) && /accento/i.test(t) && /Carattere/.test(t) && /Dimensione/.test(t) && /Densità/.test(t));
       dico('e un\'anteprima con un totale, un bottone e del testo piccolo',
         /Anteprima/.test(t) && /Totale preventivo/.test(t));
+      dico('l\'anteprima include una tabella vera (stesse classi dell\'elenco ordini)',
+        !!n.querySelector('.table-wrap table.ds-table'));
 
       /* Provare un colore non deve essere un impegno. */
       const prima = T.stato().corrente.accento;
@@ -158,10 +180,14 @@ const esito = await page.evaluate(async () => {
   dico('nessun secondo motore ha preso il posto del primo',
     !!window.InglyTema && window.InglyTema.version);
 
+  T.applica({ densita: 'compatta' });
+  await attesa(100);
   T.ripristina();
   await attesa(150);
   dico('ripristina riporta al ciano predefinito',
     T.stato().corrente.accento === T.PREDEFINITO.accento);
+  dico('e anche alla densità predefinita',
+    T.stato().corrente.densita === T.PREDEFINITO.densita);
 
   return out;
 });

@@ -80,6 +80,7 @@
   --table-row-hover: var(--color-surface-hover);
   --table-row-selected: var(--color-primary-surface);
   --table-cell-padding-x: var(--space-3);
+  --table-cell-padding-y: var(--space-2);
   --table-border: var(--color-divider);
 
   /* ── Badge ──────────────────────────────────────────────────────────────  */

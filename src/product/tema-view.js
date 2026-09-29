@@ -146,6 +146,11 @@
             Math.round(s.fattore * 100) + '%');
         }).join('') + '</div>')
 
+      + sezione('Densità delle tabelle', '<div style="display:flex;gap:7px;flex-wrap:wrap">'
+        + (M ? M.DENSITA : []).map(function (d) {
+          return scelta((c.densita || 'comoda') === d.id, "InglyAspetto.aggiorna('densita','" + d.id + "')", d.label, d.nota);
+        }).join('') + '</div>')
+
       + anteprima(c, car)
 
       + '<div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">'
@@ -187,7 +192,22 @@
       + '<div style="font-size:11px;color:var(--text-muted,#94a3b8);margin-top:10px;line-height:1.55">'
         + 'Testo normale di una scheda. <span style="color:' + esc(c.accento) + ';font-weight:700">Un valore evidenziato</span> '
         + 'e una nota piccola come quelle sotto i campi.</div>'
+      + tabellaAnteprima()
       + '</div>';
+  }
+
+  /* Una tabella vera, non disegnata a mano: usa le stesse classi
+     `.ds-table`/`.table-wrap` dell'elenco ordini o del catalogo, così la
+     densità scelta si vede esattamente come si vedrà lì — non in
+     un'approssimazione locale che potrebbe smentire lo schermo reale. */
+  function tabellaAnteprima() {
+    var righe = [['#2481', 'Portachiavi inciso — 12 pz', '€ 84,00'],
+      ['#2482', 'Etichette UV su acciaio', '€ 212,50']];
+    return '<div class="table-wrap" style="margin-top:10px">'
+      + '<table class="ds-table"><thead><tr><th>Ordine</th><th>Descrizione</th><th class="num">Totale</th></tr></thead>'
+      + '<tbody>' + righe.map(function (r) {
+        return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="num">' + esc(r[2]) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
   }
 
   global.InglyAspetto = {

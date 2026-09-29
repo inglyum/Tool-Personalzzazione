@@ -3,6 +3,50 @@
 Versionamento semantico. Ogni voce riflette il codice realmente presente al
 commit indicato — non una roadmap, un resoconto.
 
+## 2.28.0 — Densità delle tabelle: più righe a schermo, quando serve
+
+Audit di partenza: prima di aggiungere una funzione di aspetto, un
+controllo di cosa esisteva già. Risultato — l'aspetto NON è un'area
+scoperta: convivono quattro sistemi che cambiano tema/colore/font
+(`InglyTema`/`InglyAspetto`, il vecchio `ThemeSwitcher` in Impostazioni,
+`DesignStudio`, e i due engine di brand storici già migrati da
+`InglyTema`). Aggiungerne un quinto sarebbe stata la stessa duplicazione
+che il mandato vieta. Un solo punto risultava davvero vuoto: il design
+system aveva già i token per la densità delle tabelle
+(`--table-row-height`, `--table-cell-padding-x` in
+`src/design-system/tokens/component.css`) ma un solo valore fisso —
+nessuno poteva sceglierlo, in nessuno dei quattro pannelli.
+
+Aggiunta una sezione "Densità delle tabelle" al pannello Aspetto
+esistente (`InglyAspetto`, non un pannello nuovo): Comoda (come adesso,
+38px di riga) o Compatta (26px — per chi scorre l'elenco ordini o il
+catalogo tutto il giorno su un monitor di laboratorio e preferisce più
+righe a poche informazioni per volta). L'anteprima nel pannello ora
+include una tabella vera, con le stesse classi `.table-wrap`/`.ds-table`
+usate in Ordini, CRM, Catalogo, Magazzino e Impostazioni (17 punti nel
+codice) — non un'approssimazione disegnata a mano: quello che si vede
+nell'anteprima è esattamente quello che cambia in quegli schermi.
+
+Un token nuovo, `--table-cell-padding-y`, separato da
+`--table-cell-padding-x`: prima il padding verticale era scritto a mano
+(`var(--space-2)`, condiviso con badge e KPI in tutta l'app) dentro la
+regola della tabella — cambiarlo per la densità avrebbe ristretto anche
+quei componenti, un effetto collaterale non richiesto. Ora la densità
+tocca solo le tabelle.
+
+Deliberatamente NON toccati: i tre sistemi di aspetto storici
+(ThemeSwitcher, DesignStudio, White Label) — restano tre punti di
+accesso ridondanti, un problema di consolidamento reale ma più ampio di
+questa release, segnalato a parte.
+
+Coperto da `tests/qa/aspetto.mjs`, esteso con 5 nuove verifiche: la
+densità cambia l'altezza di una riga vera di almeno 8px (misurata sul
+DOM, non assunta dal CSS), il pannello mostra la nuova sezione,
+l'anteprima contiene una tabella vera con le classi reali, e
+`ripristina()` riporta anche la densità al valore predefinito.
+
+npm test: 2230/2230. npm run qa: 91/91 script puliti alla prima corsa.
+
 ## 2.27.0 — Confronto macchine: la stessa stampa, su una seconda macchina
 
 Punto 21 del mandato: "Scenario Comparison — Printer A vs B ... output

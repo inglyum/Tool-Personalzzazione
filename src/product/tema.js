@@ -86,7 +86,20 @@
     { id: 'ampia', label: 'Ampia', fattore: 1.08 },
   ];
 
-  var PREDEFINITO = { tema: 'scuro', accento: '#00e6d2', carattere: 'inter', scala: 'normale' };
+  /* ── La densità delle tabelle ─────────────────────────────────────────────
+     Il design system aveva già i token (`--table-row-height`,
+     `--table-cell-padding-x`, `--table-font-size` in component.css) ma un
+     solo valore fisso: nessuno poteva sceglierlo. Chi lavora su un monitor
+     appeso in laboratorio e scorre l'elenco ordini tutto il giorno vuole
+     vedere più righe a schermo; chi legge da vicino vuole più aria. Non è
+     lo stesso asse della dimensione del testo generale (`SCALE`): quella
+     scala anche i titoli e i pulsanti, questa tocca solo le tabelle dati. */
+  var DENSITA = [
+    { id: 'comoda', label: 'Comoda', nota: 'Come adesso', rigaAltezza: 38, cellaPadX: 12, cellaPadY: 8, carattere: 13 },
+    { id: 'compatta', label: 'Compatta', nota: 'Più righe a schermo', rigaAltezza: 26, cellaPadX: 8, cellaPadY: 4, carattere: 12 },
+  ];
+
+  var PREDEFINITO = { tema: 'scuro', accento: '#00e6d2', carattere: 'inter', scala: 'normale', densita: 'comoda' };
 
   /* ── Colore: le poche funzioni che servono ────────────────────────────── */
 
@@ -185,6 +198,7 @@
     var a = rgb(c.accento) ? c.accento : PREDEFINITO.accento;
     var car = CARATTERI.filter(function (f) { return f.id === c.carattere; })[0] || CARATTERI[0];
     var sc = SCALE.filter(function (s) { return s.id === c.scala; })[0] || SCALE[1];
+    var de = DENSITA.filter(function (d) { return d.id === c.densita; })[0] || DENSITA[0];
     return {
       '--color-primary': a,
       '--color-primary-hover': schiarisci(a, 0.14),
@@ -214,6 +228,13 @@
       '--font-sans': car.stack,
       '--font-body': car.stack,
       '--ds-font-scale': String(sc.fattore),
+      /* Sovrascrivono i valori fissi di component.css: quelli restano la
+         base per chi non ha mai aperto il pannello, questi arrivano solo
+         a chi ha scelto una densità diversa. */
+      '--table-row-height': de.rigaAltezza + 'px',
+      '--table-cell-padding-x': de.cellaPadX + 'px',
+      '--table-cell-padding-y': de.cellaPadY + 'px',
+      '--table-font-size': de.carattere + 'px',
     };
   }
 
@@ -319,7 +340,7 @@
 
   global.InglyTema = {
     version: VERSIONE,
-    TEMI: TEMI, ACCENTI: ACCENTI, CARATTERI: CARATTERI, SCALE: SCALE,
+    TEMI: TEMI, ACCENTI: ACCENTI, CARATTERI: CARATTERI, SCALE: SCALE, DENSITA: DENSITA,
     PREDEFINITO: PREDEFINITO,
     applica: applica, salva: salva, ripristina: ripristina,
     leggi: leggi, stato: stato, token: token,

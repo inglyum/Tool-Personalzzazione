@@ -174,7 +174,7 @@ table.ds-table thead th {
 .table-wrap tbody td,
 table.ds-table tbody td {
   height: var(--table-row-height);
-  padding: var(--space-2) var(--table-cell-padding-x);
+  padding: var(--table-cell-padding-y) var(--table-cell-padding-x);
   border-bottom: 1px solid var(--table-border);
   color: var(--color-text);
   vertical-align: middle;
