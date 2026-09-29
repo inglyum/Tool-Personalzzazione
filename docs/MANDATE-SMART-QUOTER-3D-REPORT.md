@@ -1,26 +1,26 @@
 # Rapporto finale — "COMMAND DEFINITIVO — SMART QUOTER 3D MARKET-COST ENGINE + UI/UX + AGENTS + CATALOGO DINAMICO"
 
 Punto 44 del mandato. Non un resoconto di intenzioni: ogni voce qui sotto è
-verificata leggendo il codice presente al commit `b50a729` (branch
+verificata leggendo il codice presente al commit `6b4401a` (branch
 `claude/ingly-personalization-repo-ekvc0z`), eseguendo `npm test` e
 `npm run qa`, o aprendo la schermata vera con Playwright. Dove non ho potuto
 verificare, lo dico — non lo do per fatto.
 
-Aggiornato dopo la release 2.27.0 (confronto macchine per la stessa
-stampa, §21) — le versioni precedenti di questo rapporto coprivano fino
-alla 2.23.0, alla 2.24.0, alla 2.25.0 e alla 2.26.0.
+Aggiornato dopo la release 2.28.0 (densità delle tabelle nel pannello
+Aspetto) — le versioni precedenti di questo rapporto coprivano fino alla
+2.23.0, alla 2.24.0, alla 2.25.0, alla 2.26.0 e alla 2.27.0.
 
 ## REPOSITORY
 
 Audit §0 eseguito prima di ogni modifica, non dopo. Repo: `Tool-Personalzzazione`
 (non `Pusatingly`, che è un progetto statico separato con cui questa sessione
 condivide solo l'ambiente di esecuzione). Branch di lavoro:
-`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.27.0**.
+`claude/ingly-personalization-repo-ekvc0z`. Versione corrente: **2.28.0**.
 Build: `dist/INGLY-OS.html` (11,24 MB) e `dist/INGLY-CLOUD-ADMIN.html`
 (994 KB), generati da `npm run build` da `src/legacy/patches/*.js` +
 `src/product/*.js` via `scripts/compose.mjs`. Ogni release di questa sessione
 è registrata in `dist/releases/<versione>/manifest.json` e in `RELEASES.json`
-(27 release tracciate).
+(28 release tracciate).
 
 ## GANTT
 
@@ -234,6 +234,23 @@ Le altre feature di questa sessione (card "Canale & Spedizione"; campo
 sul design system esistente, non skin — ma non costituiscono il redesign
 generale del §41, che resta P2/P3 e non è stato affrontato.
 
+**Densità delle tabelle (release 2.28.0).** Prima di costruire, un audit
+del pannello Aspetto esistente: l'aspetto non è un'area scoperta —
+convivono già quattro sistemi (`InglyTema`/`InglyAspetto`, il vecchio
+`ThemeSwitcher` di Impostazioni, `DesignStudio`, e i due engine di brand
+storici già migrati da `InglyTema`). Aggiungerne un quinto sarebbe stata
+la stessa duplicazione che il mandato vieta altrove. L'unico punto
+davvero vuoto: il design system aveva già i token per la densità delle
+tabelle (`--table-row-height`, `--table-cell-padding-x` in
+`component.css`) ma un solo valore fisso, in nessuno dei quattro
+pannelli scegliibile. Aggiunta una sezione "Densità delle tabelle" al
+pannello `InglyAspetto` esistente — Comoda (38px di riga) o Compatta
+(26px) — cablata su 17 punti reali del codice (`.table-wrap`/`.ds-table`
+in Ordini, CRM, Catalogo, Magazzino, Impostazioni), con un nuovo token
+`--table-cell-padding-y` per non toccare il padding verticale condiviso
+con badge e KPI. Verificato misurando l'altezza reale di una riga sul
+DOM (non assunto dal CSS): la differenza è di almeno 8px.
+
 ## TEST
 
 `npm test`: **2230/2230**, eseguito più volte in questa sessione (una per
@@ -244,27 +261,31 @@ residuo, sul preventivo vero, non sul motore isolato),
 `tests/marketplace-profiles.test.mjs` (12 test, inclusi due sulla
 combinazione scaglioni × canale × IVA), `tests/qa/quoter3d-canale-
 spedizione.mjs` (12 verifiche browser), `tests/quoter3d-cost-chart.test.mjs`
-(7 test sul grafico di composizione) e `tests/qa/quoter3d-confronto-
-macchine.mjs` (9 verifiche browser sul confronto macchine, §21).
+(7 test sul grafico di composizione), `tests/qa/quoter3d-confronto-
+macchine.mjs` (9 verifiche browser sul confronto macchine, §21) e 5
+verifiche nuove in `tests/qa/aspetto.mjs` sulla densità delle tabelle
+(altezza riga reale misurata sul DOM, pannello, anteprima, ripristino).
 
 ## REGRESSION
 
-`npm run qa` eseguito **dieci volte** in questa sessione (90 script
-Playwright ciascuna, in quattro gruppi — uno per release). In quattro delle
-dieci corse è comparso un fallimento isolato, sempre in `page.reload()`
+`npm run qa` eseguito **undici volte** in questa sessione (90-91 script
+Playwright ciascuna, in cinque gruppi — uno per release). In quattro delle
+undici corse è comparso un fallimento isolato, sempre in `page.reload()`
 sotto la contesa di CPU dei ~90 lanci Chromium in sequenza, sempre in un
 modulo **non toccato** da questa sessione (`quoter3d-calcoli.mjs` FASE 16
 — salvataggio preventivo — o `apparel-scaglioni-consuntivo.mjs` —
 consuntivo tessile), mai negli stessi due insieme. Rieseguiti
 singolarmente: sempre puliti (52/52 e 33/33, verificato più volte). Le
-corse per le release 2.25.0, 2.26.0 e 2.27.0 sono state pulite alla prima.
+corse per le release 2.25.0, 2.26.0 e 2.27.0 sono state pulite alla prima;
+quella per la 2.28.0 ha avuto l'unico fallimento isolato di questo lotto
+(`apparel-scaglioni-consuntivo.mjs`, rieseguito standalone: 33/33 pulito).
 Nessun fallimento ha mai coinvolto i moduli toccati da questa sessione
 (marketplace, macchina, quoter 3D, contenitore sticky, grafico, confronto
-macchine) in nessuna delle dieci corse.
+macchine, densità tabelle) in nessuna delle undici corse.
 
 ## RELEASE
 
-Sei release spedite in questa sessione, tutte con la pipeline completa
+Sette release spedite in questa sessione, tutte con la pipeline completa
 (build → test → qa → commit → release-artifacts → push → verifica sync):
 
 - **2.22.0** — Canale di vendita e spedizione nello Smart Quoter 3D
@@ -273,8 +294,9 @@ Sei release spedite in questa sessione, tutte con la pipeline completa
 - **2.25.0** — Grafico semplice della composizione del costo (§33)
 - **2.26.0** — Il prezzo consigliato come vero hero visivo (§33)
 - **2.27.0** — Confronto macchine per la stessa stampa (§21)
+- **2.28.0** — Densità delle tabelle nel pannello Aspetto
 
-Tutte e sei verificate su `dist/INGLY-OS.html` vero con Playwright,
+Tutte e sette verificate su `dist/INGLY-OS.html` vero con Playwright,
 non solo a livello di modulo. Branch remoto
 `claude/ingly-personalization-repo-ekvc0z` sincronizzato (`git fetch` +
 `git status` puliti dopo ogni push).
@@ -306,3 +328,18 @@ non solo a livello di modulo. Branch remoto
    del mandato stesso, non saltato per fretta ma per priorità dichiarata.
    Il flusso a 6 step dello Smart Quoter (§31-32) resta nella stessa
    categoria, vedi punto 4 sopra.
+7. **Tre sistemi di aspetto ridondanti, non consolidati in questa
+   sessione**: `ThemeSwitcher` (bottone 🎨 in topbar) e `DesignStudio`
+   (voce di navigazione propria) restano accessibili accanto a
+   `InglyAspetto`, ciascuno con la propria UI per scegliere temi/colori.
+   Non è la duplicazione di calcolo che il mandato vieta — nessuno dei
+   tre scrive un numero fatturato, solo variabili CSS d'aspetto — ma è
+   la stessa confusione utente già segnalata per `InglyMachineCost` al
+   punto 2: chi cambia "tema" in un pannello non vede la scelta
+   riflessa nell'interfaccia degli altri due, anche se `--primary` ecc.
+   finiscono per essere coerenti sotto il cofano. Consolidare vorrebbe
+   dire far aprire ai due bottoni storici lo stesso pannello
+   `InglyAspetto` invece della propria UI — un cambiamento più ampio di
+   un'aggiunta additiva, valutato prima della release 2.28.0 e
+   deliberatamente rimandato a favore del gap realmente vuoto (la
+   densità).
